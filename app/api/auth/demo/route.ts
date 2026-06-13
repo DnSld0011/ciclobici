@@ -9,16 +9,9 @@ const TEST_USERS: Record<string, { email: string; rol: string }> = {
   '51900100005': { email: 'laura@example.pe',      rol: 'ciudadano' },
 }
 
-const REDIRECT: Record<string, string> = {
-  operador:   '/operador/mapa',
-  tecnico:    '/tecnico/mantenimiento',
-  ciudadano:  '/ciudadano/mapa',
-}
-
-export async function POST(req: NextRequest) {
-  const { phone } = await req.json()
-  const normalized = phone.replace('+', '').replace(/\s/g, '')
-  const test = TEST_USERS[normalized]
+export async function GET(req: NextRequest) {
+  const phone = req.nextUrl.searchParams.get('phone') ?? ''
+  const test = TEST_USERS[phone]
 
   if (!test) {
     return NextResponse.json({ error: 'Número no registrado como usuario de prueba' }, { status: 400 })
@@ -33,9 +26,10 @@ export async function POST(req: NextRequest) {
     options: { redirectTo: `${baseUrl}/auth/callback` },
   })
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error || !data?.properties?.action_link) {
+    const msg = error?.message ?? 'No se generó el enlace'
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(msg)}`, baseUrl))
   }
 
-  return NextResponse.json({ url: data.properties.action_link })
+  return NextResponse.redirect(data.properties.action_link)
 }
