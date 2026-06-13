@@ -14,9 +14,9 @@ import { Phone, KeyRound, Bike, FlaskConical } from 'lucide-react'
 type Paso = 'celular' | 'otp'
 
 const DEMO_USERS = [
-  { label: 'Operador',  phone: '519001000001', desc: 'Admin / gestión' },
-  { label: 'Técnico',   phone: '519001000002', desc: 'Mantenimiento' },
-  { label: 'Ciudadano', phone: '519001000003', desc: 'Usuario normal' },
+  { label: 'Operador',  phone: '51900100001', desc: 'Admin / gestión' },
+  { label: 'Técnico',   phone: '51900100002', desc: 'Mantenimiento' },
+  { label: 'Ciudadano', phone: '51900100003', desc: 'Usuario normal' },
 ]
 
 export default function LoginPage() {

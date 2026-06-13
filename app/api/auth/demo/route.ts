@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const TEST_USERS: Record<string, { email: string; rol: string }> = {
-  '519001000001': { email: 'operador@ciclobici.pe', rol: 'operador' },
-  '519001000002': { email: 'tecnico@ciclobici.pe',  rol: 'tecnico' },
-  '519001000003': { email: 'maria@example.pe',      rol: 'ciudadano' },
-  '519001000004': { email: 'juan@example.pe',       rol: 'ciudadano' },
-  '519001000005': { email: 'laura@example.pe',      rol: 'ciudadano' },
+  '51900100001': { email: 'operador@ciclobici.pe', rol: 'operador' },
+  '51900100002': { email: 'tecnico@ciclobici.pe',  rol: 'tecnico' },
+  '51900100003': { email: 'maria@example.pe',      rol: 'ciudadano' },
+  '51900100004': { email: 'juan@example.pe',       rol: 'ciudadano' },
+  '51900100005': { email: 'laura@example.pe',      rol: 'ciudadano' },
 }
 
 const REDIRECT: Record<string, string> = {
