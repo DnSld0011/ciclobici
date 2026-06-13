@@ -7,9 +7,10 @@ interface MapaEstacionesProps {
   estaciones: EstacionConDisponibilidad[]
   onEstacionClick?: (estacion: EstacionConDisponibilidad) => void
   modoOperador?: boolean
+  focusEstacion?: EstacionConDisponibilidad | null
 }
 
-export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = false }: MapaEstacionesProps) {
+export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = false, focusEstacion }: MapaEstacionesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<unknown>(null)
   const markersRef = useRef<unknown[]>([])
@@ -122,6 +123,17 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
       }
     }
   }, [mounted, estaciones, onEstacionClick])
+
+  useEffect(() => {
+    if (!focusEstacion || !mapInstanceRef.current) return
+    const map = mapInstanceRef.current as { flyTo: (latlng: [number, number], zoom: number) => void }
+    map.flyTo([focusEstacion.latitud, focusEstacion.longitud], 16)
+
+    // Open popup of matching marker
+    const idx = estaciones.findIndex(e => e.id === focusEstacion.id)
+    const marker = markersRef.current[idx] as { openPopup: () => void } | undefined
+    marker?.openPopup()
+  }, [focusEstacion, estaciones])
 
   if (!mounted) {
     return (

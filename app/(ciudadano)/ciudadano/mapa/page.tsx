@@ -74,6 +74,7 @@ export default function MapaCiudadanoPage() {
           <MapaEstaciones
             estaciones={estaciones}
             onEstacionClick={setSeleccionada}
+            focusEstacion={seleccionada}
           />
         )}
 
