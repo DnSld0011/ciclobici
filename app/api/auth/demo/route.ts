@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase.auth.admin.generateLink({
     type: 'magiclink',
     email: test.email,
-    options: { redirectTo: `${baseUrl}/auth/callback` },
+    options: { redirectTo: `${baseUrl}/login` },
   })
 
   if (error || !data?.properties?.action_link) {

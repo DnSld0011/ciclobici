@@ -35,6 +35,20 @@ function LoginContent() {
     if (urlError) setError(decodeURIComponent(urlError))
   }, [searchParams])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!window.location.hash.includes('access_token')) return
+    const supabase = createClient()
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user) return
+      const { data: perfil } = await supabase
+        .from('usuarios').select('rol').eq('id', session.user.id).single()
+      if (perfil?.rol === 'operador')      router.replace('/operador/mapa')
+      else if (perfil?.rol === 'tecnico')  router.replace('/tecnico/mantenimiento')
+      else                                 router.replace('/ciudadano/mapa')
+    })
+  }, [router])
+
   async function enviarOtp(e: React.FormEvent) {
     e.preventDefault()
     setError('')
