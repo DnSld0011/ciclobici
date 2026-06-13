@@ -39,7 +39,8 @@ export default function LoginPage() {
         body: JSON.stringify({ phone }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
+      if (!res.ok) throw new Error(data.error ?? 'Error en servidor')
+      if (!data.url) throw new Error('No se generó el enlace de acceso')
       window.location.href = data.url
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error en acceso demo')
