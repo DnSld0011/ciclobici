@@ -20,12 +20,12 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 // ─── Datos de prueba ────────────────────────────────────────────────
 
 const ESTACIONES = [
-  { nombre: 'Estación Parque Simón Bolívar', direccion: 'Cra 48 # 63-20, Bogotá', latitud: 4.6587, longitud: -74.0957, capacidad: 15, estado: 'activa' },
-  { nombre: 'Estación Candelaria Centro',    direccion: 'Cra 7 # 11-83, Bogotá',  latitud: 4.5981, longitud: -74.0760, capacidad: 10, estado: 'activa' },
-  { nombre: 'Estación Chapinero',            direccion: 'Cra 13 # 63-20, Bogotá', latitud: 4.6485, longitud: -74.0626, capacidad: 12, estado: 'activa' },
-  { nombre: 'Estación Usaquén',              direccion: 'Cll 119 # 6-24, Bogotá',  latitud: 4.6948, longitud: -74.0310, capacidad: 8,  estado: 'activa' },
-  { nombre: 'Estación Teusaquillo',          direccion: 'Cll 34 # 15-12, Bogotá', latitud: 4.6415, longitud: -74.0728, capacidad: 10, estado: 'mantenimiento' },
-  { nombre: 'Estación El Poblado',           direccion: 'Cll 10 # 43-20, Medellín', latitud: 6.2087, longitud: -75.5706, capacidad: 12, estado: 'activa' },
+  { nombre: 'Estación Miraflores Centro',     direccion: 'Av. Larco 1150, Miraflores, Lima',           latitud: -12.1219, longitud: -77.0282, capacidad: 15, estado: 'activa' },
+  { nombre: 'Estación San Isidro Financiero', direccion: 'Av. Javier Prado Este 500, San Isidro, Lima', latitud: -12.0951, longitud: -77.0280, capacidad: 12, estado: 'activa' },
+  { nombre: 'Estación Barranco Malecón',      direccion: 'Malecón Cisneros s/n, Barranco, Lima',        latitud: -12.1453, longitud: -77.0219, capacidad: 10, estado: 'activa' },
+  { nombre: 'Estación Surco Primavera',       direccion: 'Av. Primavera 650, Santiago de Surco, Lima',  latitud: -12.1280, longitud: -77.0019, capacidad: 12, estado: 'activa' },
+  { nombre: 'Estación Pueblo Libre',          direccion: 'Av. Sucre 200, Pueblo Libre, Lima',           latitud: -12.0745, longitud: -77.0585, capacidad: 8,  estado: 'mantenimiento' },
+  { nombre: 'Estación La Molina',             direccion: 'Av. La Molina 1200, La Molina, Lima',         latitud: -12.0839, longitud: -76.9385, capacidad: 10, estado: 'activa' },
 ]
 
 const USUARIOS_TEST = [
