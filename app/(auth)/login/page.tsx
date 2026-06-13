@@ -9,9 +9,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Phone, KeyRound, Bike } from 'lucide-react'
+import { Phone, KeyRound, Bike, FlaskConical } from 'lucide-react'
 
 type Paso = 'celular' | 'otp'
+
+const DEMO_USERS = [
+  { label: 'Operador',  phone: '519001000001', desc: 'Admin / gestión' },
+  { label: 'Técnico',   phone: '519001000002', desc: 'Mantenimiento' },
+  { label: 'Ciudadano', phone: '519001000003', desc: 'Usuario normal' },
+]
 
 export default function LoginPage() {
   const [paso, setPaso] = useState<Paso>('celular')
@@ -19,8 +25,28 @@ export default function LoginPage() {
   const [otp, setOtp] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [demoLoading, setDemoLoading] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
+
+  async function demoLogin(phone: string) {
+    setDemoLoading(phone)
+    setError('')
+    try {
+      const res = await fetch('/api/auth/demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      window.location.href = data.url
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error en acceso demo')
+    } finally {
+      setDemoLoading(null)
+    }
+  }
 
   async function enviarOtp(e: React.FormEvent) {
     e.preventDefault()
@@ -167,6 +193,26 @@ export default function LoginPage() {
               <Link href="/registro" className="text-blue-700 hover:underline font-medium">
                 Regístrate
               </Link>
+            </div>
+
+            <div className="mt-6 pt-5 border-t border-gray-100">
+              <p className="text-xs text-gray-400 flex items-center gap-1 mb-3">
+                <FlaskConical size={12} /> Acceso rápido demo
+              </p>
+              <div className="flex flex-col gap-2">
+                {DEMO_USERS.map(u => (
+                  <button
+                    key={u.phone}
+                    onClick={() => demoLogin(u.phone)}
+                    disabled={!!demoLoading}
+                    className="flex items-center justify-between px-3 py-2 rounded-md border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition text-left disabled:opacity-50"
+                  >
+                    <span className="text-sm font-medium text-gray-700">{u.label}</span>
+                    <span className="text-xs text-gray-400">{u.desc}</span>
+                    {demoLoading === u.phone && <span className="text-xs text-blue-500">...</span>}
+                  </button>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>
