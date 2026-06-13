@@ -27,7 +27,7 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const telefono = `+57${celular}`
+      const telefono = `+51${celular}`
       const { error } = await supabase.auth.signInWithOtp({ phone: telefono })
       if (error) throw error
       setPaso('otp')
@@ -43,7 +43,7 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const telefono = `+57${celular}`
+      const telefono = `+51${celular}`
       const { data, error } = await supabase.auth.verifyOtp({
         phone: telefono,
         token: otp,
@@ -112,19 +112,19 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <Label htmlFor="celular">Celular</Label>
                   <div className="flex gap-2">
-                    <span className="flex items-center px-3 border border-gray-300 rounded-md bg-gray-50 text-gray-600 text-sm">+57</span>
+                    <span className="flex items-center px-3 border border-gray-300 rounded-md bg-gray-50 text-gray-600 text-sm">+51</span>
                     <Input
                       id="celular"
                       type="tel"
-                      placeholder="3001234567"
+                      placeholder="987654321"
                       value={celular}
-                      onChange={e => setCelular(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onChange={e => setCelular(e.target.value.replace(/\D/g, '').slice(0, 9))}
                       required
                       maxLength={10}
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={loading || celular.length !== 10}>
+                <Button type="submit" className="w-full" disabled={loading || celular.length !== 9}>
                   <Phone size={16} />
                   {loading ? 'Enviando...' : 'Enviar Código OTP'}
                 </Button>
@@ -144,7 +144,7 @@ export default function LoginPage() {
                     className="text-center text-2xl tracking-widest font-mono"
                   />
                   <p className="text-xs text-gray-500">
-                    Código enviado a +57{celular}
+                    Código enviado a +51{celular}
                   </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading || otp.length !== 6}>

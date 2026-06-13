@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { validarCelularColombiano, validarDocumento } from '@/lib/utils/codigos'
+import { validarCelularPeruano, validarDocumento } from '@/lib/utils/codigos'
 import { Bike, CheckCircle } from 'lucide-react'
 
 export default function RegistroPage() {
@@ -32,8 +32,8 @@ export default function RegistroPage() {
       return 'Documento inválido (solo números, 6-12 dígitos)'
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo))
       return 'Correo electrónico inválido'
-    if (!validarCelularColombiano(form.celular))
-      return 'Celular inválido (debe ser colombiano: 10 dígitos, empieza por 3)'
+    if (!validarCelularPeruano(form.celular))
+      return 'Celular inválido (debe ser peruano: 9 dígitos, empieza por 9)'
     return null
   }
 
@@ -46,7 +46,7 @@ export default function RegistroPage() {
 
     try {
       const supabase = createClient()
-      const telefono = `+57${form.celular}`
+      const telefono = `+51${form.celular}`
 
       // Create auth user via OTP
       const { data: authData, error: authError } = await supabase.auth.signInWithOtp({
@@ -79,7 +79,7 @@ export default function RegistroPage() {
           <CardContent className="pt-8 pb-6">
             <CheckCircle className="mx-auto text-green-500 mb-4" size={56} />
             <h2 className="text-xl font-bold mb-2">¡Registro Iniciado!</h2>
-            <p className="text-gray-600">Te enviamos un código OTP al celular <strong>+57{form.celular}</strong>.</p>
+            <p className="text-gray-600">Te enviamos un código OTP al celular <strong>+51{form.celular}</strong>.</p>
             <p className="text-gray-500 text-sm mt-2">Redirigiendo a verificación...</p>
           </CardContent>
         </Card>
@@ -129,15 +129,15 @@ export default function RegistroPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="celular">Celular Colombiano</Label>
+                <Label htmlFor="celular">Celular Peruano</Label>
                 <div className="flex gap-2">
-                  <span className="flex items-center px-3 border border-gray-300 rounded-md bg-gray-50 text-gray-600 text-sm">+57</span>
-                  <Input id="celular" name="celular" type="tel" placeholder="3001234567"
+                  <span className="flex items-center px-3 border border-gray-300 rounded-md bg-gray-50 text-gray-600 text-sm">+51</span>
+                  <Input id="celular" name="celular" type="tel" placeholder="987654321"
                     value={form.celular}
-                    onChange={e => setForm(p => ({ ...p, celular: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                    required maxLength={10} />
+                    onChange={e => setForm(p => ({ ...p, celular: e.target.value.replace(/\D/g, '').slice(0, 9) }))}
+                    required maxLength={9} />
                 </div>
-                <p className="text-xs text-gray-500">10 dígitos, empieza por 3</p>
+                <p className="text-xs text-gray-500">9 dígitos, empieza por 9</p>
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>

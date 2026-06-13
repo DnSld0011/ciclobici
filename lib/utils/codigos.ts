@@ -7,8 +7,8 @@ export function generarCodigoBicicleta(secuencial: number): string {
   return `BC-${yyyy}${mm}${dd}-${seq}`
 }
 
-export function validarCelularColombiano(celular: string): boolean {
-  return /^[3][0-9]{9}$/.test(celular)
+export function validarCelularPeruano(celular: string): boolean {
+  return /^9[0-9]{8}$/.test(celular)
 }
 
 export function validarDocumento(documento: string): boolean {

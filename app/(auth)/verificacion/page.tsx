@@ -35,7 +35,7 @@ function VerificacionContent() {
     setLoading(true)
     try {
       const supabase = createClient()
-      const telefono = `+57${celular}`
+      const telefono = `+51${celular}`
 
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         phone: telefono,
@@ -122,7 +122,7 @@ function VerificacionContent() {
               maxLength={6}
               className="text-center text-2xl tracking-widest font-mono"
             />
-            {celular && <p className="text-xs text-gray-500">Código enviado a +57{celular}</p>}
+            {celular && <p className="text-xs text-gray-500">Código enviado a +51{celular}</p>}
           </div>
           <Button type="submit" className="w-full" disabled={loading || otp.length !== 6 || !celular}>
             {loading ? 'Verificando...' : 'Verificar Código'}
