@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚲 CicloBici — Sistema Municipal de Bicicletas Compartidas
 
-## Getting Started
+Aplicación web completa para gestión de bicicletas compartidas, construida con Next.js 14, Supabase y Vercel.
 
-First, run the development server:
+## Stack Técnico
+
+- **Framework**: Next.js 14 (App Router)
+- **Lenguaje**: TypeScript estricto
+- **Estilos**: Tailwind CSS + componentes Radix UI
+- **Base de datos**: Supabase (PostgreSQL + Realtime)
+- **Autenticación**: Supabase Auth (OTP por celular)
+- **Mapas**: Leaflet + React-Leaflet
+- **Gráficos**: Recharts
+- **QR**: librería `qrcode`
+- **Deploy**: Vercel
+
+## Funcionalidades
+
+| Rol | Funcionalidades |
+|-----|----------------|
+| **Ciudadano** | Registro, verificación celular OTP, mapa en tiempo real, disponibilidad de estaciones |
+| **Operador** | CRUD estaciones, gestión bicicletas con código y QR automático, mantenimientos, predicción de demanda, mapa realtime |
+| **Técnico** | Registro de mantenimientos, historial por bicicleta |
+
+## Instalación Local
+
+### 1. Clonar y preparar
+
+```bash
+git clone https://github.com/tu-usuario/ciclobici.git
+cd ciclobici
+npm install
+cp .env.example .env.local
+```
+
+### 2. Configurar variables de entorno
+
+Editar `.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
+```
+
+### 3. Configurar Supabase
+
+1. Crear proyecto en [supabase.com](https://supabase.com)
+2. Ir a **SQL Editor** → ejecutar el contenido de `schema.sql`
+3. Ir a **Database > Replication** → activar tablas `bicicletas` y `estaciones` para Realtime
+4. Ir a **Authentication > Providers > Phone** → configurar SMS (Twilio o Vonage)
+
+### 4. Ejecutar
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abrir [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy en Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Subir el proyecto a GitHub
+2. Ir a [vercel.com](https://vercel.com) → Import Project → seleccionar el repositorio
+3. Agregar variables de entorno en Vercel Dashboard > Settings > Environment Variables:
 
-## Learn More
+| Variable | Descripción |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key de Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (solo backend) |
 
-To learn more about Next.js, take a look at the following resources:
+4. Click en **Deploy** — cada push a `main` despliega automáticamente
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Crear Usuario Operador
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Después de que el usuario se registre, ejecutar en Supabase SQL Editor:
 
-## Deploy on Vercel
+```sql
+UPDATE public.usuarios
+SET rol = 'operador', estado = 'activo'
+WHERE correo = 'operador@ejemplo.com';
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Estructura del Proyecto
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+ciclobici/
+├── app/
+│   ├── (auth)/           # Login, registro, verificación OTP
+│   ├── (ciudadano)/      # Mapa para ciudadanos
+│   ├── (operador)/       # Panel completo para operadores
+│   ├── (tecnico)/        # Panel técnico de mantenimiento
+│   └── api/prediccion/   # Endpoint predicción de demanda
+├── components/
+│   ├── ui/               # Button, Input, Card, Dialog, etc.
+│   └── maps/             # Componente mapa Leaflet
+├── lib/supabase/         # Clientes Supabase
+├── lib/utils/            # Validaciones y utilidades
+├── types/                # Tipos TypeScript
+├── schema.sql            # SQL completo para Supabase
+└── middleware.ts         # Protección de rutas por rol
+```
