@@ -31,7 +31,7 @@ export async function proxy(request: NextRequest) {
 
     const { data: { user } } = await supabase.auth.getUser()
 
-    const publicRoutes = ['/login', '/registro', '/verificacion']
+    const publicRoutes = ['/login', '/registro', '/verificacion', '/api/']
     const isPublic = publicRoutes.some(r => pathname.startsWith(r))
 
     if (isPublic) {
@@ -71,7 +71,7 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse
   } catch {
     // On Supabase error, redirect protected routes to login
-    const publicRoutes = ['/login', '/registro', '/verificacion']
+    const publicRoutes = ['/login', '/registro', '/verificacion', '/api/']
     if (!publicRoutes.some(r => pathname.startsWith(r))) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
