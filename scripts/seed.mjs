@@ -20,12 +20,12 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 // ─── Datos de prueba ────────────────────────────────────────────────
 
 const ESTACIONES = [
-  { nombre: 'Estación Miraflores Centro',     direccion: 'Av. Larco 1150, Miraflores, Lima',           latitud: -12.1219, longitud: -77.0282, capacidad: 15, estado: 'activa' },
-  { nombre: 'Estación San Isidro Financiero', direccion: 'Av. Javier Prado Este 500, San Isidro, Lima', latitud: -12.0951, longitud: -77.0280, capacidad: 12, estado: 'activa' },
-  { nombre: 'Estación Barranco Malecón',      direccion: 'Malecón Cisneros s/n, Barranco, Lima',        latitud: -12.1453, longitud: -77.0219, capacidad: 10, estado: 'activa' },
-  { nombre: 'Estación Surco Primavera',       direccion: 'Av. Primavera 650, Santiago de Surco, Lima',  latitud: -12.1280, longitud: -77.0019, capacidad: 12, estado: 'activa' },
-  { nombre: 'Estación Pueblo Libre',          direccion: 'Av. Sucre 200, Pueblo Libre, Lima',           latitud: -12.0745, longitud: -77.0585, capacidad: 8,  estado: 'mantenimiento' },
-  { nombre: 'Estación La Molina',             direccion: 'Av. La Molina 1200, La Molina, Lima',         latitud: -12.0839, longitud: -76.9385, capacidad: 10, estado: 'activa' },
+  { nombre: 'Estación San Borja Norte',    direccion: 'Av. San Borja Norte 1200, San Borja, Lima',  latitud: -12.0960, longitud: -76.9980, capacidad: 15, estado: 'activa' },
+  { nombre: 'Estación San Borja Sur',     direccion: 'Av. San Borja Sur 780, San Borja, Lima',      latitud: -12.1080, longitud: -76.9990, capacidad: 12, estado: 'activa' },
+  { nombre: 'Estación Aviación',          direccion: 'Av. Aviación 2850, San Borja, Lima',          latitud: -12.1020, longitud: -77.0050, capacidad: 10, estado: 'activa' },
+  { nombre: 'Estación Javier Prado',      direccion: 'Av. Javier Prado Este 3200, San Borja, Lima', latitud: -12.0970, longitud: -76.9940, capacidad: 12, estado: 'activa' },
+  { nombre: 'Estación Canadá',            direccion: 'Av. Canadá 1450, San Borja, Lima',            latitud: -12.1050, longitud: -77.0010, capacidad: 8,  estado: 'mantenimiento' },
+  { nombre: 'Estación Angamos',           direccion: 'Av. Angamos Este 1800, San Borja, Lima',      latitud: -12.1100, longitud: -76.9960, capacidad: 10, estado: 'activa' },
 ]
 
 const USUARIOS_TEST = [
