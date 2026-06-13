@@ -35,19 +35,33 @@ function LoginContent() {
     if (urlError) setError(decodeURIComponent(urlError))
   }, [searchParams])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!window.location.hash.includes('access_token')) return
-    const supabase = createClient()
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.user) return
+  async function demoLogin(phone: string) {
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/auth/demo?phone=${phone}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+
+      const supabase = createClient()
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      })
+      if (signInError) throw signInError
+
       const { data: perfil } = await supabase
-        .from('usuarios').select('rol').eq('id', session.user.id).single()
-      if (perfil?.rol === 'operador')      router.replace('/operador/mapa')
-      else if (perfil?.rol === 'tecnico')  router.replace('/tecnico/mantenimiento')
-      else                                 router.replace('/ciudadano/mapa')
-    })
-  }, [router])
+        .from('usuarios').select('rol').eq('id', authData.user.id).single()
+
+      if (perfil?.rol === 'operador')     router.replace('/operador/mapa')
+      else if (perfil?.rol === 'tecnico') router.replace('/tecnico/mantenimiento')
+      else                                router.replace('/ciudadano/mapa')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error en acceso demo')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function enviarOtp(e: React.FormEvent) {
     e.preventDefault()
@@ -202,14 +216,15 @@ function LoginContent() {
               </p>
               <div className="flex flex-col gap-2">
                 {DEMO_USERS.map(u => (
-                  <a
+                  <button
                     key={u.phone}
-                    href={`/api/auth/demo?phone=${u.phone}`}
-                    className="flex items-center justify-between px-3 py-2 rounded-md border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition"
+                    onClick={() => demoLogin(u.phone)}
+                    disabled={loading}
+                    className="flex items-center justify-between px-3 py-2 rounded-md border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition text-left disabled:opacity-50"
                   >
                     <span className="text-sm font-medium text-gray-700">{u.label}</span>
                     <span className="text-xs text-gray-400">{u.desc}</span>
-                  </a>
+                  </button>
                 ))}
               </div>
             </div>
