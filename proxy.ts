@@ -3,11 +3,18 @@ import { createServerClient } from '@supabase/ssr'
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
+  const { pathname } = request.nextUrl
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // If env vars missing, pass through (pages will handle gracefully)
+  if (!supabaseUrl || !supabaseKey) {
+    return supabaseResponse
+  }
+
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll()
@@ -20,57 +27,56 @@ export async function proxy(request: NextRequest) {
           )
         },
       },
+    })
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const publicRoutes = ['/login', '/registro', '/verificacion']
+    const isPublic = publicRoutes.some(r => pathname.startsWith(r))
+
+    if (isPublic) {
+      return supabaseResponse
     }
-  )
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
 
-  // Public routes
-  const publicRoutes = ['/login', '/registro', '/verificacion']
-  if (publicRoutes.some(r => pathname.startsWith(r))) {
-    if (user) {
-      // Redirect authenticated users away from auth pages
+    const { data: perfil } = await supabase
+      .from('usuarios')
+      .select('rol, estado')
+      .eq('id', user.id)
+      .single()
+
+    if (!perfil) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    if (perfil.estado === 'pendiente' && !pathname.startsWith('/verificacion')) {
+      return NextResponse.redirect(new URL('/verificacion', request.url))
+    }
+
+    if (pathname.startsWith('/operador') && perfil.rol !== 'operador') {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    if (pathname.startsWith('/tecnico') && !['tecnico', 'operador'].includes(perfil.rol)) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    if (pathname.startsWith('/ciudadano') && perfil.rol !== 'ciudadano') {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    return supabaseResponse
+  } catch {
+    // On Supabase error, redirect protected routes to login
+    const publicRoutes = ['/login', '/registro', '/verificacion']
+    if (!publicRoutes.some(r => pathname.startsWith(r))) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
     return supabaseResponse
   }
-
-  // No user → redirect to login
-  if (!user) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  // Fetch user profile for role/state checks
-  const { data: perfil } = await supabase
-    .from('usuarios')
-    .select('rol, estado')
-    .eq('id', user.id)
-    .single()
-
-  if (!perfil) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  // Pending users must verify phone
-  if (perfil.estado === 'pendiente' && !pathname.startsWith('/verificacion')) {
-    return NextResponse.redirect(new URL('/verificacion', request.url))
-  }
-
-  // Route protection by role
-  if (pathname.startsWith('/operador') && perfil.rol !== 'operador') {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  if (pathname.startsWith('/tecnico') && !['tecnico', 'operador'].includes(perfil.rol)) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  if (pathname.startsWith('/ciudadano') && perfil.rol !== 'ciudadano') {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  return supabaseResponse
 }
 
 export const config = {
