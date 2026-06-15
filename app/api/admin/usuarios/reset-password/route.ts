@@ -7,7 +7,8 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
-  const { data: perfil } = await supabase
+  const admin2 = createAdminClient()
+  const { data: perfil } = await admin2
     .from('usuarios').select('rol').eq('id', user.id).single()
   if (perfil?.rol !== 'operador')
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })

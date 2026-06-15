@@ -6,7 +6,8 @@ async function verificarOperador() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const { data: perfil } = await supabase
+  const admin = createAdminClient()
+  const { data: perfil } = await admin
     .from('usuarios').select('rol').eq('id', user.id).single()
   if (perfil?.rol !== 'operador') return null
   return user
@@ -17,8 +18,8 @@ export async function GET() {
   const caller = await verificarOperador()
   if (!caller) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .from('usuarios')
     .select('id, nombre, documento, correo, celular, rol, estado')
     .order('nombre', { ascending: true })
@@ -40,8 +41,8 @@ export async function PATCH(req: NextRequest) {
   if (!camposPermitidos.includes(campo))
     return NextResponse.json({ error: 'Campo no permitido' }, { status: 400 })
 
-  const supabase = await createClient()
-  const { error } = await supabase
+  const admin = createAdminClient()
+  const { error } = await admin
     .from('usuarios').update({ [campo]: valor }).eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -57,18 +58,14 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
-  // No permitir auto-eliminación
   if (id === caller.id)
     return NextResponse.json({ error: 'No puedes eliminar tu propia cuenta' }, { status: 400 })
 
-  const supabase = await createClient()
-  const admin    = createAdminClient()
+  const admin = createAdminClient()
 
-  // Eliminar de la tabla pública primero
-  const { error: dbErr } = await supabase.from('usuarios').delete().eq('id', id)
+  const { error: dbErr } = await admin.from('usuarios').delete().eq('id', id)
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
 
-  // Eliminar de auth.users
   const { error: authErr } = await admin.auth.admin.deleteUser(id)
   if (authErr) return NextResponse.json({ error: authErr.message }, { status: 500 })
 
