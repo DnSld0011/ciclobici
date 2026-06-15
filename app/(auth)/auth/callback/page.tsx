@@ -56,8 +56,9 @@ export default function AuthCallbackPage() {
         }
       }
 
-      const { data: perfil } = await supabase
-        .from('usuarios').select('rol').eq('id', user.id).maybeSingle()
+      // Usar API para obtener perfil sin restricciones de RLS
+      const res = await fetch('/api/auth/perfil')
+      const { perfil } = res.ok ? await res.json() : { perfil: null }
 
       if (perfil?.rol === 'administrador' || perfil?.rol === 'operador') router.replace('/operador')
       else if (perfil?.rol === 'tecnico') router.replace('/tecnico/mantenimiento')

@@ -36,7 +36,7 @@ function LoginContent() {
         emailToUse = usuario.correo
       }
 
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: emailToUse, password,
       })
       if (signInError) {
@@ -44,13 +44,17 @@ function LoginContent() {
           throw new Error('Correo/teléfono o contraseña incorrectos')
         throw signInError
       }
-      if (!data.user) throw new Error('Error al iniciar sesión')
 
-      const { data: perfil } = await supabase
-        .from('usuarios').select('rol, estado').eq('id', data.user.id).maybeSingle()
+      // Obtener perfil via API (usa admin client, sin restricciones de RLS)
+      const res = await fetch('/api/auth/perfil')
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error ?? 'No se pudo obtener el perfil')
+      }
+      const { perfil, email: userEmail } = await res.json()
 
       if (!perfil) {
-        router.push(`/registro?correo=${encodeURIComponent(data.user.email ?? '')}`)
+        router.push(`/registro?correo=${encodeURIComponent(userEmail ?? emailToUse)}`)
         return
       }
       if (perfil.estado === 'suspendido') {
