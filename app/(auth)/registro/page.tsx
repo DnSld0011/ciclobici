@@ -4,21 +4,24 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { validarCelularPeruano, validarDocumento } from '@/lib/utils/codigos'
-import { Bike, CheckCircle, ArrowLeft } from 'lucide-react'
+import { Bike, CheckCircle, ArrowLeft, User, CreditCard, Mail, Phone } from 'lucide-react'
 
-const inputCls = 'w-full h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all'
+const inputCls = 'w-full h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all placeholder-outline'
 const labelCls = 'block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1.5'
+
+function validarDocumento(doc: string) { return /^\d{6,12}$/.test(doc) }
+function validarCelular(cel: string)   { return /^9\d{8}$/.test(cel) }
 
 export default function RegistroPage() {
   const [form, setForm] = useState({ nombre: '', documento: '', correo: '', celular: '' })
-  const [error, setError] = useState('')
+  const [error, setError]   = useState('')
   const [loading, setLoading] = useState(false)
-  const [exito, setExito] = useState(false)
+  const [exito, setExito]   = useState(false)
   const router = useRouter()
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  function set(field: string) {
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm(prev => ({ ...prev, [field]: e.target.value }))
   }
 
   function validar(): string | null {
@@ -28,8 +31,8 @@ export default function RegistroPage() {
       return 'Documento inválido (solo números, 6-12 dígitos)'
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo))
       return 'Correo electrónico inválido'
-    if (!validarCelularPeruano(form.celular))
-      return 'Celular inválido (9 dígitos, empieza por 9)'
+    if (!validarCelular(form.celular))
+      return 'Celular inválido (9 dígitos, debe empezar por 9)'
     return null
   }
 
@@ -38,21 +41,39 @@ export default function RegistroPage() {
     const err = validar()
     if (err) { setError(err); return }
     setError(''); setLoading(true)
+
     try {
       const supabase = createClient()
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        phone: `+51${form.celular}`,
+
+      // Verificar que el correo no está ya registrado intentando login
+      // (si ya existe, signInWithOtp igualmente enviará código)
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: form.correo.trim().toLowerCase(),
         options: { shouldCreateUser: true },
       })
-      if (authError) throw authError
+
+      if (otpError) {
+        // Rate limit u otro error de Supabase
+        throw otpError
+      }
+
+      // Guardar datos de perfil en localStorage para usarlos después de verificar
       localStorage.setItem('ciclobici_registro', JSON.stringify({
-        nombre: form.nombre.trim(), documento: form.documento,
-        correo: form.correo, celular: form.celular,
+        nombre:    form.nombre.trim(),
+        documento: form.documento.trim(),
+        correo:    form.correo.trim().toLowerCase(),
+        celular:   form.celular.trim(),
       }))
+
       setExito(true)
-      setTimeout(() => router.push('/verificacion?modo=registro'), 2000)
+      setTimeout(() => router.push('/verificacion?modo=registro'), 1800)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al registrar')
+      const msg = err instanceof Error ? err.message : 'Error al registrar'
+      if (msg.toLowerCase().includes('rate limit') || msg.includes('429')) {
+        setError('Demasiados intentos. Espera unos minutos y vuelve a intentarlo.')
+      } else {
+        setError(msg)
+      }
     } finally { setLoading(false) }
   }
 
@@ -65,9 +86,10 @@ export default function RegistroPage() {
             <CheckCircle size={40} className="text-[#166534]" />
           </div>
           <div>
-            <h2 className="text-xl font-extrabold text-on-surface">¡Registro iniciado!</h2>
+            <h2 className="text-xl font-extrabold text-on-surface">¡Código enviado!</h2>
             <p className="text-sm text-outline mt-2">
-              Enviamos un código OTP al celular <strong className="text-on-surface">+51 {form.celular}</strong>
+              Revisa tu correo <strong className="text-on-surface">{form.correo}</strong>
+              <br />e ingresa el código de 6 dígitos.
             </p>
           </div>
           <p className="text-xs text-outline">Redirigiendo a verificación...</p>
@@ -79,7 +101,7 @@ export default function RegistroPage() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
 
-      {/* Hero panel */}
+      {/* ── Hero ── */}
       <div className="relative hidden md:flex md:w-5/12 flex-col justify-center p-12 overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #003527 0%, #064e3b 60%, #002117 100%)' }}>
         <div className="absolute top-0 right-0 w-72 h-72 rounded-full opacity-10"
@@ -89,7 +111,7 @@ export default function RegistroPage() {
             <Bike size={24} className="text-white" />
           </div>
           <h1 className="text-3xl font-extrabold text-white leading-tight mb-4">
-            Únete a la red verde de San Borja
+            Únete a la red verde<br />de San Borja
           </h1>
           <p className="text-white/60 text-sm leading-relaxed max-w-xs">
             Crea tu cuenta gratis y empieza a usar las bicicletas compartidas. Tu ciudad, tu ritmo.
@@ -108,10 +130,11 @@ export default function RegistroPage() {
         </div>
       </div>
 
-      {/* Form panel */}
+      {/* ── Formulario ── */}
       <div className="flex-1 flex items-center justify-center p-6 bg-surface">
         <div className="w-full max-w-sm space-y-6">
 
+          {/* Logo mobile */}
           <div className="md:hidden flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#003527' }}>
               <Bike size={20} className="text-white" />
@@ -121,7 +144,9 @@ export default function RegistroPage() {
 
           <div>
             <h2 className="text-2xl font-extrabold text-on-surface">Crear cuenta</h2>
-            <p className="text-sm text-outline mt-1">Regístrate para usar el sistema de bicicletas compartidas</p>
+            <p className="text-sm text-outline mt-1">
+              Recibirás un código en tu correo para confirmar el registro
+            </p>
           </div>
 
           {error && (
@@ -131,56 +156,84 @@ export default function RegistroPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Nombre */}
             <div>
-              <label className={labelCls}>Nombre completo</label>
-              <input className={inputCls} name="nombre" placeholder="Juan García López"
-                value={form.nombre} onChange={handleChange} required />
+              <label className={labelCls}>
+                <User size={10} className="inline mr-1" />Nombre completo
+              </label>
+              <input
+                className={inputCls} name="nombre"
+                placeholder="Juan García López"
+                value={form.nombre} onChange={set('nombre')} required
+              />
+              <p className="text-[10px] text-outline mt-1">Nombre y apellidos como en tu documento</p>
             </div>
 
+            {/* Documento */}
             <div>
-              <label className={labelCls}>Número de documento</label>
-              <input className={inputCls} name="documento" placeholder="12345678"
+              <label className={labelCls}>
+                <CreditCard size={10} className="inline mr-1" />DNI / Documento
+              </label>
+              <input
+                className={inputCls} name="documento"
+                placeholder="12345678"
                 value={form.documento}
                 onChange={e => setForm(p => ({ ...p, documento: e.target.value.replace(/\D/g, '') }))}
-                required maxLength={12} />
-              <p className="text-[10px] text-outline mt-1">Solo números, sin puntos ni guiones</p>
+                required maxLength={12}
+              />
             </div>
 
+            {/* Correo */}
             <div>
-              <label className={labelCls}>Correo electrónico</label>
-              <input type="email" className={inputCls} name="correo" placeholder="usuario@correo.com"
-                value={form.correo} onChange={handleChange} required />
+              <label className={labelCls}>
+                <Mail size={10} className="inline mr-1" />Correo electrónico
+              </label>
+              <input
+                type="email" className={inputCls} name="correo"
+                placeholder="tu@correo.com"
+                value={form.correo} onChange={set('correo')}
+                required autoComplete="email"
+              />
+              <p className="text-[10px] text-outline mt-1">Aquí recibirás el código de verificación</p>
             </div>
 
+            {/* Celular */}
             <div>
-              <label className={labelCls}>Celular peruano</label>
+              <label className={labelCls}>
+                <Phone size={10} className="inline mr-1" />Celular peruano
+              </label>
               <div className="flex gap-2">
-                <span className="flex items-center px-3 h-12 rounded-xl border border-outline-variant/40 bg-white text-outline text-sm font-semibold shrink-0">
+                <span className="flex items-center px-3 h-12 rounded-xl border border-outline-variant/40 bg-surface-container-low text-outline text-sm font-semibold shrink-0">
                   +51
                 </span>
-                <input type="tel" className="flex-1 h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
-                  name="celular" placeholder="987 654 321"
+                <input
+                  type="tel" name="celular"
+                  placeholder="987 654 321"
+                  className="flex-1 h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
                   value={form.celular}
                   onChange={e => setForm(p => ({ ...p, celular: e.target.value.replace(/\D/g, '').slice(0, 9) }))}
-                  required maxLength={9} />
+                  required maxLength={9}
+                />
               </div>
               <p className="text-[10px] text-outline mt-1">9 dígitos, empieza por 9</p>
             </div>
 
-            <button type="submit"
-              className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50"
+            <button
+              type="submit"
+              className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50 mt-2"
               style={{ background: '#b2f746', color: '#002117' }}
               disabled={loading}>
-              {loading ? 'Registrando...' : 'Crear cuenta'}
+              <Mail size={16} />
+              {loading ? 'Enviando código...' : 'Crear cuenta y recibir código'}
             </button>
           </form>
 
-          <div className="text-center text-sm">
-            <span className="text-outline">¿Ya tienes cuenta? </span>
-            <Link href="/login" className="font-bold text-primary-container hover:underline flex-inline items-center gap-1">
+          <p className="text-center text-sm text-outline">
+            ¿Ya tienes cuenta?{' '}
+            <Link href="/login" className="font-bold text-primary-container hover:underline">
               <ArrowLeft size={12} className="inline" /> Iniciar sesión
             </Link>
-          </div>
+          </p>
 
         </div>
       </div>
