@@ -198,9 +198,10 @@ CREATE TRIGGER trg_finalizar_viaje
 -- incidencias: el ciudadano solo ve las suyas; operador/tecnico ve todo
 ALTER TABLE public.incidencias ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "ciudadano_ve_sus_incidencias"  ON public.incidencias;
+DROP POLICY IF EXISTS "ciudadano_ve_sus_incidencias"   ON public.incidencias;
 DROP POLICY IF EXISTS "staff_ve_todas_las_incidencias" ON public.incidencias;
 DROP POLICY IF EXISTS "ciudadano_crea_incidencias"     ON public.incidencias;
+DROP POLICY IF EXISTS "staff_actualiza_incidencias"    ON public.incidencias;
 
 CREATE POLICY "ciudadano_ve_sus_incidencias" ON public.incidencias
   FOR SELECT USING (

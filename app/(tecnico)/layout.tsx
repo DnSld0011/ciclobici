@@ -1,13 +1,11 @@
-import { SidebarOperador } from '@/components/SidebarOperador'
+import { SidebarTecnico } from '@/components/SidebarTecnico'
 
 export default function TecnicoLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <SidebarOperador />
-      <main className="flex-1 md:ml-64 transition-all duration-300">
-        <div className="p-6 max-w-7xl mx-auto">
-          {children}
-        </div>
+    <div className="flex min-h-screen bg-surface">
+      <SidebarTecnico />
+      <main className="flex-1 md:ml-60 transition-all duration-300">
+        {children}
       </main>
     </div>
   )

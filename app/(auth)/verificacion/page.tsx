@@ -1,15 +1,10 @@
 'use client'
 
-import { Suspense } from 'react'
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { CheckCircle, Phone } from 'lucide-react'
+import { Bike, CheckCircle, KeyRound, ArrowLeft } from 'lucide-react'
+import Link from 'next/link'
 
 function VerificacionContent() {
   const [otp, setOtp] = useState('')
@@ -23,24 +18,15 @@ function VerificacionContent() {
 
   useEffect(() => {
     const data = localStorage.getItem('ciclobici_registro')
-    if (data) {
-      const parsed = JSON.parse(data)
-      setCelular(parsed.celular)
-    }
+    if (data) setCelular(JSON.parse(data).celular)
   }, [])
 
   async function verificar(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault(); setError(''); setLoading(true)
     try {
       const supabase = createClient()
-      const telefono = `+51${celular}`
-
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        phone: telefono,
-        token: otp,
-        type: 'sms',
+        phone: `+51${celular}`, token: otp, type: 'sms',
       })
       if (verifyError) throw verifyError
       if (!data.user) throw new Error('Verificación fallida')
@@ -50,13 +36,8 @@ function VerificacionContent() {
         if (regData) {
           const { nombre, documento, correo, celular: cel } = JSON.parse(regData)
           const { error: insertError } = await supabase.from('usuarios').upsert({
-            id: data.user.id,
-            nombre,
-            documento,
-            correo,
-            celular: cel,
-            estado: 'activo',
-            rol: 'ciudadano',
+            id: data.user.id, nombre, documento, correo,
+            celular: cel, estado: 'activo', rol: 'ciudadano',
           })
           if (insertError) throw insertError
           localStorage.removeItem('ciclobici_registro')
@@ -66,87 +47,105 @@ function VerificacionContent() {
       }
 
       setExito(true)
-      setTimeout(() => router.push('/ciudadano/mapa'), 2000)
+      setTimeout(() => router.push('/ciudadano'), 2000)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Código incorrecto o expirado')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (exito) {
-    return (
-      <Card className="w-full max-w-md text-center">
-        <CardContent className="pt-8 pb-6">
-          <CheckCircle className="mx-auto text-green-500 mb-4" size={56} />
-          <h2 className="text-xl font-bold mb-2">¡Celular Verificado!</h2>
-          <p className="text-gray-600">Tu cuenta está activa. Redirigiendo...</p>
-        </CardContent>
-      </Card>
-    )
+    } finally { setLoading(false) }
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle>Verificar Celular</CardTitle>
-        <CardDescription>
-          {modoRegistro
-            ? 'Ingresa el código enviado para activar tu cuenta'
-            : 'Tu cuenta está pendiente de verificación. Ingresa el código OTP.'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {!celular && (
-          <Alert variant="warning" className="mb-4">
-            <AlertDescription>
-              No se encontró información de registro. Por favor{' '}
-              <a href="/registro" className="underline">regístrate nuevamente</a>.
-            </AlertDescription>
-          </Alert>
-        )}
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        <form onSubmit={verificar} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Código OTP de 6 dígitos</Label>
-            <Input
-              type="text"
-              placeholder="123456"
-              value={otp}
-              onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              required
-              maxLength={6}
-              className="text-center text-2xl tracking-widest font-mono"
-            />
-            {celular && <p className="text-xs text-gray-500">Código enviado a +51{celular}</p>}
+    <div className="w-full max-w-sm space-y-7">
+
+      {/* Logo */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#003527' }}>
+          <Bike size={20} className="text-white" />
+        </div>
+        <span className="text-lg font-extrabold text-primary-container">San Borja en Bici</span>
+      </div>
+
+      {exito ? (
+        <div className="text-center space-y-5 py-8">
+          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
+            style={{ background: 'linear-gradient(135deg, #dcfce7, #b2f746)' }}>
+            <CheckCircle size={40} className="text-[#166534]" />
           </div>
-          <Button type="submit" className="w-full" disabled={loading || otp.length !== 6 || !celular}>
-            {loading ? 'Verificando...' : 'Verificar Código'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+          <div>
+            <h2 className="text-xl font-extrabold text-on-surface">¡Celular verificado!</h2>
+            <p className="text-sm text-outline mt-2">Tu cuenta está activa. Redirigiendo...</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div>
+            <h2 className="text-2xl font-extrabold text-on-surface">Verificar celular</h2>
+            <p className="text-sm text-outline mt-1">
+              {modoRegistro
+                ? 'Ingresa el código enviado para activar tu cuenta'
+                : 'Tu cuenta está pendiente. Ingresa el código OTP.'}
+            </p>
+          </div>
+
+          {!celular && (
+            <div className="px-4 py-3 rounded-xl bg-[#fef9c3] text-[#854d0e] text-sm border border-[#fde68a]">
+              No se encontró información de registro.{' '}
+              <Link href="/registro" className="font-bold underline">Regístrate nuevamente</Link>
+            </div>
+          )}
+
+          {error && (
+            <div className="px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold border border-error/20">
+              {error}
+            </div>
+          )}
+
+          {celular && (
+            <div className="px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/20 text-xs text-outline">
+              Código enviado a <span className="font-bold text-on-surface">+51 {celular}</span>
+            </div>
+          )}
+
+          <form onSubmit={verificar} className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1.5">
+                Código de 6 dígitos
+              </label>
+              <input type="text" placeholder="123 456"
+                className="w-full h-16 px-4 rounded-xl border border-outline-variant/40 bg-white text-center text-3xl tracking-[0.6em] font-mono text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
+                value={otp}
+                onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                required maxLength={6} autoFocus />
+            </div>
+
+            <button type="submit"
+              className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50"
+              style={{ background: '#b2f746', color: '#002117' }}
+              disabled={loading || otp.length !== 6 || !celular}>
+              <KeyRound size={16} />
+              {loading ? 'Verificando...' : 'Verificar código'}
+            </button>
+          </form>
+
+          <Link href="/login"
+            className="w-full h-10 rounded-xl text-sm text-outline font-semibold flex items-center justify-center gap-1.5 hover:bg-surface-container-low transition-colors">
+            <ArrowLeft size={14} /> Volver al inicio
+          </Link>
+        </>
+      )}
+    </div>
   )
 }
 
 export default function VerificacionPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-white rounded-full mb-3">
-            <Phone className="text-blue-700" size={28} />
-          </div>
-          <h1 className="text-2xl font-bold text-white">CicloBici</h1>
+    <div className="min-h-screen bg-surface flex items-center justify-center p-6">
+      <Suspense fallback={
+        <div className="flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-primary-container border-t-transparent rounded-full animate-spin" />
         </div>
-        <Suspense fallback={<div className="text-white text-center">Cargando...</div>}>
-          <VerificacionContent />
-        </Suspense>
-      </div>
+      }>
+        <VerificacionContent />
+      </Suspense>
     </div>
   )
 }
