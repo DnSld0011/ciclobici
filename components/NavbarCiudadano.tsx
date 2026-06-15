@@ -28,6 +28,10 @@ export function NavbarCiudadano() {
             <Map size={16} />
             <span className="hidden sm:inline">Mapa</span>
           </Link>
+          <Link href="/ciudadano/perfil" className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-blue-600 text-sm">
+            <User size={16} />
+            <span className="hidden sm:inline">Perfil</span>
+          </Link>
           <button
             onClick={handleLogout}
             className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-blue-600 text-sm"
