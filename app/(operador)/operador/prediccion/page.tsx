@@ -140,7 +140,7 @@ export default function PrediccionPage() {
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={datos} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5eeff" vertical={false} />
-              <XAxis dataKey="hora_label" tick={{ fontSize: 11, fill: '#707974' }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="hora" tickFormatter={(h) => `${h}:00`} tick={{ fontSize: 11, fill: '#707974' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#707974' }} axisLine={false} tickLine={false} />
               <Tooltip
                 contentStyle={{
@@ -179,7 +179,7 @@ export default function PrediccionPage() {
             <div className="bg-surface-container-low rounded-xl p-4">
               <p className="text-[10px] text-outline uppercase font-extrabold tracking-widest">Hora pico</p>
               <p className="text-lg font-extrabold text-primary-container mt-1">
-                {datos.find(d => d.demanda_estimada === maxDemanda)?.hora_label ?? '—'}
+                {(() => { const h = datos.find(d => d.demanda_estimada === maxDemanda)?.hora; return h != null ? `${h}:00` : '—' })()}
               </p>
             </div>
             <div className="bg-surface-container-low rounded-xl p-4">
