@@ -1,46 +1,50 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Bicicleta, BicicletaEstado, Estacion } from '@/types'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Plus, Search, QrCode, Download, Bike } from 'lucide-react'
+import { Plus, Search, QrCode, Download, Bike, X } from 'lucide-react'
 import { generarCodigoBicicleta } from '@/lib/utils/codigos'
 
 type FormBici = { tipo: string; marca: string; modelo: string; estacion_id: string; estado: BicicletaEstado }
 const formVacio: FormBici = { tipo: '', marca: '', modelo: '', estacion_id: '', estado: 'disponible' }
+
+const ESTADO_CHIP: Record<BicicletaEstado, string> = {
+  disponible: 'chip-disponible', en_viaje: 'chip-en-uso',
+  mantenimiento: 'chip-mantenimiento', baja: 'chip-baja',
+}
+const ESTADO_LABEL: Record<BicicletaEstado, string> = {
+  disponible: 'Disponible', en_viaje: 'En viaje', mantenimiento: 'Mantenimiento', baja: 'Baja',
+}
+
+const inputCls = 'w-full h-11 px-3 rounded-xl border border-outline-variant/40 bg-surface text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all'
+const labelCls = 'block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1'
+const btnPrimary = 'inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-primary-container text-white text-sm font-bold shadow-sm hover:opacity-90 active:scale-[.98] transition-all disabled:opacity-50'
+const btnOutline = 'inline-flex items-center gap-2 px-4 h-10 rounded-xl border border-outline-variant/40 bg-white text-on-surface text-sm font-semibold hover:bg-surface-container-low active:scale-[.98] transition-all'
 
 export default function BicicletasPage() {
   const [bicicletas, setBicicletas] = useState<Bicicleta[]>([])
   const [estaciones, setEstaciones] = useState<Estacion[]>([])
   const [filtro, setFiltro] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
-  const [dialogAbierto, setDialogAbierto] = useState(false)
-  const [dialogQr, setDialogQr] = useState<Bicicleta | null>(null)
+  const [modalNueva, setModalNueva] = useState(false)
+  const [modalQr, setModalQr] = useState<Bicicleta | null>(null)
   const [form, setForm] = useState<FormBici>(formVacio)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState('')
   const supabase = createClient()
 
-  async function cargar() {
+  const cargar = useCallback(async () => {
     const [{ data: bicis }, { data: ests }] = await Promise.all([
       supabase.from('bicicletas').select('*, estacion:estaciones(nombre)').order('created_at', { ascending: false }),
       supabase.from('estaciones').select('*').eq('estado', 'activa').order('nombre'),
     ])
     if (bicis) setBicicletas(bicis)
     if (ests) setEstaciones(ests)
-  }
+  }, [supabase])
 
-  useEffect(() => { cargar() }, [])
+  useEffect(() => { cargar() }, [cargar])
 
   async function generarQR(codigo: string): Promise<string> {
     const QRCode = (await import('qrcode')).default
@@ -48,20 +52,16 @@ export default function BicicletasPage() {
   }
 
   async function abrirQr(bici: Bicicleta) {
-    setDialogQr(bici)
-    if (bici.qr_url) {
-      setQrDataUrl(bici.qr_url)
-    } else {
-      const url = await generarQR(bici.codigo)
-      setQrDataUrl(url)
-    }
+    setModalQr(bici)
+    const url = bici.qr_url ?? await generarQR(bici.codigo)
+    setQrDataUrl(url)
   }
 
   function descargarQr() {
-    if (!dialogQr || !qrDataUrl) return
+    if (!modalQr || !qrDataUrl) return
     const a = document.createElement('a')
     a.href = qrDataUrl
-    a.download = `qr-${dialogQr.codigo}.png`
+    a.download = `qr-${modalQr.codigo}.png`
     a.click()
   }
 
@@ -71,19 +71,16 @@ export default function BicicletasPage() {
     if (!form.tipo.trim()) { setError('El tipo es requerido'); return }
     setLoading(true)
     try {
-      // Get next sequential number
       const { count } = await supabase.from('bicicletas').select('*', { count: 'exact', head: true })
       const codigo = generarCodigoBicicleta((count ?? 0) + 1)
       const qrUrl = await generarQR(codigo)
-
-      const payload = {
+      const { error: err } = await supabase.from('bicicletas').insert({
         codigo, tipo: form.tipo.trim(), marca: form.marca || null,
         modelo: form.modelo || null, qr_url: qrUrl,
         estado: form.estado, estacion_id: form.estacion_id || null,
-      }
-      const { error: err } = await supabase.from('bicicletas').insert(payload)
+      })
       if (err) throw err
-      setDialogAbierto(false)
+      setModalNueva(false)
       setForm(formVacio)
       await cargar()
     } catch (err: unknown) {
@@ -98,183 +95,173 @@ export default function BicicletasPage() {
     await cargar()
   }
 
-  const filtradas = bicicletas.filter(b => {
-    const matchCodigo = b.codigo.toLowerCase().includes(filtro.toLowerCase())
-    const matchEstado = filtroEstado === 'todos' || b.estado === filtroEstado
-    return matchCodigo && matchEstado
-  })
-
-  const badgeVariant = (estado: BicicletaEstado) => ({
-    disponible: 'success', en_viaje: 'default', mantenimiento: 'warning', baja: 'destructive',
-  }[estado] as 'success' | 'default' | 'warning' | 'destructive')
-
-  const estadoLabel: Record<BicicletaEstado, string> = {
-    disponible: 'Disponible', en_viaje: 'En Viaje', mantenimiento: 'Mantenimiento', baja: 'Baja',
-  }
+  const filtradas = bicicletas.filter(b =>
+    b.codigo.toLowerCase().includes(filtro.toLowerCase()) &&
+    (filtroEstado === 'todos' || b.estado === filtroEstado)
+  )
 
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-5 max-w-[1300px]">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Bicicletas</h1>
-          <p className="text-gray-500 text-sm">Gestión de bicicletas con código y QR automático</p>
+          <h1 className="text-xl font-extrabold text-primary-container">Bicicletas</h1>
+          <p className="text-xs text-outline mt-0.5">Gestión de flota · QR automático</p>
         </div>
-        <Button onClick={() => { setForm(formVacio); setError(''); setDialogAbierto(true) }}>
+        <button className={btnPrimary} onClick={() => { setForm(formVacio); setError(''); setModalNueva(true) }}>
           <Plus size={16} /> Nueva Bicicleta
-        </Button>
+        </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
         {(['disponible', 'en_viaje', 'mantenimiento', 'baja'] as BicicletaEstado[]).map(e => (
-          <Card key={e}>
-            <CardContent className="pt-4 pb-3">
-              <div className="text-2xl font-bold">{bicicletas.filter(b => b.estado === e).length}</div>
-              <div className="text-xs text-gray-500">{estadoLabel[e]}</div>
-            </CardContent>
-          </Card>
+          <div key={e} className={`card p-4 cursor-pointer transition-all ${filtroEstado === e ? 'ring-2 ring-primary-container' : ''}`}
+            onClick={() => setFiltroEstado(filtroEstado === e ? 'todos' : e)}>
+            <p className="text-2xl font-extrabold text-on-surface">{bicicletas.filter(b => b.estado === e).length}</p>
+            <span className={`mt-1 inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full ${ESTADO_CHIP[e]}`}>{ESTADO_LABEL[e]}</span>
+          </div>
         ))}
       </div>
 
       {/* Filtros */}
-      <Card>
-        <CardContent className="pt-4 pb-3">
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-              <Input placeholder="Buscar por código..." className="pl-9"
-                value={filtro} onChange={e => setFiltro(e.target.value)} />
+      <div className="card p-4 flex gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 text-outline" size={14} />
+          <input placeholder="Buscar por código..." className={`${inputCls} pl-9`}
+            value={filtro} onChange={e => setFiltro(e.target.value)} />
+        </div>
+        <select className="h-11 px-3 rounded-xl border border-outline-variant/40 bg-surface text-sm text-on-surface focus:outline-none"
+          value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
+          <option value="todos">Todos los estados</option>
+          <option value="disponible">Disponible</option>
+          <option value="en_viaje">En viaje</option>
+          <option value="mantenimiento">Mantenimiento</option>
+          <option value="baja">Baja</option>
+        </select>
+      </div>
+
+      {/* Tabla */}
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-outline-variant/20 bg-surface-container-low">
+              <th className="text-left px-5 py-3 text-[10px] font-extrabold tracking-widest text-outline uppercase">Código</th>
+              <th className="text-left px-5 py-3 text-[10px] font-extrabold tracking-widest text-outline uppercase">Tipo / Marca</th>
+              <th className="text-left px-5 py-3 text-[10px] font-extrabold tracking-widest text-outline uppercase">Estado</th>
+              <th className="text-left px-5 py-3 text-[10px] font-extrabold tracking-widest text-outline uppercase">Estación</th>
+              <th className="text-right px-5 py-3 text-[10px] font-extrabold tracking-widest text-outline uppercase">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-outline-variant/10">
+            {filtradas.length === 0 && (
+              <tr><td colSpan={5} className="text-center text-outline py-12 text-sm">Sin bicicletas</td></tr>
+            )}
+            {filtradas.map(b => (
+              <tr key={b.id} className="hover:bg-surface-container-low/50 transition-colors">
+                <td className="px-5 py-3">
+                  <span className="font-mono font-bold text-primary-container text-xs tracking-wide">{b.codigo}</span>
+                </td>
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <Bike size={13} className="text-outline shrink-0" />
+                    <span className="text-on-surface">{b.tipo}{b.marca ? ` · ${b.marca}` : ''}{b.modelo ? ` ${b.modelo}` : ''}</span>
+                  </div>
+                </td>
+                <td className="px-5 py-3">
+                  <select value={b.estado}
+                    onChange={e => cambiarEstado(b.id, e.target.value as BicicletaEstado)}
+                    className={`text-xs font-bold px-2.5 py-1 rounded-full border cursor-pointer bg-transparent focus:outline-none ${ESTADO_CHIP[b.estado]}`}>
+                    {(['disponible', 'en_viaje', 'mantenimiento', 'baja'] as BicicletaEstado[]).map(e => (
+                      <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-5 py-3 text-outline text-xs">
+                  {(b.estacion as unknown as { nombre?: string })?.nombre ?? '—'}
+                </td>
+                <td className="px-5 py-3 text-right">
+                  <button className={btnOutline + ' text-xs px-3 h-8'} onClick={() => abrirQr(b)}>
+                    <QrCode size={13} /> QR
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal Nueva Bicicleta */}
+      {modalNueva && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-outline-variant/20">
+              <h2 className="font-extrabold text-on-surface">Nueva Bicicleta</h2>
+              <button onClick={() => setModalNueva(false)} className="w-8 h-8 rounded-xl bg-surface-container-low flex items-center justify-center hover:bg-surface-container transition-colors">
+                <X size={16} className="text-outline" />
+              </button>
             </div>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="disponible">Disponible</SelectItem>
-                <SelectItem value="en_viaje">En Viaje</SelectItem>
-                <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
-                <SelectItem value="baja">Baja</SelectItem>
-              </SelectContent>
-            </Select>
+            {error && <div className="mx-6 mt-4 px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold">{error}</div>}
+            <form onSubmit={guardar} className="p-6 space-y-4">
+              <div>
+                <label className={labelCls}>Tipo *</label>
+                <input className={inputCls} placeholder="Urbana, MTB, Eléctrica..."
+                  value={form.tipo} onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))} required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Marca</label>
+                  <input className={inputCls} placeholder="Trek, Giant..."
+                    value={form.marca} onChange={e => setForm(p => ({ ...p, marca: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={labelCls}>Modelo</label>
+                  <input className={inputCls} placeholder="FX3, 2024..."
+                    value={form.modelo} onChange={e => setForm(p => ({ ...p, modelo: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Estación inicial</label>
+                <select className={inputCls} value={form.estacion_id} onChange={e => setForm(p => ({ ...p, estacion_id: e.target.value }))}>
+                  <option value="">Sin asignar</option>
+                  {estaciones.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                </select>
+              </div>
+              <div className="px-4 py-3 rounded-xl bg-surface-container-low text-xs text-outline border border-outline-variant/20">
+                El código (BC-YYYYMMDD-XXXX) y el QR se generarán automáticamente.
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" className={btnOutline + ' flex-1'} onClick={() => setModalNueva(false)}>Cancelar</button>
+                <button type="submit" className={btnPrimary + ' flex-1 justify-center'} disabled={loading}>
+                  {loading ? 'Creando...' : 'Crear Bicicleta'}
+                </button>
+              </div>
+            </form>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Tipo / Marca</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Estación</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtradas.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="text-center text-gray-400 py-8">Sin bicicletas</TableCell></TableRow>
-              )}
-              {filtradas.map(b => (
-                <TableRow key={b.id}>
-                  <TableCell className="font-mono font-medium text-blue-700">{b.codigo}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Bike size={14} className="text-gray-400" />
-                      <span>{b.tipo}{b.marca ? ` — ${b.marca}` : ''}{b.modelo ? ` ${b.modelo}` : ''}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Select value={b.estado} onValueChange={(v) => cambiarEstado(b.id, v as BicicletaEstado)}>
-                      <SelectTrigger className="w-36 h-7">
-                        <Badge variant={badgeVariant(b.estado)} className="cursor-pointer">{estadoLabel[b.estado]}</Badge>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(['disponible', 'en_viaje', 'mantenimiento', 'baja'] as BicicletaEstado[]).map(e => (
-                          <SelectItem key={e} value={e}>{estadoLabel[e]}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="text-gray-600">
-                    {(b.estacion as unknown as { nombre?: string })?.nombre ?? '—'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => abrirQr(b)}>
-                      <QrCode size={14} /> QR
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Dialog Nueva Bicicleta */}
-      <Dialog open={dialogAbierto} onOpenChange={setDialogAbierto}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Nueva Bicicleta</DialogTitle></DialogHeader>
-          {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-          <form onSubmit={guardar} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tipo *</Label>
-              <Input placeholder="Urbana, MTB, Eléctrica..." value={form.tipo}
-                onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))} required />
+      {/* Modal QR */}
+      {modalQr && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs">
+            <div className="flex items-center justify-between p-6 border-b border-outline-variant/20">
+              <h2 className="font-extrabold text-on-surface">Código QR</h2>
+              <button onClick={() => setModalQr(null)} className="w-8 h-8 rounded-xl bg-surface-container-low flex items-center justify-center hover:bg-surface-container transition-colors">
+                <X size={16} className="text-outline" />
+              </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Marca</Label>
-                <Input placeholder="Trek, Giant..." value={form.marca}
-                  onChange={e => setForm(p => ({ ...p, marca: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Modelo</Label>
-                <Input placeholder="FX3, 2024..." value={form.modelo}
-                  onChange={e => setForm(p => ({ ...p, modelo: e.target.value }))} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Estación Inicial</Label>
-              <Select value={form.estacion_id} onValueChange={v => setForm(p => ({ ...p, estacion_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Sin asignar</SelectItem>
-                  {estaciones.map(e => <SelectItem key={e.id} value={e.id}>{e.nombre}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <Alert variant="info">
-              <AlertDescription className="text-xs">
-                El código (formato BC-YYYYMMDD-XXXX) y el QR se generarán automáticamente.
-              </AlertDescription>
-            </Alert>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogAbierto(false)}>Cancelar</Button>
-              <Button type="submit" disabled={loading}>{loading ? 'Creando...' : 'Crear Bicicleta'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog QR */}
-      <Dialog open={!!dialogQr} onOpenChange={() => setDialogQr(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Código QR</DialogTitle></DialogHeader>
-          {dialogQr && (
-            <div className="text-center space-y-4">
-              <p className="font-mono font-bold text-blue-700 text-lg">{dialogQr.codigo}</p>
-              {qrDataUrl && (
-                <img src={qrDataUrl} alt="QR" className="mx-auto rounded-lg border" width={220} height={220} />
-              )}
-              <Button onClick={descargarQr} className="w-full">
+            <div className="p-6 text-center space-y-4">
+              <p className="font-mono font-bold text-primary-container text-lg">{modalQr.codigo}</p>
+              {qrDataUrl && <img src={qrDataUrl} alt="QR" className="mx-auto rounded-xl border border-outline-variant/20" width={220} height={220} />}
+              <button className={btnPrimary + ' w-full justify-center'} onClick={descargarQr}>
                 <Download size={16} /> Descargar QR
-              </Button>
+              </button>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-export const dynamic = 'force-dynamic'

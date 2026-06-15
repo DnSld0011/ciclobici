@@ -1,120 +1,140 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, MapPin, Bike, AlertTriangle } from 'lucide-react'
 
 const MapaEstaciones = dynamicImport(
   () => import('@/components/maps/MapaEstaciones').then(m => m.MapaEstaciones),
-  { ssr: false, loading: () => <div className="w-full h-full bg-gray-100 flex items-center justify-center rounded-lg"><div className="animate-pulse text-gray-500">Cargando mapa...</div></div> }
+  { ssr: false, loading: () => <div className="w-full h-full bg-surface-container-low animate-pulse rounded-xl" /> }
 )
 
 export default function MapaOperadorPage() {
   const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
-  const [ultimaActualizacion, setUltimaActualizacion] = useState<Date>(new Date())
+  const [seleccionada, setSeleccionada] = useState<EstacionConDisponibilidad | null>(null)
+  const [ultimaAct, setUltimaAct] = useState(new Date())
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  const cargarEstaciones = useCallback(async () => {
+  const cargar = useCallback(async () => {
     const { data } = await supabase
       .from('estaciones')
       .select('*, bicicletas(id, estado)')
       .order('nombre')
-
     if (data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mapped: EstacionConDisponibilidad[] = (data as any[]).map((est) => ({
-        ...est,
-        bicicletas_disponibles: Array.isArray(est.bicicletas)
-          ? est.bicicletas.filter((b: { estado: string }) => b.estado === 'disponible').length
-          : 0,
-      }))
-      setEstaciones(mapped)
-      setUltimaActualizacion(new Date())
+      setEstaciones((data as any[]).map(e => ({
+        ...e,
+        bicicletas_disponibles: Array.isArray(e.bicicletas)
+          ? e.bicicletas.filter((b: { estado: string }) => b.estado === 'disponible').length : 0,
+      })))
+      setUltimaAct(new Date())
     }
     setLoading(false)
   }, [supabase])
 
   useEffect(() => {
-    cargarEstaciones()
-
-    // Realtime subscription
-    const channel = supabase
-      .channel('mapa-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargarEstaciones)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, cargarEstaciones)
+    cargar()
+    const ch = supabase.channel('mapa-op-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, cargar)
       .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [cargar, supabase])
 
-    return () => { supabase.removeChannel(channel) }
-  }, [cargarEstaciones, supabase])
-
-  const activas = estaciones.filter(e => e.estado === 'activa').length
-  const inactivas = estaciones.filter(e => e.estado === 'inactiva').length
-  const mantenimiento = estaciones.filter(e => e.estado === 'mantenimiento').length
+  const activas      = estaciones.filter(e => e.estado === 'activa').length
+  const enMantenimiento = estaciones.filter(e => e.estado === 'mantenimiento').length
+  const inactivas    = estaciones.filter(e => e.estado === 'inactiva').length
+  const criticas     = estaciones.filter(e => e.bicicletas_disponibles === 0 && e.estado === 'activa').length
 
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-4 max-w-[1400px]">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mapa en Tiempo Real</h1>
-          <p className="text-gray-500 text-sm">Estado de estaciones y disponibilidad</p>
+          <h1 className="text-xl font-extrabold text-primary-container">Mapa en Tiempo Real</h1>
+          <p className="text-xs text-outline mt-0.5">Estado de estaciones · San Borja en Bici</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <RefreshCw size={12} className="animate-spin" style={{ animationDuration: '3s' }} />
-          Última actualización: {ultimaActualizacion.toLocaleTimeString('es-CO')}
+        <div className="flex items-center gap-1.5 text-xs text-outline bg-white border border-outline-variant/30 px-3 py-1.5 rounded-full shadow-sm">
+          <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '4s' }} />
+          {ultimaAct.toLocaleTimeString('es-PE')}
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-green-600">{activas}</div>
-            <div className="text-xs text-gray-500">Estaciones Activas</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-yellow-600">{mantenimiento}</div>
-            <div className="text-xs text-gray-500">En Mantenimiento</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-red-600">{inactivas}</div>
-            <div className="text-xs text-gray-500">Inactivas</div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { icon: MapPin,       label: 'Activas',        value: activas,        color: 'text-[#166534] bg-[#dcfce7]' },
+          { icon: RefreshCw,    label: 'Mantenimiento',  value: enMantenimiento, color: 'text-[#854d0e] bg-[#fef9c3]' },
+          { icon: AlertTriangle,label: 'Vacías',         value: criticas,       color: 'text-error bg-[#ffdad6]' },
+          { icon: Bike,         label: 'Bicis disponibles', value: estaciones.reduce((s, e) => s + e.bicicletas_disponibles, 0), color: 'text-primary-container bg-[#e5eeff]' },
+        ].map(({ icon: Icon, label, value, color }) => (
+          <div key={label} className="card p-4 flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+              <Icon size={16} />
+            </div>
+            <div>
+              <p className="text-xl font-extrabold text-on-surface">{loading ? '—' : value}</p>
+              <p className="text-[10px] text-outline uppercase font-semibold tracking-wide">{label}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Legend */}
-      <div className="flex gap-4 text-sm">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-green-600" />
-          <span className="text-gray-600">≥50% disponible</span>
+      {/* Mapa + Lista */}
+      <div className="flex gap-4" style={{ height: 520 }}>
+        <div className="flex-1 card overflow-hidden relative">
+          {loading
+            ? <div className="w-full h-full bg-surface-container-low animate-pulse" />
+            : <MapaEstaciones estaciones={estaciones} modoOperador onEstacionClick={setSeleccionada} focusEstacion={seleccionada} />
+          }
+          {/* Leyenda */}
+          <div className="absolute bottom-4 left-4 glass-panel px-3 py-2.5 rounded-xl border border-white/50 shadow-md space-y-1.5">
+            {[
+              { color: 'bg-[#b2f746]',  text: 'Disponible (>20%)' },
+              { color: 'bg-amber-400',   text: 'Stock bajo (<20%)' },
+              { color: 'bg-error',       text: 'Vacía / Crítica' },
+              { color: 'bg-outline-variant', text: 'Mantenimiento' },
+            ].map(({ color, text }) => (
+              <div key={text} className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
+                <span className="text-[10px] font-semibold text-on-surface">{text}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-yellow-500" />
-          <span className="text-gray-600">1-49% disponible</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-red-600" />
-          <span className="text-gray-600">Sin disponibilidad</span>
-        </div>
-      </div>
 
-      {/* Map */}
-      <div style={{ height: '500px' }}>
-        {loading ? (
-          <div className="w-full h-full bg-gray-100 animate-pulse rounded-lg" />
-        ) : (
-          <MapaEstaciones estaciones={estaciones} modoOperador />
-        )}
+        {/* Lista lateral */}
+        <div className="w-72 card flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-outline-variant/20">
+            <h2 className="font-extrabold text-sm text-on-surface">Estaciones</h2>
+            <p className="text-[10px] text-outline mt-0.5">Por disponibilidad</p>
+          </div>
+          <div className="flex-1 overflow-y-auto divide-y divide-outline-variant/10">
+            {[...estaciones]
+              .sort((a, b) => a.bicicletas_disponibles - b.bicicletas_disponibles)
+              .map(est => {
+                const pct = est.capacidad > 0 ? est.bicicletas_disponibles / est.capacidad : 0
+                const dot = pct === 0 ? 'bg-error' : pct < 0.2 ? 'bg-amber-400' : 'bg-[#b2f746]'
+                return (
+                  <button key={est.id} onClick={() => setSeleccionada(est)}
+                    className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-surface-container-low transition-colors ${seleccionada?.id === est.id ? 'bg-surface-container-low' : ''}`}>
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-on-surface truncate">{est.nombre}</p>
+                      <p className="text-[10px] text-outline truncate">{est.estado}</p>
+                    </div>
+                    <span className="text-xs font-bold text-on-surface shrink-0">
+                      {est.bicicletas_disponibles}<span className="text-outline font-normal">/{est.capacidad}</span>
+                    </span>
+                  </button>
+                )
+              })}
+          </div>
+        </div>
       </div>
     </div>
   )

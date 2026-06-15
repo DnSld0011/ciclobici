@@ -1,108 +1,131 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import {
-  Map, Bike, Building2, Wrench, TrendingUp,
-  Menu, X, LogOut, ChevronLeft, ChevronRight
+  LayoutDashboard, Map, Bike, Building2, Wrench,
+  TrendingUp, Bell, Menu, X, LogOut
 } from 'lucide-react'
-import { cn } from '@/lib/utils/cn'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 
-const navItems = [
-  { href: '/operador/mapa', label: 'Mapa en Tiempo Real', icon: Map },
-  { href: '/operador/estaciones', label: 'Estaciones', icon: Building2 },
-  { href: '/operador/bicicletas', label: 'Bicicletas', icon: Bike },
+const NAV = [
+  { href: '/operador',            label: 'Dashboard',    icon: LayoutDashboard, exact: true },
+  { href: '/operador/mapa',       label: 'Mapa en vivo', icon: Map },
+  { href: '/operador/alertas',    label: 'Alertas',      icon: Bell },
+  { href: '/operador/estaciones', label: 'Estaciones',   icon: Building2 },
+  { href: '/operador/bicicletas', label: 'Bicicletas',   icon: Bike },
   { href: '/operador/mantenimiento', label: 'Mantenimiento', icon: Wrench },
-  { href: '/operador/prediccion', label: 'Predicción', icon: TrendingUp },
+  { href: '/operador/prediccion', label: 'Predicción',   icon: TrendingUp },
 ]
 
 export function SidebarOperador() {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
   const router = useRouter()
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [alertasNoLeidas, setAlertasNoLeidas] = useState(0)
+  const supabase = createClient()
+
+  useEffect(() => {
+    supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('leida', false)
+      .then(({ count }) => setAlertasNoLeidas(count ?? 0))
+
+    const ch = supabase.channel('alertas-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, () => {
+        supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('leida', false)
+          .then(({ count }) => setAlertasNoLeidas(count ?? 0))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [supabase])
 
   async function handleLogout() {
-    const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  function isActive(href: string, exact?: boolean) {
+    return exact ? pathname === href : (pathname === href || pathname.startsWith(href + '/'))
+  }
+
+  const sidebarContent = (
+    <aside className="flex flex-col h-full bg-white border-r border-outline-variant/30 w-64">
+      {/* Logo */}
+      <div className="px-6 py-6 border-b border-outline-variant/20">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-primary-container rounded-lg flex items-center justify-center text-base">🚲</div>
+          <div>
+            <p className="font-extrabold text-sm text-primary-container leading-none">San Borja en Bici</p>
+            <p className="text-[10px] text-outline mt-0.5">Centro de Control</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
+        {NAV.map(({ href, label, icon: Icon, exact }) => {
+          const active = isActive(href, exact)
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative
+                ${active
+                  ? 'bg-primary-container text-white shadow-sm'
+                  : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}`}
+            >
+              <Icon size={17} className="shrink-0" />
+              <span>{label}</span>
+              {label === 'Alertas' && alertasNoLeidas > 0 && (
+                <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full
+                  ${active ? 'bg-white/20 text-white' : 'bg-error text-white'}`}>
+                  {alertasNoLeidas > 9 ? '9+' : alertasNoLeidas}
+                </span>
+              )}
+            </Link>
+          )
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="px-3 py-4 border-t border-outline-variant/20 space-y-1">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-error-container hover:text-error transition-colors"
+        >
+          <LogOut size={17} />
+          Cerrar Sesión
+        </button>
+      </div>
+    </aside>
+  )
 
   return (
     <>
       {/* Mobile toggle */}
       <button
         onClick={() => setMobileOpen(!mobileOpen)}
-        className="fixed top-4 left-4 z-50 md:hidden bg-blue-700 text-white p-2 rounded-md"
+        className="fixed top-4 left-4 z-50 md:hidden bg-primary-container text-white p-2 rounded-lg shadow-md"
       >
-        {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+        {mobileOpen ? <X size={18} /> : <Menu size={18} />}
       </button>
 
-      {/* Overlay mobile */}
+      {/* Mobile overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setMobileOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={cn(
-          'fixed left-0 top-0 z-40 h-full bg-blue-900 text-white transition-all duration-300 flex flex-col',
-          collapsed ? 'w-16' : 'w-64',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        )}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-blue-800">
-          {!collapsed && (
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🚲</span>
-              <span className="font-bold text-lg">CicloBici</span>
-            </div>
-          )}
-          {collapsed && <span className="text-xl mx-auto">🚲</span>}
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="hidden md:flex text-blue-300 hover:text-white p-1 rounded"
-          >
-            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
-        </div>
+      {/* Desktop sidebar — fixed */}
+      <div className="hidden md:block fixed left-0 top-0 h-full z-40 w-64">
+        {sidebarContent}
+      </div>
 
-        {/* Nav */}
-        <nav className="flex-1 py-4 space-y-1 px-2">
-          {navItems.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm font-medium',
-                pathname === href || pathname.startsWith(href + '/')
-                  ? 'bg-blue-700 text-white'
-                  : 'text-blue-200 hover:bg-blue-800 hover:text-white'
-              )}
-              title={collapsed ? label : undefined}
-            >
-              <Icon size={18} className="shrink-0" />
-              {!collapsed && <span>{label}</span>}
-            </Link>
-          ))}
-        </nav>
-
-        {/* Logout */}
-        <div className="p-2 border-t border-blue-800">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-blue-200 hover:bg-blue-800 hover:text-white transition-colors text-sm font-medium w-full"
-            title={collapsed ? 'Cerrar Sesión' : undefined}
-          >
-            <LogOut size={18} className="shrink-0" />
-            {!collapsed && <span>Cerrar Sesión</span>}
-          </button>
-        </div>
-      </aside>
+      {/* Mobile sidebar — slide in */}
+      <div className={`fixed left-0 top-0 h-full z-50 w-64 transition-transform duration-300 md:hidden
+        ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {sidebarContent}
+      </div>
     </>
   )
 }

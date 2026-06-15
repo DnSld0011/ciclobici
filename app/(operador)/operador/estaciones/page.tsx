@@ -1,52 +1,50 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Estacion, EstacionEstado } from '@/types'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Plus, Pencil, Trash2, Search, Building2, MapPin } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Building2, MapPin, X } from 'lucide-react'
 import { validarCoordenadas } from '@/lib/utils/codigos'
 
 type FormEstacion = {
   nombre: string; direccion: string; latitud: string
   longitud: string; capacidad: string; estado: EstacionEstado
 }
+const formVacio: FormEstacion = { nombre: '', direccion: '', latitud: '', longitud: '', capacidad: '', estado: 'activa' }
 
-const formVacio: FormEstacion = {
-  nombre: '', direccion: '', latitud: '', longitud: '', capacidad: '', estado: 'activa',
+const ESTADO_CHIP: Record<EstacionEstado, string> = {
+  activa: 'chip-disponible', inactiva: 'chip-baja', mantenimiento: 'chip-mantenimiento',
 }
+const ESTADO_LABEL: Record<EstacionEstado, string> = {
+  activa: 'Activa', inactiva: 'Inactiva', mantenimiento: 'Mantenimiento',
+}
+
+const inputCls = 'w-full h-11 px-3 rounded-xl border border-outline-variant/40 bg-surface text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all'
+const labelCls = 'block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1'
+const btnPrimary = 'inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-primary-container text-white text-sm font-bold shadow-sm hover:opacity-90 active:scale-[.98] transition-all disabled:opacity-50'
+const btnOutline = 'inline-flex items-center gap-2 px-4 h-10 rounded-xl border border-outline-variant/40 bg-white text-on-surface text-sm font-semibold hover:bg-surface-container-low active:scale-[.98] transition-all'
+const btnGhost = 'w-8 h-8 flex items-center justify-center rounded-xl hover:bg-surface-container-low transition-colors'
 
 export default function EstacionesPage() {
   const [estaciones, setEstaciones] = useState<Estacion[]>([])
   const [filtro, setFiltro] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<string>('todos')
-  const [dialogAbierto, setDialogAbierto] = useState(false)
+  const [modalAbierto, setModalAbierto] = useState(false)
   const [editando, setEditando] = useState<Estacion | null>(null)
   const [form, setForm] = useState<FormEstacion>(formVacio)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
 
-  async function cargar() {
+  const cargar = useCallback(async () => {
     const { data } = await supabase.from('estaciones').select('*').order('nombre')
     if (data) setEstaciones(data)
-  }
+  }, [supabase])
 
-  useEffect(() => { cargar() }, [])
+  useEffect(() => { cargar() }, [cargar])
 
   function abrirCrear() {
-    setEditando(null)
-    setForm(formVacio)
-    setError('')
-    setDialogAbierto(true)
+    setEditando(null); setForm(formVacio); setError(''); setModalAbierto(true)
   }
 
   function abrirEditar(est: Estacion) {
@@ -56,27 +54,20 @@ export default function EstacionesPage() {
       latitud: String(est.latitud), longitud: String(est.longitud),
       capacidad: String(est.capacidad), estado: est.estado,
     })
-    setError('')
-    setDialogAbierto(true)
+    setError(''); setModalAbierto(true)
   }
 
   async function guardar(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    const lat = parseFloat(form.latitud)
-    const lng = parseFloat(form.longitud)
-    const cap = parseInt(form.capacidad)
-
+    e.preventDefault(); setError('')
+    const lat = parseFloat(form.latitud), lng = parseFloat(form.longitud), cap = parseInt(form.capacidad)
     if (!form.nombre.trim()) { setError('El nombre es requerido'); return }
     if (!validarCoordenadas(lat, lng)) { setError('Coordenadas inválidas'); return }
     if (!cap || cap <= 0) { setError('La capacidad debe ser mayor a 0'); return }
-
     setLoading(true)
     const payload = {
       nombre: form.nombre.trim(), direccion: form.direccion.trim(),
       latitud: lat, longitud: lng, capacidad: cap, estado: form.estado,
     }
-
     try {
       if (editando) {
         const { error: err } = await supabase.from('estaciones').update(payload).eq('id', editando.id)
@@ -85,8 +76,7 @@ export default function EstacionesPage() {
         const { error: err } = await supabase.from('estaciones').insert(payload)
         if (err) throw err
       }
-      setDialogAbierto(false)
-      await cargar()
+      setModalAbierto(false); await cargar()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
@@ -106,171 +96,179 @@ export default function EstacionesPage() {
     await cargar()
   }
 
-  const filtradas = estaciones.filter(e => {
-    const matchNombre = e.nombre.toLowerCase().includes(filtro.toLowerCase())
-    const matchEstado = filtroEstado === 'todos' || e.estado === filtroEstado
-    return matchNombre && matchEstado
-  })
+  const filtradas = estaciones.filter(e =>
+    e.nombre.toLowerCase().includes(filtro.toLowerCase()) &&
+    (filtroEstado === 'todos' || e.estado === filtroEstado)
+  )
 
-  const badgeVariant = (estado: EstacionEstado) =>
-    estado === 'activa' ? 'success' : estado === 'mantenimiento' ? 'warning' : 'destructive'
-
-  const estadoLabel = (estado: EstacionEstado) =>
-    ({ activa: 'Activa', inactiva: 'Inactiva', mantenimiento: 'Mantenimiento' })[estado]
+  const activas = estaciones.filter(e => e.estado === 'activa').length
+  const mantenimiento = estaciones.filter(e => e.estado === 'mantenimiento').length
+  const inactivas = estaciones.filter(e => e.estado === 'inactiva').length
 
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-5 max-w-[1300px]">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Estaciones</h1>
-          <p className="text-gray-500 text-sm">Administración de estaciones de bicicletas</p>
+          <h1 className="text-xl font-extrabold text-primary-container">Estaciones</h1>
+          <p className="text-xs text-outline mt-0.5">Administración de estaciones · San Borja en Bici</p>
         </div>
-        <Button onClick={abrirCrear}>
+        <button className={btnPrimary} onClick={abrirCrear}>
           <Plus size={16} /> Nueva Estación
-        </Button>
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Activas', value: activas, chip: 'chip-disponible' },
+          { label: 'Mantenimiento', value: mantenimiento, chip: 'chip-mantenimiento' },
+          { label: 'Inactivas', value: inactivas, chip: 'chip-baja' },
+        ].map(({ label, value, chip }) => (
+          <div key={label} className="card p-5 flex items-center justify-between">
+            <div>
+              <p className="text-2xl font-extrabold text-on-surface">{value}</p>
+              <p className="text-xs text-outline mt-0.5">{label}</p>
+            </div>
+            <Building2 size={20} className="text-outline-variant" />
+          </div>
+        ))}
       </div>
 
       {/* Filtros */}
-      <Card>
-        <CardContent className="pt-4 pb-3">
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-              <Input placeholder="Buscar por nombre..." className="pl-9"
-                value={filtro} onChange={e => setFiltro(e.target.value)} />
-            </div>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los estados</SelectItem>
-                <SelectItem value="activa">Activas</SelectItem>
-                <SelectItem value="inactiva">Inactivas</SelectItem>
-                <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="card p-4 flex gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 text-outline" size={14} />
+          <input placeholder="Buscar por nombre..." className={`${inputCls} pl-9`}
+            value={filtro} onChange={e => setFiltro(e.target.value)} />
+        </div>
+        <select className="h-11 px-3 rounded-xl border border-outline-variant/40 bg-surface text-sm text-on-surface focus:outline-none"
+          value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
+          <option value="todos">Todos los estados</option>
+          <option value="activa">Activas</option>
+          <option value="inactiva">Inactivas</option>
+          <option value="mantenimiento">Mantenimiento</option>
+        </select>
+      </div>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Dirección</TableHead>
-                <TableHead>Capacidad</TableHead>
-                <TableHead>Coordenadas</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtradas.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-400 py-8">
-                    No se encontraron estaciones
-                  </TableCell>
-                </TableRow>
-              )}
-              {filtradas.map(est => (
-                <TableRow key={est.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <Building2 size={16} className="text-gray-400" />
-                      {est.nombre}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <MapPin size={12} className="text-gray-400" />
-                      {est.direccion}
-                    </div>
-                  </TableCell>
-                  <TableCell>{est.capacidad} bicis</TableCell>
-                  <TableCell className="font-mono text-xs text-gray-500">
-                    {est.latitud.toFixed(4)}, {est.longitud.toFixed(4)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={badgeVariant(est.estado)}>{estadoLabel(est.estado)}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="outline" onClick={() => toggleEstado(est)}>
-                        {est.estado === 'activa' ? 'Desactivar' : 'Activar'}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => abrirEditar(est)}>
-                        <Pencil size={14} />
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => eliminar(est.id)}>
-                        <Trash2 size={14} className="text-red-500" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+      {/* Tabla */}
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-outline-variant/20 bg-surface-container-low">
+              {['Nombre', 'Dirección', 'Capacidad', 'Coordenadas', 'Estado', ''].map(h => (
+                <th key={h} className={`px-5 py-3 text-[10px] font-extrabold tracking-widest text-outline uppercase ${h === '' ? 'text-right' : 'text-left'}`}>{h}</th>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-outline-variant/10">
+            {filtradas.length === 0 && (
+              <tr><td colSpan={6} className="text-center text-outline py-12 text-sm">No se encontraron estaciones</td></tr>
+            )}
+            {filtradas.map(est => (
+              <tr key={est.id} className="hover:bg-surface-container-low/50 transition-colors">
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-2 font-semibold text-on-surface">
+                    <Building2 size={14} className="text-outline shrink-0" />
+                    {est.nombre}
+                  </div>
+                </td>
+                <td className="px-5 py-3 text-outline text-xs">
+                  <div className="flex items-center gap-1">
+                    <MapPin size={11} className="shrink-0" />
+                    {est.direccion}
+                  </div>
+                </td>
+                <td className="px-5 py-3 text-on-surface font-medium">{est.capacidad} bicis</td>
+                <td className="px-5 py-3 font-mono text-[11px] text-outline">
+                  {est.latitud.toFixed(4)}, {est.longitud.toFixed(4)}
+                </td>
+                <td className="px-5 py-3">
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${ESTADO_CHIP[est.estado]}`}>
+                    {ESTADO_LABEL[est.estado]}
+                  </span>
+                </td>
+                <td className="px-5 py-3">
+                  <div className="flex items-center justify-end gap-1">
+                    <button className={btnOutline + ' text-xs px-3 h-8'}
+                      onClick={() => toggleEstado(est)}>
+                      {est.estado === 'activa' ? 'Desactivar' : 'Activar'}
+                    </button>
+                    <button className={btnGhost} onClick={() => abrirEditar(est)}>
+                      <Pencil size={14} className="text-outline" />
+                    </button>
+                    <button className={btnGhost} onClick={() => eliminar(est.id)}>
+                      <Trash2 size={14} className="text-error" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      {/* Dialog */}
-      <Dialog open={dialogAbierto} onOpenChange={setDialogAbierto}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editando ? 'Editar Estación' : 'Nueva Estación'}</DialogTitle>
-          </DialogHeader>
-          {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-          <form onSubmit={guardar} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Nombre</Label>
-              <Input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} required />
+      {/* Modal */}
+      {modalAbierto && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-outline-variant/20">
+              <h2 className="font-extrabold text-on-surface">{editando ? 'Editar Estación' : 'Nueva Estación'}</h2>
+              <button onClick={() => setModalAbierto(false)} className="w-8 h-8 rounded-xl bg-surface-container-low flex items-center justify-center hover:bg-surface-container transition-colors">
+                <X size={16} className="text-outline" />
+              </button>
             </div>
-            <div className="space-y-2">
-              <Label>Dirección</Label>
-              <Input value={form.direccion} onChange={e => setForm(p => ({ ...p, direccion: e.target.value }))} required />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Latitud</Label>
-                <Input type="number" step="any" placeholder="4.7110" value={form.latitud}
-                  onChange={e => setForm(p => ({ ...p, latitud: e.target.value }))} required />
+            {error && <div className="mx-6 mt-4 px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold">{error}</div>}
+            <form onSubmit={guardar} className="p-6 space-y-4">
+              <div>
+                <label className={labelCls}>Nombre</label>
+                <input className={inputCls} value={form.nombre}
+                  onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} required />
               </div>
-              <div className="space-y-2">
-                <Label>Longitud</Label>
-                <Input type="number" step="any" placeholder="-74.0721" value={form.longitud}
-                  onChange={e => setForm(p => ({ ...p, longitud: e.target.value }))} required />
+              <div>
+                <label className={labelCls}>Dirección</label>
+                <input className={inputCls} value={form.direccion}
+                  onChange={e => setForm(p => ({ ...p, direccion: e.target.value }))} required />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Capacidad</Label>
-                <Input type="number" min="1" value={form.capacidad}
-                  onChange={e => setForm(p => ({ ...p, capacidad: e.target.value }))} required />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Latitud</label>
+                  <input type="number" step="any" className={inputCls} placeholder="-12.1000"
+                    value={form.latitud} onChange={e => setForm(p => ({ ...p, latitud: e.target.value }))} required />
+                </div>
+                <div>
+                  <label className={labelCls}>Longitud</label>
+                  <input type="number" step="any" className={inputCls} placeholder="-77.0000"
+                    value={form.longitud} onChange={e => setForm(p => ({ ...p, longitud: e.target.value }))} required />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Estado</Label>
-                <Select value={form.estado} onValueChange={(v) => setForm(p => ({ ...p, estado: v as EstacionEstado }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="activa">Activa</SelectItem>
-                    <SelectItem value="inactiva">Inactiva</SelectItem>
-                    <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Capacidad</label>
+                  <input type="number" min="1" className={inputCls}
+                    value={form.capacidad} onChange={e => setForm(p => ({ ...p, capacidad: e.target.value }))} required />
+                </div>
+                <div>
+                  <label className={labelCls}>Estado</label>
+                  <select className={inputCls} value={form.estado}
+                    onChange={e => setForm(p => ({ ...p, estado: e.target.value as EstacionEstado }))}>
+                    <option value="activa">Activa</option>
+                    <option value="inactiva">Inactiva</option>
+                    <option value="mantenimiento">Mantenimiento</option>
+                  </select>
+                </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogAbierto(false)}>Cancelar</Button>
-              <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+              <div className="flex gap-3 pt-2">
+                <button type="button" className={btnOutline + ' flex-1'} onClick={() => setModalAbierto(false)}>Cancelar</button>
+                <button type="submit" className={btnPrimary + ' flex-1 justify-center'} disabled={loading}>
+                  {loading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-export const dynamic = 'force-dynamic'
