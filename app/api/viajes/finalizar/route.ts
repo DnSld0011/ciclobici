@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { viaje_id, estacion_destino_id } = await req.json()
+  const { viaje_id, estacion_destino_id, distancia_km } = await req.json()
   if (!viaje_id || !estacion_destino_id) {
     return NextResponse.json({ error: 'viaje_id y estacion_destino_id son requeridos' }, { status: 400 })
   }
@@ -48,14 +48,21 @@ export async function POST(req: NextRequest) {
 
   const fin = new Date().toISOString()
 
-  // Finalizar el viaje (trigger fn_finalizar_viaje calculará duracion_min y distancia_km)
+  // Construir el payload de actualización
+  // Si el cliente envía distancia_km GPS, la incluimos para que el trigger la respete
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updatePayload: Record<string, any> = {
+    fin_at: fin,
+    estacion_destino_id,
+    estado: 'finalizado',
+  }
+  if (typeof distancia_km === 'number' && distancia_km > 0) {
+    updatePayload.distancia_km = distancia_km
+  }
+
   const { data: viajeActualizado, error: errUpdate } = await supabase
     .from('viajes')
-    .update({
-      fin_at: fin,
-      estacion_destino_id,
-      estado: 'finalizado',
-    })
+    .update(updatePayload)
     .eq('id', viaje_id)
     .select()
     .single()
