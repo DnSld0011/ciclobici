@@ -167,16 +167,16 @@ function VerificacionContent() {
           <form onSubmit={verificar} className="space-y-4">
             <div>
               <label className="block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1.5">
-                Código de 8 dígitos
+                Código de 6 dígitos
               </label>
               <input
                 type="text"
                 inputMode="numeric"
                 placeholder="000000"
-                className="w-full h-16 px-4 rounded-xl border border-outline-variant/40 bg-white text-center text-2xl tracking-[0.35em] font-mono text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
+                className="w-full h-16 px-4 rounded-xl border border-outline-variant/40 bg-white text-center text-3xl tracking-[0.6em] font-mono text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
                 value={otp}
-                onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                required maxLength={8} autoFocus
+                onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                required maxLength={6} autoFocus
               />
               <p className="text-[10px] text-outline mt-1.5">
                 Revisa también la carpeta de spam · Válido por 10 minutos
@@ -187,7 +187,7 @@ function VerificacionContent() {
               type="submit"
               className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50"
               style={{ background: '#b2f746', color: '#002117' }}
-              disabled={loading || otp.length !== 8 || !correo}>
+              disabled={loading || otp.length !== 6 || !correo}>
               <KeyRound size={16} />
               {loading ? 'Verificando...' : modoRegistro ? 'Confirmar y crear cuenta' : 'Verificar'}
             </button>
