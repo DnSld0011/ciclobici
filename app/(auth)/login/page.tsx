@@ -203,15 +203,15 @@ function LoginContent() {
               </div>
 
               <div>
-                <label className={labelCls}>Código de 6 dígitos</label>
+                <label className={labelCls}>Código de 8 dígitos</label>
                 <input
                   type="text"
                   inputMode="numeric"
                   placeholder="000000"
-                  className="w-full h-16 px-4 rounded-xl border border-outline-variant/40 bg-white text-center text-3xl tracking-[0.5em] font-mono text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
+                  className="w-full h-16 px-4 rounded-xl border border-outline-variant/40 bg-white text-center text-2xl tracking-[0.4em] font-mono text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
                   value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required maxLength={6} autoFocus
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  required maxLength={8} autoFocus
                 />
                 <p className="text-[10px] text-outline mt-1.5">Revisa también la carpeta de spam</p>
               </div>
@@ -220,7 +220,7 @@ function LoginContent() {
                 type="submit"
                 className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50"
                 style={{ background: '#b2f746', color: '#002117' }}
-                disabled={loading || otp.length !== 6}>
+                disabled={loading || otp.length !== 8}>
                 <KeyRound size={16} />
                 {loading ? 'Verificando...' : 'Entrar'}
               </button>
