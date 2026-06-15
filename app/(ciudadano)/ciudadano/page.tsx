@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
-import { Map, Bike, MapPin, ChevronRight, Leaf, Clock, AlertTriangle } from 'lucide-react'
+import { Map, Bike, MapPin, ChevronRight, Leaf, Clock, AlertTriangle, QrCode } from 'lucide-react'
 
 interface Stats { viajes: number; estacionesActivas: number }
 
@@ -81,12 +81,20 @@ export default function DashboardCiudadano() {
           </h1>
           <p className="text-on-primary-container opacity-60 text-sm mt-1">¿Listo para pedalear por San Borja?</p>
           {!viajeActivo && (
-            <Link
-              href="/ciudadano/mapa"
-              className="mt-4 inline-flex items-center gap-2 bg-[#b2f746] text-[#003527] font-extrabold px-5 py-2.5 rounded-xl text-sm shadow-md hover:bg-[#98da27] active:scale-[0.97] transition-all"
-            >
-              <Map size={15} /> Encontrar bicicleta
-            </Link>
+            <div className="mt-4 flex gap-2">
+              <Link
+                href="/ciudadano/escanear"
+                className="inline-flex items-center gap-2 bg-[#b2f746] text-[#003527] font-extrabold px-4 py-2.5 rounded-xl text-sm shadow-md hover:bg-[#98da27] active:scale-[0.97] transition-all"
+              >
+                <QrCode size={15} /> Escanear QR
+              </Link>
+              <Link
+                href="/ciudadano/mapa"
+                className="inline-flex items-center gap-2 bg-white/10 text-white font-bold px-4 py-2.5 rounded-xl text-sm hover:bg-white/20 active:scale-[0.97] transition-all border border-white/20"
+              >
+                <Map size={15} /> Ver mapa
+              </Link>
+            </div>
           )}
         </div>
       </div>
@@ -110,6 +118,15 @@ export default function DashboardCiudadano() {
 
       {/* Accesos rápidos */}
       <div className="grid grid-cols-2 gap-3">
+        <Link href="/ciudadano/escanear" className="card p-4 flex items-center gap-3 hover:border-[#bbf7d0] hover:shadow-md transition-all col-span-2">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#b2f746' }}>
+            <QrCode size={19} style={{ color: '#002117' }} />
+          </div>
+          <div>
+            <p className="font-bold text-sm text-on-surface">Escanear QR</p>
+            <p className="text-xs text-outline">Tomar una bicicleta</p>
+          </div>
+        </Link>
         <Link href="/ciudadano/mapa" className="card p-4 flex items-center gap-3 hover:border-primary-container/30 hover:shadow-md transition-all">
           <div className="w-10 h-10 bg-[#e5eeff] rounded-xl flex items-center justify-center shrink-0">
             <Map size={19} className="text-primary-container" />
