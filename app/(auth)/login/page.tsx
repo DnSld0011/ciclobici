@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, Suspense, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Lock, Eye, EyeOff, Bike, CheckCircle } from 'lucide-react'
 
@@ -16,10 +16,18 @@ function LoginContent() {
   const [error, setError]           = useState('')
   const [loading, setLoading]       = useState(false)
   const [resetSent, setResetSent]   = useState(false)
-  const router  = useRouter()
-  const supabase = createClient()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const supabase     = createClient()
 
   const isEmail = identifier.includes('@')
+
+  useEffect(() => {
+    const err = searchParams.get('error')
+    if (err === 'suspendido') setError('Tu cuenta está suspendida. Contacta al administrador.')
+    else if (err === 'sin-sesion') setError('La sesión expiró. Vuelve a iniciar sesión.')
+    else if (err === 'error-interno') setError('Error interno. Intenta nuevamente.')
+  }, [searchParams])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -45,25 +53,8 @@ function LoginContent() {
         throw signInError
       }
 
-      // Obtener perfil via API (usa admin client, sin restricciones de RLS)
-      const res = await fetch('/api/auth/perfil')
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error ?? 'No se pudo obtener el perfil')
-      }
-      const { perfil, email: userEmail } = await res.json()
-
-      if (!perfil) {
-        router.push(`/registro?correo=${encodeURIComponent(userEmail ?? emailToUse)}`)
-        return
-      }
-      if (perfil.estado === 'suspendido') {
-        await supabase.auth.signOut()
-        throw new Error('Tu cuenta está suspendida. Contacta al administrador.')
-      }
-      if (perfil.rol === 'administrador' || perfil.rol === 'operador') router.replace('/operador')
-      else if (perfil.rol === 'tecnico') router.replace('/tecnico/mantenimiento')
-      else                               router.replace('/ciudadano')
+      // El servidor lee la cookie de sesión y redirige según el rol
+      window.location.href = '/api/auth/redirect'
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
     } finally { setLoading(false) }
