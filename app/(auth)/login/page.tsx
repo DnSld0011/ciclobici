@@ -1,129 +1,92 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Mail, KeyRound, Bike, ArrowLeft, RefreshCw } from 'lucide-react'
+import { Lock, Eye, EyeOff, Bike, CheckCircle } from 'lucide-react'
 
 const inputCls = 'w-full h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface placeholder-outline focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all'
 const labelCls = 'block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1.5'
 
 function LoginContent() {
-  const [paso, setPaso]     = useState<'email' | 'otp'>('email')
-  const [correo, setCorreo] = useState('')
-  const [otp, setOtp]       = useState('')
-  const [error, setError]   = useState('')
-  const [loading, setLoading] = useState(false)
-  const [countdown, setCountdown] = useState(0)
-  const router       = useRouter()
-  const searchParams = useSearchParams()
-  const supabase     = createClient()
+  const [identifier, setIdentifier] = useState('')
+  const [password, setPassword]     = useState('')
+  const [showPass, setShowPass]     = useState(false)
+  const [error, setError]           = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [resetSent, setResetSent]   = useState(false)
+  const router  = useRouter()
+  const supabase = createClient()
 
-  useEffect(() => {
-    const urlError = searchParams.get('error')
-    if (urlError) setError(decodeURIComponent(urlError))
-  }, [searchParams])
+  const isEmail = identifier.includes('@')
 
-  // Countdown para reenvío
-  useEffect(() => {
-    if (countdown <= 0) return
-    const id = setTimeout(() => setCountdown(c => c - 1), 1000)
-    return () => clearTimeout(id)
-  }, [countdown])
-
-  async function enviarOtp(e: React.FormEvent) {
-    e.preventDefault(); setError(''); setLoading(true)
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: correo.trim().toLowerCase(),
-        options: { shouldCreateUser: false },
-      })
-      if (error) throw error
-      setPaso('otp')
-      setCountdown(60)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al enviar código'
-      // Usuario no existe → invitarle a registrarse
-      if (msg.includes('not found') || msg.includes('User not found') || msg.includes('Invalid login')) {
-        setError('No encontramos una cuenta con ese correo. ¿Quieres registrarte?')
-      } else {
-        setError(msg)
-      }
-    } finally { setLoading(false) }
-  }
-
-  async function verificarOtp(e: React.FormEvent) {
-    e.preventDefault(); setError(''); setLoading(true)
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: correo.trim().toLowerCase(),
-        token: otp.trim(),
-        type: 'email',
-      })
-      if (error) throw error
-      if (!data.user) throw new Error('No se pudo verificar la sesión')
-
-      const email = data.user.email ?? correo.trim().toLowerCase()
-
-      // Buscar perfil primero por auth ID, luego por correo (usuarios migrados de SMS OTP)
-      let { data: perfil } = await supabase
-        .from('usuarios')
-        .select('id, rol, estado')
-        .eq('id', data.user.id)
-        .maybeSingle()
-
-      if (!perfil) {
-        const { data: porCorreo } = await supabase
-          .from('usuarios')
-          .select('id, rol, estado')
-          .eq('correo', email)
-          .maybeSingle()
-
-        if (porCorreo) {
-          // Sincronizar el ID del auth user con el registro existente
-          await supabase
-            .from('usuarios')
-            .update({ id: data.user.id })
-            .eq('correo', email)
-          perfil = { ...porCorreo, id: data.user.id }
-        }
-      }
-
-      if (!perfil) {
-        // Usuario en auth pero sin perfil — completar registro
-        router.push(`/registro?correo=${encodeURIComponent(email)}`)
-        return
-      }
-      if (perfil.estado === 'pendiente')     { router.push('/verificacion'); return }
-      if (perfil.rol === 'operador')         router.replace('/operador')
-      else if (perfil.rol === 'tecnico')     router.replace('/tecnico/mantenimiento')
-      else                                   router.replace('/ciudadano')
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Código incorrecto o expirado')
-    } finally { setLoading(false) }
-  }
-
-  async function reenviar() {
-    if (countdown > 0) return
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
     setError(''); setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: correo.trim().toLowerCase(),
-        options: { shouldCreateUser: false },
+      let emailToUse = identifier.trim().toLowerCase()
+
+      if (!isEmail) {
+        const phone = identifier.replace(/\D/g, '')
+        const { data: usuario } = await supabase
+          .from('usuarios').select('correo').eq('celular', phone).maybeSingle()
+        if (!usuario?.correo)
+          throw new Error('No encontramos una cuenta con ese número de celular')
+        emailToUse = usuario.correo
+      }
+
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: emailToUse, password,
       })
-      if (error) throw error
-      setCountdown(60)
-      setOtp('')
+      if (signInError) {
+        if (signInError.message.includes('Invalid login') || signInError.message.includes('invalid_credentials'))
+          throw new Error('Correo/teléfono o contraseña incorrectos')
+        throw signInError
+      }
+      if (!data.user) throw new Error('Error al iniciar sesión')
+
+      const { data: perfil } = await supabase
+        .from('usuarios').select('rol, estado').eq('id', data.user.id).maybeSingle()
+
+      if (!perfil) {
+        router.push(`/registro?correo=${encodeURIComponent(data.user.email ?? '')}`)
+        return
+      }
+      if (perfil.estado === 'suspendido') {
+        await supabase.auth.signOut()
+        throw new Error('Tu cuenta está suspendida. Contacta al administrador.')
+      }
+      if (perfil.rol === 'operador')   router.replace('/operador')
+      else if (perfil.rol === 'tecnico') router.replace('/tecnico/mantenimiento')
+      else                               router.replace('/ciudadano')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al reenviar')
+      setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
+    } finally { setLoading(false) }
+  }
+
+  async function handleForgotPassword() {
+    if (!isEmail || !identifier.trim()) {
+      setError('Ingresa tu correo electrónico para recuperar tu contraseña')
+      return
+    }
+    setLoading(true); setError('')
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        identifier.trim().toLowerCase(),
+        { redirectTo: `${window.location.origin}/auth/reset-password` }
+      )
+      if (error) throw error
+      setResetSent(true)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al enviar correo')
     } finally { setLoading(false) }
   }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
 
-      {/* ── Hero panel ── */}
+      {/* ── Hero ── */}
       <div className="relative hidden md:flex md:w-1/2 flex-col justify-between p-12 overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #003527 0%, #064e3b 60%, #002117 100%)' }}>
         <div className="absolute top-0 right-0 w-80 h-80 rounded-full opacity-10"
@@ -170,104 +133,90 @@ function LoginContent() {
           </div>
 
           <div>
-            <h2 className="text-2xl font-extrabold text-on-surface">
-              {paso === 'email' ? 'Bienvenido de vuelta' : 'Revisa tu correo'}
-            </h2>
-            <p className="text-sm text-outline mt-1">
-              {paso === 'email'
-                ? 'Ingresa tu correo para recibir un código de acceso'
-                : `Enviamos un código de 6 dígitos a ${correo}`}
-            </p>
+            <h2 className="text-2xl font-extrabold text-on-surface">Bienvenido de vuelta</h2>
+            <p className="text-sm text-outline mt-1">Ingresa con tu correo o número de celular</p>
           </div>
 
-          {error && (
-            <div className="px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold border border-error/20 flex flex-col gap-1">
-              {error}
-              {error.includes('registrarte') && (
-                <Link href="/registro" className="text-primary-container underline text-xs">
-                  Crear una cuenta →
-                </Link>
-              )}
+          {resetSent ? (
+            <div className="px-4 py-4 rounded-xl bg-[#dcfce7] border border-[#bbf7d0] flex items-start gap-3">
+              <CheckCircle size={18} className="text-[#166534] shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-[#166534]">Correo enviado</p>
+                <p className="text-xs text-[#166534]/80 mt-0.5">
+                  Revisa tu bandeja de entrada y sigue las instrucciones para crear una nueva contraseña.
+                </p>
+              </div>
             </div>
-          )}
+          ) : error ? (
+            <div className="px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold border border-error/20">
+              {error}
+            </div>
+          ) : null}
 
-          {paso === 'email' ? (
-            <form onSubmit={enviarOtp} className="space-y-4">
-              <div>
-                <label className={labelCls}>Correo electrónico</label>
+          <form onSubmit={handleLogin} className="space-y-4">
+            {/* Identificador */}
+            <div>
+              <label className={labelCls}>Correo o celular</label>
+              <input
+                type="text"
+                placeholder="tu@correo.com  ó  987654321"
+                className={inputCls}
+                value={identifier}
+                onChange={e => setIdentifier(e.target.value)}
+                required autoFocus autoComplete="username"
+              />
+              <p className="text-[10px] text-outline mt-1">
+                {isEmail ? '✉ Ingresando con correo electrónico'
+                  : identifier.length > 3 ? '📱 Ingresando con número de celular'
+                  : 'Puedes usar tu correo o número de celular peruano'}
+              </p>
+            </div>
+
+            {/* Contraseña */}
+            <div>
+              <label className={labelCls}>
+                <Lock size={10} className="inline mr-1" />Contraseña
+              </label>
+              <div className="relative">
                 <input
-                  type="email"
-                  placeholder="tu@correo.com"
-                  className={inputCls}
-                  value={correo}
-                  onChange={e => setCorreo(e.target.value)}
-                  required autoFocus autoComplete="email"
+                  type={showPass ? 'text' : 'password'}
+                  placeholder="Tu contraseña"
+                  className={`${inputCls} pr-11`}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required autoComplete="current-password"
                 />
-              </div>
-              <button
-                type="submit"
-                className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50"
-                style={{ background: '#b2f746', color: '#002117' }}
-                disabled={loading || !correo.includes('@')}>
-                <Mail size={16} />
-                {loading ? 'Enviando código...' : 'Enviar código'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={verificarOtp} className="space-y-4">
-              {/* Info correo */}
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/20">
-                <div className="w-8 h-8 rounded-lg bg-[#e5eeff] flex items-center justify-center shrink-0">
-                  <Mail size={15} className="text-primary-container" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] text-outline uppercase font-semibold">Código enviado a</p>
-                  <p className="text-sm font-bold text-on-surface truncate">{correo}</p>
-                </div>
-              </div>
-
-              <div>
-                <label className={labelCls}>Código de 6 dígitos</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="000000"
-                  className="w-full h-16 px-4 rounded-xl border border-outline-variant/40 bg-white text-center text-3xl tracking-[0.5em] font-mono text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
-                  value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required maxLength={6} autoFocus
-                />
-                <p className="text-[10px] text-outline mt-1.5">Revisa también la carpeta de spam</p>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50"
-                style={{ background: '#b2f746', color: '#002117' }}
-                disabled={loading || otp.length !== 6}>
-                <KeyRound size={16} />
-                {loading ? 'Verificando...' : 'Entrar'}
-              </button>
-
-              {/* Reenviar + cambiar correo */}
-              <div className="flex items-center justify-between text-sm">
                 <button
                   type="button"
-                  onClick={reenviar}
-                  disabled={countdown > 0 || loading}
-                  className="flex items-center gap-1.5 text-primary-container font-semibold disabled:text-outline transition-colors hover:underline">
-                  <RefreshCw size={13} />
-                  {countdown > 0 ? `Reenviar en ${countdown}s` : 'Reenviar código'}
-                </button>
-                <button
-                  type="button"
-                  className="text-outline font-semibold flex items-center gap-1 hover:text-on-surface transition-colors"
-                  onClick={() => { setPaso('email'); setOtp(''); setError('') }}>
-                  <ArrowLeft size={13} /> Cambiar correo
+                  tabIndex={-1}
+                  onClick={() => setShowPass(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors">
+                  {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
-            </form>
-          )}
+            </div>
+
+            {/* Olvidé contraseña */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={loading}
+                className="text-xs text-primary-container font-semibold hover:underline disabled:opacity-50">
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50"
+              style={{ background: '#b2f746', color: '#002117' }}
+              disabled={loading || !identifier || !password}>
+              {loading
+                ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-[#002117]/30 border-t-[#002117] rounded-full animate-spin" />Ingresando...</span>
+                : 'Ingresar'}
+            </button>
+          </form>
 
           <p className="text-center text-sm text-outline">
             ¿No tienes cuenta?{' '}

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Map, Bike, Building2, Wrench,
-  TrendingUp, Bell, Menu, X, LogOut, Activity
+  TrendingUp, Bell, Menu, X, LogOut, Activity, Users
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -18,6 +18,7 @@ const NAV = [
   { href: '/operador/bicicletas',        label: 'Bicicletas',     icon: Bike },
   { href: '/operador/mantenimiento',     label: 'Mantenimiento',  icon: Wrench },
   { href: '/operador/prediccion',        label: 'Predicción',     icon: TrendingUp },
+  { href: '/operador/usuarios',          label: 'Usuarios',       icon: Users },
 ]
 
 export function SidebarOperador() {

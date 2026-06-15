@@ -1,33 +1,55 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Bike, CheckCircle, ArrowLeft, User, CreditCard, Mail, Phone } from 'lucide-react'
+import { Bike, CheckCircle, User, CreditCard, Mail, Phone, Lock, Eye, EyeOff } from 'lucide-react'
 
 const inputCls = 'w-full h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all placeholder-outline'
 const labelCls = 'block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1.5'
 
-function validarDocumento(doc: string) { return /^\d{6,12}$/.test(doc) }
-function validarCelular(cel: string)   { return /^9\d{8}$/.test(cel) }
+function PasswordStrength({ password }: { password: string }) {
+  const checks = [
+    password.length >= 8,
+    /[A-Z]/.test(password),
+    /[0-9]/.test(password),
+    /[^A-Za-z0-9]/.test(password),
+  ]
+  const strength = checks.filter(Boolean).length
+  const labels = ['Muy débil', 'Débil', 'Media', 'Fuerte', 'Muy fuerte']
+  const colors = ['bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-lime-500', 'bg-green-500']
+
+  if (!password) return null
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="flex gap-1">
+        {[0,1,2,3].map(i => (
+          <div key={i} className={`h-1 flex-1 rounded-full transition-all ${i < strength ? colors[strength] : 'bg-outline-variant/30'}`} />
+        ))}
+      </div>
+      <p className={`text-[10px] font-semibold ${strength < 2 ? 'text-error' : strength < 3 ? 'text-outline' : 'text-green-700'}`}>
+        {labels[strength]}
+      </p>
+    </div>
+  )
+}
 
 function RegistroContent() {
-  const [form, setForm] = useState({ nombre: '', documento: '', correo: '', celular: '' })
-  const [error, setError]   = useState('')
-  const [loading, setLoading] = useState(false)
-  const [exito, setExito]   = useState(false)
-  const [completandoPerfil, setCompletandoPerfil] = useState(false)
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  const searchParams   = useSearchParams()
+  const correoParam    = searchParams.get('correo')
+  const completandoPerfil = !!correoParam
 
-  useEffect(() => {
-    const correoParam = searchParams.get('correo')
-    if (correoParam) {
-      setForm(p => ({ ...p, correo: decodeURIComponent(correoParam) }))
-      setCompletandoPerfil(true)
-    }
-  }, [searchParams])
+  const [form, setForm]       = useState({
+    nombre: '', documento: '', correo: correoParam ? decodeURIComponent(correoParam) : '',
+    celular: '', password: '', confirmPassword: '',
+  })
+  const [showPass, setShowPass]       = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [error, setError]             = useState('')
+  const [loading, setLoading]         = useState(false)
+  const [emailSent, setEmailSent]     = useState(false)
+  const router = useRouter()
 
   function set(field: string) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -37,12 +59,18 @@ function RegistroContent() {
   function validar(): string | null {
     if (!form.nombre.trim() || form.nombre.trim().split(' ').length < 2)
       return 'Ingresa nombre y apellido completos'
-    if (!validarDocumento(form.documento))
+    if (!/^\d{6,12}$/.test(form.documento))
       return 'Documento inválido (solo números, 6-12 dígitos)'
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo))
       return 'Correo electrónico inválido'
-    if (!validarCelular(form.celular))
+    if (!/^9\d{8}$/.test(form.celular))
       return 'Celular inválido (9 dígitos, debe empezar por 9)'
+    if (!completandoPerfil) {
+      if (form.password.length < 8)
+        return 'La contraseña debe tener al menos 8 caracteres'
+      if (form.password !== form.confirmPassword)
+        return 'Las contraseñas no coinciden'
+    }
     return null
   }
 
@@ -75,48 +103,70 @@ function RegistroContent() {
         return
       }
 
-      // Flujo normal de registro: enviar OTP al correo
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: form.correo.trim().toLowerCase(),
-        options: { shouldCreateUser: true },
+      // Registro nuevo con contraseña
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email:    form.correo.trim().toLowerCase(),
+        password: form.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            nombre:    form.nombre.trim(),
+            documento: form.documento.trim(),
+            celular:   form.celular.trim(),
+          },
+        },
       })
-      if (otpError) throw otpError
+      if (signUpError) {
+        if (signUpError.message.includes('already registered') || signUpError.message.includes('User already'))
+          throw new Error('Ya existe una cuenta con ese correo. ¿Quieres iniciar sesión?')
+        throw signUpError
+      }
 
-      localStorage.setItem('ciclobici_registro', JSON.stringify({
-        nombre:    form.nombre.trim(),
-        documento: form.documento.trim(),
-        correo:    form.correo.trim().toLowerCase(),
-        celular:   form.celular.trim(),
-      }))
-
-      setExito(true)
-      setTimeout(() => router.push('/verificacion?modo=registro'), 1800)
+      if (data.session) {
+        // Email confirmation desactivado — sesión activa de inmediato
+        await supabase.from('usuarios').upsert({
+          id:        data.user!.id,
+          nombre:    form.nombre.trim(),
+          documento: form.documento.trim(),
+          correo:    form.correo.trim().toLowerCase(),
+          celular:   form.celular.trim(),
+          estado:   'activo',
+          rol:      'ciudadano',
+        }, { onConflict: 'id' })
+        router.replace('/ciudadano')
+      } else {
+        // Email confirmation activado — usuario debe confirmar su correo
+        setEmailSent(true)
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al registrar'
-      if (msg.toLowerCase().includes('rate limit') || msg.includes('429')) {
+      if (msg.includes('rate limit') || msg.includes('429'))
         setError('Demasiados intentos. Espera unos minutos y vuelve a intentarlo.')
-      } else {
-        setError(msg)
-      }
+      else setError(msg)
     } finally { setLoading(false) }
   }
 
-  if (exito) {
+  if (emailSent) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-6">
         <div className="w-full max-w-sm text-center space-y-5">
           <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
             style={{ background: 'linear-gradient(135deg, #dcfce7, #b2f746)' }}>
-            <CheckCircle size={40} className="text-[#166534]" />
+            <Mail size={40} className="text-[#166534]" />
           </div>
           <div>
-            <h2 className="text-xl font-extrabold text-on-surface">¡Código enviado!</h2>
+            <h2 className="text-xl font-extrabold text-on-surface">¡Confirma tu correo!</h2>
             <p className="text-sm text-outline mt-2">
-              Revisa tu correo <strong className="text-on-surface">{form.correo}</strong>
-              <br />e ingresa el código de 6 dígitos.
+              Enviamos un enlace de activación a<br />
+              <strong className="text-on-surface">{form.correo}</strong>
+            </p>
+            <p className="text-xs text-outline mt-3">
+              Revisa tu bandeja de entrada (y spam). Una vez que confirmes, podrás iniciar sesión.
             </p>
           </div>
-          <p className="text-xs text-outline">Redirigiendo a verificación...</p>
+          <Link href="/login" className="inline-block mt-2 text-sm font-bold text-primary-container hover:underline">
+            Ir a Iniciar Sesión
+          </Link>
         </div>
       </div>
     )
@@ -138,7 +188,7 @@ function RegistroContent() {
             Únete a la red verde<br />de San Borja
           </h1>
           <p className="text-white/60 text-sm leading-relaxed max-w-xs">
-            Crea tu cuenta gratis y empieza a usar las bicicletas compartidas. Tu ciudad, tu ritmo.
+            Crea tu cuenta y empieza a usar las bicicletas compartidas. Tu ciudad, tu ritmo.
           </p>
           <div className="mt-8 space-y-3">
             {['Sin costo de membresía', 'Disponible 24/7', 'Tracking en tiempo real'].map(b => (
@@ -155,8 +205,8 @@ function RegistroContent() {
       </div>
 
       {/* ── Formulario ── */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-surface">
-        <div className="w-full max-w-sm space-y-6">
+      <div className="flex-1 flex items-center justify-center p-6 bg-surface overflow-y-auto">
+        <div className="w-full max-w-sm space-y-5 py-8">
 
           {/* Logo mobile */}
           <div className="md:hidden flex items-center gap-3">
@@ -171,48 +221,32 @@ function RegistroContent() {
               {completandoPerfil ? 'Completa tu perfil' : 'Crear cuenta'}
             </h2>
             <p className="text-sm text-outline mt-1">
-              {completandoPerfil
-                ? 'Tu correo ya está verificado. Solo necesitamos tus datos.'
-                : 'Recibirás un código en tu correo para confirmar el registro'}
+              {completandoPerfil ? 'Ya tienes sesión activa. Solo necesitamos tus datos.' : 'Registro rápido, empieza en segundos'}
             </p>
           </div>
 
-          {completandoPerfil && (
-            <div className="px-4 py-3 rounded-xl bg-[#dcfce7] text-[#166534] text-sm border border-[#bbf7d0] flex items-center gap-2">
-              <CheckCircle size={15} />
-              Correo verificado: <strong>{form.correo}</strong>
-            </div>
-          )}
-
           {error && (
-            <div className="px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold border border-error/20">
+            <div className="px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold border border-error/20 flex flex-col gap-1">
               {error}
+              {error.includes('iniciar sesión') && (
+                <Link href="/login" className="text-primary-container underline text-xs">Ir a Iniciar Sesión →</Link>
+              )}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Nombre */}
             <div>
-              <label className={labelCls}>
-                <User size={10} className="inline mr-1" />Nombre completo
-              </label>
-              <input
-                className={inputCls} name="nombre"
-                placeholder="Juan García López"
-                value={form.nombre} onChange={set('nombre')} required
-              />
+              <label className={labelCls}><User size={10} className="inline mr-1" />Nombre completo</label>
+              <input className={inputCls} placeholder="Juan García López" value={form.nombre} onChange={set('nombre')} required />
               <p className="text-[10px] text-outline mt-1">Nombre y apellidos como en tu documento</p>
             </div>
 
             {/* Documento */}
             <div>
-              <label className={labelCls}>
-                <CreditCard size={10} className="inline mr-1" />DNI / Documento
-              </label>
+              <label className={labelCls}><CreditCard size={10} className="inline mr-1" />DNI / Documento</label>
               <input
-                className={inputCls} name="documento"
-                placeholder="12345678"
-                value={form.documento}
+                className={inputCls} placeholder="12345678" value={form.documento}
                 onChange={e => setForm(p => ({ ...p, documento: e.target.value.replace(/\D/g, '') }))}
                 required maxLength={12}
               />
@@ -220,30 +254,21 @@ function RegistroContent() {
 
             {/* Correo */}
             <div>
-              <label className={labelCls}>
-                <Mail size={10} className="inline mr-1" />Correo electrónico
-              </label>
+              <label className={labelCls}><Mail size={10} className="inline mr-1" />Correo electrónico</label>
               <input
-                type="email" className={inputCls} name="correo"
-                placeholder="tu@correo.com"
+                type="email" className={inputCls} placeholder="tu@correo.com"
                 value={form.correo} onChange={set('correo')}
-                required autoComplete="email"
+                required autoComplete="email" readOnly={!!completandoPerfil}
               />
-              <p className="text-[10px] text-outline mt-1">Aquí recibirás el código de verificación</p>
             </div>
 
             {/* Celular */}
             <div>
-              <label className={labelCls}>
-                <Phone size={10} className="inline mr-1" />Celular peruano
-              </label>
+              <label className={labelCls}><Phone size={10} className="inline mr-1" />Celular peruano</label>
               <div className="flex gap-2">
-                <span className="flex items-center px-3 h-12 rounded-xl border border-outline-variant/40 bg-surface-container-low text-outline text-sm font-semibold shrink-0">
-                  +51
-                </span>
+                <span className="flex items-center px-3 h-12 rounded-xl border border-outline-variant/40 bg-surface-container-low text-outline text-sm font-semibold shrink-0">+51</span>
                 <input
-                  type="tel" name="celular"
-                  placeholder="987 654 321"
+                  type="tel" placeholder="987 654 321"
                   className="flex-1 h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
                   value={form.celular}
                   onChange={e => setForm(p => ({ ...p, celular: e.target.value.replace(/\D/g, '').slice(0, 9) }))}
@@ -253,22 +278,60 @@ function RegistroContent() {
               <p className="text-[10px] text-outline mt-1">9 dígitos, empieza por 9</p>
             </div>
 
+            {/* Contraseña (solo en registro nuevo) */}
+            {!completandoPerfil && (
+              <>
+                <div>
+                  <label className={labelCls}><Lock size={10} className="inline mr-1" />Contraseña</label>
+                  <div className="relative">
+                    <input
+                      type={showPass ? 'text' : 'password'} className={`${inputCls} pr-11`}
+                      placeholder="Mínimo 8 caracteres" value={form.password} onChange={set('password')}
+                      required autoComplete="new-password"
+                    />
+                    <button type="button" tabIndex={-1} onClick={() => setShowPass(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface">
+                      {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+                  <PasswordStrength password={form.password} />
+                </div>
+
+                <div>
+                  <label className={labelCls}><Lock size={10} className="inline mr-1" />Confirmar contraseña</label>
+                  <div className="relative">
+                    <input
+                      type={showConfirm ? 'text' : 'password'} className={`${inputCls} pr-11`}
+                      placeholder="Repite tu contraseña" value={form.confirmPassword} onChange={set('confirmPassword')}
+                      required autoComplete="new-password"
+                    />
+                    <button type="button" tabIndex={-1} onClick={() => setShowConfirm(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface">
+                      {showConfirm ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+                  {form.confirmPassword && form.password !== form.confirmPassword && (
+                    <p className="text-[10px] text-error mt-1 font-semibold">Las contraseñas no coinciden</p>
+                  )}
+                </div>
+              </>
+            )}
+
             <button
               type="submit"
               className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50 mt-2"
               style={{ background: '#b2f746', color: '#002117' }}
               disabled={loading}>
-              <Mail size={16} />
               {loading
-                ? (completandoPerfil ? 'Guardando...' : 'Enviando código...')
-                : (completandoPerfil ? 'Guardar y entrar' : 'Crear cuenta y recibir código')}
+                ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-[#002117]/30 border-t-[#002117] rounded-full animate-spin" />{completandoPerfil ? 'Guardando...' : 'Creando cuenta...'}</span>
+                : completandoPerfil ? 'Guardar y entrar' : 'Crear cuenta'}
             </button>
           </form>
 
           <p className="text-center text-sm text-outline">
             ¿Ya tienes cuenta?{' '}
             <Link href="/login" className="font-bold text-primary-container hover:underline">
-              <ArrowLeft size={12} className="inline" /> Iniciar sesión
+              Iniciar sesión
             </Link>
           </p>
 
