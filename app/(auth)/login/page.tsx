@@ -1,22 +1,21 @@
 'use client'
 
-import { useState, Suspense, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Lock, Eye, EyeOff, Bike, CheckCircle } from 'lucide-react'
+import { loginAction } from './actions'
 
 const inputCls = 'w-full h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface placeholder-outline focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all'
 const labelCls = 'block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1.5'
 
 function LoginContent() {
+  const [showPass, setShowPass]   = useState(false)
+  const [error, setError]         = useState('')
+  const [loading, setLoading]     = useState(false)
+  const [resetSent, setResetSent] = useState(false)
   const [identifier, setIdentifier] = useState('')
-  const [password, setPassword]     = useState('')
-  const [showPass, setShowPass]     = useState(false)
-  const [error, setError]           = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [resetSent, setResetSent]   = useState(false)
-  const router       = useRouter()
   const searchParams = useSearchParams()
   const supabase     = createClient()
 
@@ -24,40 +23,25 @@ function LoginContent() {
 
   useEffect(() => {
     const err = searchParams.get('error')
-    if (err === 'suspendido') setError('Tu cuenta está suspendida. Contacta al administrador.')
+    if (err === 'suspendido')     setError('Tu cuenta está suspendida. Contacta al administrador.')
     else if (err === 'sin-sesion') setError('La sesión expiró. Vuelve a iniciar sesión.')
-    else if (err === 'error-interno') setError('Error interno. Intenta nuevamente.')
+    else if (err)                  setError('Error al iniciar sesión. Intenta nuevamente.')
   }, [searchParams])
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(formData: FormData) {
     setError(''); setLoading(true)
     try {
-      let emailToUse = identifier.trim().toLowerCase()
-
-      if (!isEmail) {
-        const phone = identifier.replace(/\D/g, '')
-        const { data: usuario } = await supabase
-          .from('usuarios').select('correo').eq('celular', phone).maybeSingle()
-        if (!usuario?.correo)
-          throw new Error('No encontramos una cuenta con ese número de celular')
-        emailToUse = usuario.correo
-      }
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: emailToUse, password,
-      })
-      if (signInError) {
-        if (signInError.message.includes('Invalid login') || signInError.message.includes('invalid_credentials'))
-          throw new Error('Correo/teléfono o contraseña incorrectos')
-        throw signInError
-      }
-
-      // El servidor lee la cookie de sesión y redirige según el rol
-      window.location.href = '/api/auth/redirect'
+      const result = await loginAction(formData)
+      if (result?.error) setError(result.error)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
-    } finally { setLoading(false) }
+      // Next.js redirect() lanza un error interno — no mostrarlo como error de usuario
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!msg.includes('NEXT_REDIRECT')) {
+        setError('Error inesperado al iniciar sesión. Intenta de nuevo.')
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleForgotPassword() {
@@ -138,21 +122,22 @@ function LoginContent() {
               <div>
                 <p className="text-sm font-bold text-[#166534]">Correo enviado</p>
                 <p className="text-xs text-[#166534]/80 mt-0.5">
-                  Revisa tu bandeja de entrada y sigue las instrucciones para crear una nueva contraseña.
+                  Revisa tu bandeja de entrada y sigue las instrucciones.
                 </p>
               </div>
             </div>
           ) : error ? (
-            <div className="px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold border border-error/20">
+            <div className="px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm font-semibold border border-red-200">
               {error}
             </div>
           ) : null}
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form action={handleSubmit} className="space-y-4">
             {/* Identificador */}
             <div>
               <label className={labelCls}>Correo o celular</label>
               <input
+                name="identifier"
                 type="text"
                 placeholder="tu@correo.com  ó  987654321"
                 className={inputCls}
@@ -161,8 +146,8 @@ function LoginContent() {
                 required autoFocus autoComplete="username"
               />
               <p className="text-[10px] text-outline mt-1">
-                {isEmail ? '✉ Ingresando con correo electrónico'
-                  : identifier.length > 3 ? '📱 Ingresando con número de celular'
+                {isEmail ? '✉ Correo electrónico'
+                  : identifier.length > 3 ? '📱 Número de celular'
                   : 'Puedes usar tu correo o número de celular peruano'}
               </p>
             </div>
@@ -174,17 +159,13 @@ function LoginContent() {
               </label>
               <div className="relative">
                 <input
+                  name="password"
                   type={showPass ? 'text' : 'password'}
                   placeholder="Tu contraseña"
                   className={`${inputCls} pr-11`}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
                   required autoComplete="current-password"
                 />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowPass(v => !v)}
+                <button type="button" tabIndex={-1} onClick={() => setShowPass(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors">
                   {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
@@ -193,10 +174,7 @@ function LoginContent() {
 
             {/* Olvidé contraseña */}
             <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                disabled={loading}
+              <button type="button" onClick={handleForgotPassword} disabled={loading}
                 className="text-xs text-primary-container font-semibold hover:underline disabled:opacity-50">
                 ¿Olvidaste tu contraseña?
               </button>
@@ -206,9 +184,9 @@ function LoginContent() {
               type="submit"
               className="w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-50"
               style={{ background: '#b2f746', color: '#002117' }}
-              disabled={loading || !identifier || !password}>
+              disabled={loading}>
               {loading
-                ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-[#002117]/30 border-t-[#002117] rounded-full animate-spin" />Ingresando...</span>
+                ? <><span className="w-4 h-4 border-2 border-[#002117]/30 border-t-[#002117] rounded-full animate-spin" />Ingresando...</>
                 : 'Ingresar'}
             </button>
           </form>
