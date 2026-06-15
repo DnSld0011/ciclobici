@@ -4,8 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
-import { MapPin, Bike, RefreshCw, Search, QrCode, X, Navigation, ChevronRight } from 'lucide-react'
-import Link from 'next/link'
+import { MapPin, Bike, RefreshCw, X, Navigation, ChevronDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 const MapaEstaciones = dynamicImport(
@@ -13,23 +12,21 @@ const MapaEstaciones = dynamicImport(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full bg-on-surface animate-pulse flex items-center justify-center">
-        <div className="text-white/40 text-sm">Cargando mapa...</div>
+      <div className="w-full h-full bg-surface-container animate-pulse flex items-center justify-center">
+        <div className="text-outline text-sm">Cargando mapa...</div>
       </div>
     ),
   }
 )
 
 export default function MapaCiudadanoPage() {
-  const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
-  const [filtradas, setFiltradas] = useState<EstacionConDisponibilidad[]>([])
+  const [estaciones, setEstaciones]   = useState<EstacionConDisponibilidad[]>([])
   const [seleccionada, setSeleccionada] = useState<EstacionConDisponibilidad | null>(null)
-  const [busqueda, setBusqueda] = useState('')
-  const [ultimaAct, setUltimaAct] = useState(new Date())
-  const [loading, setLoading] = useState(true)
-  const [panelAbierto, setPanelAbierto] = useState(false)
+  const [ultimaAct, setUltimaAct]     = useState(new Date())
+  const [loading, setLoading]         = useState(true)
+  const [listaAbierta, setListaAbierta] = useState(false)
   const supabase = createClient()
-  const router = useRouter()
+  const router   = useRouter()
 
   const cargar = useCallback(async () => {
     const { data } = await supabase
@@ -44,9 +41,7 @@ export default function MapaCiudadanoPage() {
         bicicletas_disponibles: Array.isArray(est.bicicletas)
           ? est.bicicletas.filter((b: { estado: string }) => b.estado === 'disponible').length : 0,
       }))
-      const sorted = mapped.sort((a, b) => b.bicicletas_disponibles - a.bicicletas_disponibles)
-      setEstaciones(sorted)
-      setFiltradas(sorted)
+      setEstaciones(mapped.sort((a, b) => b.bicicletas_disponibles - a.bicicletas_disponibles))
       setUltimaAct(new Date())
     }
     setLoading(false)
@@ -61,29 +56,19 @@ export default function MapaCiudadanoPage() {
     return () => { supabase.removeChannel(ch) }
   }, [cargar, supabase])
 
-  useEffect(() => {
-    if (!busqueda.trim()) { setFiltradas(estaciones); return }
-    const q = busqueda.toLowerCase()
-    setFiltradas(estaciones.filter(e =>
-      e.nombre.toLowerCase().includes(q) || e.direccion.toLowerCase().includes(q)
-    ))
-  }, [busqueda, estaciones])
-
-  function handleEstacionClick(est: EstacionConDisponibilidad) {
-    setSeleccionada(est)
-    setPanelAbierto(false)
-  }
-
   const pct = (est: EstacionConDisponibilidad) =>
     est.capacidad > 0 ? est.bicicletas_disponibles / est.capacidad : 0
 
-  const dotColor = (est: EstacionConDisponibilidad) =>
-    pct(est) === 0 ? 'bg-error' : pct(est) < 0.2 ? 'bg-amber-400' : 'bg-[#b2f746]'
+  const barColor = (e: EstacionConDisponibilidad) =>
+    pct(e) === 0 ? '#ba1a1a' : pct(e) < 0.2 ? '#f59e0b' : '#b2f746'
 
-  const chipClass = (est: EstacionConDisponibilidad) =>
-    pct(est) === 0
+  const dotClass = (e: EstacionConDisponibilidad) =>
+    pct(e) === 0 ? 'bg-error' : pct(e) < 0.2 ? 'bg-amber-400' : 'bg-[#b2f746]'
+
+  const chipClass = (e: EstacionConDisponibilidad) =>
+    pct(e) === 0
       ? 'bg-[#ffdad6] text-error border-error/20'
-      : pct(est) < 0.2
+      : pct(e) < 0.2
         ? 'bg-[#fef9c3] text-[#854d0e] border-[#fde68a]'
         : 'bg-[#dcfce7] text-[#166534] border-[#bbf7d0]'
 
@@ -92,32 +77,15 @@ export default function MapaCiudadanoPage() {
   return (
     <div className="flex flex-col lg:flex-row h-[calc(100vh-4rem)] md:h-[calc(100vh-3.5rem)] relative">
 
-      {/* ── MAPA (full-screen base) ── */}
+      {/* ── MAPA — full screen ── */}
       <div className="absolute inset-0 lg:relative lg:flex-1">
         {loading
-          ? <div className="w-full h-full bg-on-surface animate-pulse" />
-          : <MapaEstaciones estaciones={estaciones} onEstacionClick={handleEstacionClick} focusEstacion={seleccionada} />
+          ? <div className="w-full h-full bg-surface-container animate-pulse" />
+          : <MapaEstaciones estaciones={estaciones} onEstacionClick={e => { setSeleccionada(e); setListaAbierta(false) }} focusEstacion={seleccionada} />
         }
 
-        {/* Barra superior: búsqueda + actualización */}
-        <div className="absolute top-3 left-3 right-3 flex items-center gap-2 z-10">
-          <div className="flex-1 relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" />
-            <input
-              className="w-full h-10 pl-9 pr-3 rounded-xl bg-white/90 backdrop-blur-md border border-white/50 text-sm text-on-surface placeholder-outline shadow-md focus:outline-none focus:ring-2 focus:ring-primary-container/30"
-              placeholder="Buscar estación..."
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-1.5 h-10 px-3 rounded-xl bg-white/90 backdrop-blur-md border border-white/50 shadow-md text-xs text-outline whitespace-nowrap">
-            <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '4s' }} />
-            {ultimaAct.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
-          </div>
-        </div>
-
-        {/* Mini stats flotantes */}
-        <div className="absolute top-16 left-3 flex flex-col gap-2 z-10">
+        {/* Stats flotantes — top left */}
+        <div className="absolute top-3 left-3 flex flex-col gap-2 z-10 pointer-events-none">
           <div className="glass-panel px-3 py-1.5 rounded-xl border border-white/50 shadow-md flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#b2f746]" />
             <span className="text-xs font-bold text-on-surface">{totalLibres} bicis libres</span>
@@ -128,179 +96,136 @@ export default function MapaCiudadanoPage() {
           </div>
         </div>
 
-        {/* Barra de acciones mobile — fija arriba del nav */}
-        <div className="lg:hidden absolute bottom-0 left-0 right-0 z-10 flex gap-2 px-3 pb-3 pt-2"
-          style={{ background: 'linear-gradient(to top, rgba(255,255,255,0.97) 70%, transparent)' }}>
-          <Link href="/ciudadano/escanear"
-            className="flex-1 h-12 rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 shadow-md active:scale-[.97] transition-all"
-            style={{ background: '#b2f746', color: '#002117' }}>
-            <QrCode size={18} /> Escanear QR
-          </Link>
-          <button onClick={() => setPanelAbierto(true)}
-            className="h-12 px-4 rounded-2xl font-bold text-sm flex items-center gap-2 shadow-md active:scale-[.97] transition-all border border-outline-variant/30 bg-white text-on-surface">
-            <MapPin size={16} className="text-primary-container" />
-            <span>{estaciones.length}</span>
+        {/* Hora actualización — top right */}
+        <div className="absolute top-3 right-3 z-10 pointer-events-none">
+          <div className="glass-panel px-3 py-1.5 rounded-xl border border-white/50 shadow-md flex items-center gap-1.5 text-xs text-outline">
+            <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '4s' }} />
+            {ultimaAct.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </div>
+
+        {/* Chip "Ver lista" — mobile, bottom center */}
+        <div className="lg:hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
+          <button onClick={() => setListaAbierta(true)}
+            className="glass-panel flex items-center gap-2 px-4 py-2 rounded-full border border-white/50 shadow-lg text-xs font-bold text-on-surface active:scale-[.97] transition-all">
+            <ChevronDown size={13} /> Ver {estaciones.length} estaciones
           </button>
         </div>
 
-        {/* Popup estación seleccionada */}
+        {/* Popup estación seleccionada — mobile */}
         {seleccionada && (
-          <div className="absolute bottom-16 left-3 right-3 z-20 lg:hidden">
+          <div className="absolute bottom-14 left-3 right-3 z-20 lg:hidden">
             <div className="glass-panel rounded-2xl border border-white/60 shadow-2xl p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                    pct(seleccionada) === 0 ? 'bg-[#ffdad6]' : pct(seleccionada) < 0.2 ? 'bg-[#fef9c3]' : 'bg-[#dcfce7]'
-                  }`}>
-                    <Bike size={18} className={
-                      pct(seleccionada) === 0 ? 'text-error' : pct(seleccionada) < 0.2 ? 'text-[#854d0e]' : 'text-[#166534]'
-                    } />
+              <div className="flex items-start gap-3">
+                {/* Icono */}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  pct(seleccionada) === 0 ? 'bg-[#ffdad6]' : pct(seleccionada) < 0.2 ? 'bg-[#fef9c3]' : 'bg-[#dcfce7]'
+                }`}>
+                  <Bike size={18} className={
+                    pct(seleccionada) === 0 ? 'text-error' : pct(seleccionada) < 0.2 ? 'text-[#854d0e]' : 'text-[#166534]'
+                  } />
+                </div>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-extrabold text-on-surface text-sm truncate">{seleccionada.nombre}</h3>
+                  <p className="text-xs text-outline truncate flex items-center gap-1 mt-0.5">
+                    <MapPin size={9} /> {seleccionada.direccion}
+                  </p>
+                  {/* Disponibilidad */}
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-outline-variant/20 overflow-hidden">
+                      <div className="h-full rounded-full"
+                        style={{ width: `${Math.min(100, pct(seleccionada) * 100)}%`, background: barColor(seleccionada) }} />
+                    </div>
+                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${chipClass(seleccionada)}`}>
+                      {seleccionada.bicicletas_disponibles}/{seleccionada.capacidad}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-extrabold text-on-surface text-sm truncate">{seleccionada.nombre}</h3>
-                    <p className="text-xs text-outline truncate flex items-center gap-1">
-                      <MapPin size={10} /> {seleccionada.direccion}
-                    </p>
-                  </div>
                 </div>
-                <button onClick={() => setSeleccionada(null)}
-                  className="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center shrink-0">
-                  <X size={14} className="text-outline" />
-                </button>
-              </div>
-
-              {/* Disponibilidad */}
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-outline">Disponibilidad</span>
-                  <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full border ${chipClass(seleccionada)}`}>
-                    {seleccionada.bicicletas_disponibles} / {seleccionada.capacidad} bicis
-                  </span>
+                {/* Cierre + nav */}
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button onClick={() => setSeleccionada(null)}
+                    className="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center">
+                    <X size={13} className="text-outline" />
+                  </button>
+                  <button
+                    onClick={() => router.push(`/ciudadano/mapa?nav=${seleccionada.latitud},${seleccionada.longitud}`)}
+                    className="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center">
+                    <Navigation size={13} className="text-primary-container" />
+                  </button>
                 </div>
-                <div className="h-2 rounded-full bg-outline-variant/20 overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(100, pct(seleccionada) * 100)}%`,
-                      background: pct(seleccionada) === 0 ? '#ba1a1a' : pct(seleccionada) < 0.2 ? '#f59e0b' : '#b2f746',
-                    }} />
-                </div>
-              </div>
-
-              {/* Acción */}
-              <div className="mt-3 flex gap-2">
-                <Link href="/ciudadano/escanear"
-                  className="flex-1 h-11 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[.97]"
-                  style={{ background: '#b2f746', color: '#002117' }}>
-                  <QrCode size={15} /> Escanear QR
-                </Link>
-                <button
-                  onClick={() => router.push(`/ciudadano/mapa?nav=${seleccionada.latitud},${seleccionada.longitud}`)}
-                  className="h-11 w-11 rounded-xl border border-outline-variant/30 bg-white flex items-center justify-center hover:bg-surface-container-low transition-colors">
-                  <Navigation size={16} className="text-primary-container" />
-                </button>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── PANEL DERECHO — desktop siempre visible / mobile drawer ── */}
+      {/* ── PANEL DERECHO — desktop ── */}
       {/* Overlay mobile */}
-      {panelAbierto && (
+      {listaAbierta && (
         <div className="lg:hidden fixed inset-0 bg-black/30 z-30 backdrop-blur-sm"
-          onClick={() => setPanelAbierto(false)} />
+          onClick={() => setListaAbierta(false)} />
       )}
 
       <div className={`
-        lg:relative lg:w-80 lg:flex lg:flex-col
+        lg:relative lg:w-72 lg:flex lg:flex-col
         fixed bottom-0 left-0 right-0 z-40
-        bg-white border-t lg:border-t-0 lg:border-l border-outline-variant/20
+        bg-white border-t lg:border-t-0 lg:border-l border-outline-variant/20 rounded-t-3xl lg:rounded-none
         transition-transform duration-300 ease-out
-        ${panelAbierto ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
-        max-h-[75vh] lg:max-h-none lg:h-full
+        ${listaAbierta ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
+        max-h-[70vh] lg:max-h-none lg:h-full
       `}>
         {/* Handle mobile */}
-        <div className="lg:hidden flex justify-center pt-2 pb-1">
+        <div className="lg:hidden flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-outline-variant/40" />
         </div>
 
         {/* Header */}
         <div className="px-4 py-3 border-b border-outline-variant/15 flex items-center justify-between">
           <div>
-            <h2 className="font-extrabold text-sm text-on-surface">Estaciones activas</h2>
-            <p className="text-[10px] text-outline mt-0.5">{filtradas.length} estaciones · {totalLibres} bicis libres</p>
+            <h2 className="font-extrabold text-sm text-on-surface">Estaciones</h2>
+            <p className="text-[10px] text-outline mt-0.5">{totalLibres} bicis disponibles</p>
           </div>
           <button className="lg:hidden w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center"
-            onClick={() => setPanelAbierto(false)}>
+            onClick={() => setListaAbierta(false)}>
             <X size={14} className="text-outline" />
           </button>
         </div>
 
-        {/* Búsqueda desktop */}
-        <div className="hidden lg:block px-3 py-3 border-b border-outline-variant/10">
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" />
-            <input
-              className="w-full h-9 pl-8 pr-3 rounded-xl bg-surface-container-low border border-outline-variant/20 text-xs text-on-surface placeholder-outline focus:outline-none focus:ring-1 focus:ring-primary-container/30"
-              placeholder="Buscar estación..."
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-            />
-          </div>
-        </div>
-
         {/* Lista */}
         <div className="flex-1 overflow-y-auto divide-y divide-outline-variant/10">
-          {filtradas.length === 0 && !loading && (
-            <div className="p-8 text-center text-outline text-xs">Sin estaciones</div>
-          )}
           {loading && Array(5).fill(0).map((_, i) => (
             <div key={i} className="px-4 py-3.5 flex gap-3">
-              <div className="w-8 h-8 rounded-xl bg-surface-container-low animate-pulse" />
+              <div className="w-2.5 h-2.5 rounded-full bg-surface-container-low animate-pulse mt-1.5 shrink-0" />
               <div className="flex-1 space-y-1.5">
                 <div className="h-3 rounded bg-surface-container-low animate-pulse w-3/4" />
                 <div className="h-2 rounded bg-surface-container-low animate-pulse w-1/2" />
               </div>
             </div>
           ))}
-          {filtradas.map(est => (
-            <button key={est.id} onClick={() => { handleEstacionClick(est); setPanelAbierto(false) }}
+          {estaciones.map(est => (
+            <button key={est.id}
+              onClick={() => { setSeleccionada(est); setListaAbierta(false) }}
               className={`w-full text-left px-4 py-3.5 flex items-center gap-3 hover:bg-surface-container-low/70 transition-colors ${
                 seleccionada?.id === est.id ? 'bg-surface-container-low border-l-2 border-primary-container' : ''
               }`}>
-              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotColor(est)}`} />
+              <div className={`w-2.5 h-2.5 rounded-full shrink-0 mt-0.5 ${dotClass(est)}`} />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-on-surface truncate">{est.nombre}</p>
                 <p className="text-[10px] text-outline truncate mt-0.5 flex items-center gap-1">
                   <MapPin size={9} className="shrink-0" /> {est.direccion}
                 </p>
-                {/* Barra de disponibilidad */}
                 <div className="mt-1.5 h-1 rounded-full bg-outline-variant/15 overflow-hidden">
                   <div className="h-full rounded-full"
-                    style={{
-                      width: `${Math.min(100, pct(est) * 100)}%`,
-                      background: pct(est) === 0 ? '#ba1a1a' : pct(est) < 0.2 ? '#f59e0b' : '#b2f746',
-                    }} />
+                    style={{ width: `${Math.min(100, pct(est) * 100)}%`, background: barColor(est) }} />
                 </div>
               </div>
-              <div className="flex flex-col items-end shrink-0 gap-1">
-                <span className="font-extrabold text-xs text-on-surface">
-                  {est.bicicletas_disponibles}
-                  <span className="text-outline font-normal">/{est.capacidad}</span>
-                </span>
-                <ChevronRight size={11} className="text-outline" />
-              </div>
+              <span className="font-extrabold text-xs text-on-surface shrink-0">
+                {est.bicicletas_disponibles}
+                <span className="text-outline font-normal">/{est.capacidad}</span>
+              </span>
             </button>
           ))}
-        </div>
-
-        {/* FAB escanear — desktop */}
-        <div className="hidden lg:block p-3 border-t border-outline-variant/10">
-          <Link href="/ciudadano/escanear"
-            className="flex items-center justify-center gap-2 h-11 w-full rounded-xl font-bold text-sm transition-all active:scale-[.97]"
-            style={{ background: '#b2f746', color: '#002117' }}>
-            <QrCode size={17} /> Escanear QR bicicleta
-          </Link>
         </div>
       </div>
     </div>
