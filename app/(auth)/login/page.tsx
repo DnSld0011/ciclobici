@@ -57,7 +57,7 @@ function LoginContent() {
         await supabase.auth.signOut()
         throw new Error('Tu cuenta está suspendida. Contacta al administrador.')
       }
-      if (perfil.rol === 'operador')   router.replace('/operador')
+      if (perfil.rol === 'administrador' || perfil.rol === 'operador') router.replace('/operador')
       else if (perfil.rol === 'tecnico') router.replace('/tecnico/mantenimiento')
       else                               router.replace('/ciudadano')
     } catch (err: unknown) {

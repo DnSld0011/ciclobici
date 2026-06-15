@@ -59,7 +59,7 @@ export default function AuthCallbackPage() {
       const { data: perfil } = await supabase
         .from('usuarios').select('rol').eq('id', user.id).maybeSingle()
 
-      if (perfil?.rol === 'operador')     router.replace('/operador')
+      if (perfil?.rol === 'administrador' || perfil?.rol === 'operador') router.replace('/operador')
       else if (perfil?.rol === 'tecnico') router.replace('/tecnico/mantenimiento')
       else                                router.replace('/ciudadano')
     }
