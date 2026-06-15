@@ -2,16 +2,16 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Map, User, Home, Bike, QrCode, LogOut } from 'lucide-react'
+import { Map, User, Home, Bike, AlertTriangle, LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 
 const NAV = [
-  { href: '/ciudadano',             label: 'Inicio',   icon: Home },
-  { href: '/ciudadano/mapa',        label: 'Mapa',     icon: Map  },
-  { href: '/ciudadano/escanear',    label: 'Escanear', icon: QrCode, fab: true },
-  { href: '/ciudadano/viajes',      label: 'Viajes',   icon: Bike },
-  { href: '/ciudadano/perfil',      label: 'Perfil',   icon: User },
+  { href: '/ciudadano',              label: 'Inicio',   icon: Home },
+  { href: '/ciudadano/mapa',         label: 'Mapa',     icon: Map  },
+  { href: '/ciudadano/viajes',       label: 'Viajes',   icon: Bike },
+  { href: '/ciudadano/incidencias',  label: 'Reportar', icon: AlertTriangle },
+  { href: '/ciudadano/perfil',       label: 'Perfil',   icon: User },
 ]
 
 export function NavbarCiudadano() {
@@ -41,7 +41,7 @@ export function NavbarCiudadano() {
           className="fixed top-0 left-0 right-0 z-50 bg-[#064e3b] text-white flex items-center justify-center gap-2 py-2 text-xs font-bold shadow-md md:hidden"
         >
           <div className="w-2 h-2 rounded-full bg-[#b2f746] animate-pulse" />
-          Viaje en curso — Toca para continuar
+          Viaje en curso — Toca para ver detalles
         </Link>
       )}
 
@@ -85,27 +85,18 @@ export function NavbarCiudadano() {
       </header>
 
       {/* Bottom nav — mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-outline-variant/30 shadow-lg">
-        <div className="flex items-end">
-          {NAV.map(({ href, label, icon: Icon, fab }) => {
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-outline-variant/30 shadow-lg safe-area-pb">
+        <div className="flex items-center">
+          {NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href !== '/ciudadano' && pathname.startsWith(href))
-            if (fab) {
-              return (
-                <Link key={href} href={href}
-                  className="flex-1 flex flex-col items-center -mt-4 pb-1">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg mb-0.5"
-                    style={{ background: '#b2f746', boxShadow: '0 4px 20px rgba(178,247,70,0.5)' }}>
-                    <Icon size={22} style={{ color: '#002117' }} />
-                  </div>
-                  <span className="text-[10px] font-extrabold" style={{ color: '#446900' }}>{label}</span>
-                </Link>
-              )
-            }
             return (
               <Link key={href} href={href}
-                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-semibold transition-colors
+                className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 text-[10px] font-semibold transition-colors
                   ${active ? 'text-primary-container' : 'text-on-surface-variant'}`}>
-                <Icon size={19} strokeWidth={active ? 2.5 : 1.8} />
+                {active && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary-container mb-0.5 transition-all" />
+                )}
+                <Icon size={active ? 20 : 19} strokeWidth={active ? 2.5 : 1.8} />
                 {label}
               </Link>
             )
