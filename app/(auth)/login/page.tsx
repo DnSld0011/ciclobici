@@ -64,13 +64,37 @@ function LoginContent() {
       if (error) throw error
       if (!data.user) throw new Error('No se pudo verificar la sesión')
 
-      const { data: perfil } = await supabase
-        .from('usuarios')
-        .select('rol, estado')
-        .eq('id', data.user.id)
-        .single()
+      const email = data.user.email ?? correo.trim().toLowerCase()
 
-      if (!perfil)                           { router.push('/registro'); return }
+      // Buscar perfil primero por auth ID, luego por correo (usuarios migrados de SMS OTP)
+      let { data: perfil } = await supabase
+        .from('usuarios')
+        .select('id, rol, estado')
+        .eq('id', data.user.id)
+        .maybeSingle()
+
+      if (!perfil) {
+        const { data: porCorreo } = await supabase
+          .from('usuarios')
+          .select('id, rol, estado')
+          .eq('correo', email)
+          .maybeSingle()
+
+        if (porCorreo) {
+          // Sincronizar el ID del auth user con el registro existente
+          await supabase
+            .from('usuarios')
+            .update({ id: data.user.id })
+            .eq('correo', email)
+          perfil = { ...porCorreo, id: data.user.id }
+        }
+      }
+
+      if (!perfil) {
+        // Usuario en auth pero sin perfil — completar registro
+        router.push(`/registro?correo=${encodeURIComponent(email)}`)
+        return
+      }
       if (perfil.estado === 'pendiente')     { router.push('/verificacion'); return }
       if (perfil.rol === 'operador')         router.replace('/operador')
       else if (perfil.rol === 'tecnico')     router.replace('/tecnico/mantenimiento')

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Bike, CheckCircle, ArrowLeft, User, CreditCard, Mail, Phone } from 'lucide-react'
 
@@ -12,12 +12,22 @@ const labelCls = 'block text-[10px] font-extrabold tracking-widest text-outline 
 function validarDocumento(doc: string) { return /^\d{6,12}$/.test(doc) }
 function validarCelular(cel: string)   { return /^9\d{8}$/.test(cel) }
 
-export default function RegistroPage() {
+function RegistroContent() {
   const [form, setForm] = useState({ nombre: '', documento: '', correo: '', celular: '' })
   const [error, setError]   = useState('')
   const [loading, setLoading] = useState(false)
   const [exito, setExito]   = useState(false)
+  const [completandoPerfil, setCompletandoPerfil] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const correoParam = searchParams.get('correo')
+    if (correoParam) {
+      setForm(p => ({ ...p, correo: decodeURIComponent(correoParam) }))
+      setCompletandoPerfil(true)
+    }
+  }, [searchParams])
 
   function set(field: string) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -45,19 +55,33 @@ export default function RegistroPage() {
     try {
       const supabase = createClient()
 
-      // Verificar que el correo no está ya registrado intentando login
-      // (si ya existe, signInWithOtp igualmente enviará código)
+      if (completandoPerfil) {
+        // Usuario ya autenticado (viene de login sin perfil) — solo crear el registro
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Sesión expirada. Inicia sesión nuevamente.')
+
+        const { error: insertError } = await supabase.from('usuarios').upsert({
+          id:        user.id,
+          nombre:    form.nombre.trim(),
+          documento: form.documento.trim(),
+          correo:    form.correo.trim().toLowerCase(),
+          celular:   form.celular.trim(),
+          estado:   'activo',
+          rol:      'ciudadano',
+        }, { onConflict: 'id' })
+
+        if (insertError) throw insertError
+        router.replace('/ciudadano')
+        return
+      }
+
+      // Flujo normal de registro: enviar OTP al correo
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: form.correo.trim().toLowerCase(),
         options: { shouldCreateUser: true },
       })
+      if (otpError) throw otpError
 
-      if (otpError) {
-        // Rate limit u otro error de Supabase
-        throw otpError
-      }
-
-      // Guardar datos de perfil en localStorage para usarlos después de verificar
       localStorage.setItem('ciclobici_registro', JSON.stringify({
         nombre:    form.nombre.trim(),
         documento: form.documento.trim(),
@@ -143,11 +167,22 @@ export default function RegistroPage() {
           </div>
 
           <div>
-            <h2 className="text-2xl font-extrabold text-on-surface">Crear cuenta</h2>
+            <h2 className="text-2xl font-extrabold text-on-surface">
+              {completandoPerfil ? 'Completa tu perfil' : 'Crear cuenta'}
+            </h2>
             <p className="text-sm text-outline mt-1">
-              Recibirás un código en tu correo para confirmar el registro
+              {completandoPerfil
+                ? 'Tu correo ya está verificado. Solo necesitamos tus datos.'
+                : 'Recibirás un código en tu correo para confirmar el registro'}
             </p>
           </div>
+
+          {completandoPerfil && (
+            <div className="px-4 py-3 rounded-xl bg-[#dcfce7] text-[#166534] text-sm border border-[#bbf7d0] flex items-center gap-2">
+              <CheckCircle size={15} />
+              Correo verificado: <strong>{form.correo}</strong>
+            </div>
+          )}
 
           {error && (
             <div className="px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold border border-error/20">
@@ -224,7 +259,9 @@ export default function RegistroPage() {
               style={{ background: '#b2f746', color: '#002117' }}
               disabled={loading}>
               <Mail size={16} />
-              {loading ? 'Enviando código...' : 'Crear cuenta y recibir código'}
+              {loading
+                ? (completandoPerfil ? 'Guardando...' : 'Enviando código...')
+                : (completandoPerfil ? 'Guardar y entrar' : 'Crear cuenta y recibir código')}
             </button>
           </form>
 
@@ -238,5 +275,13 @@ export default function RegistroPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function RegistroPage() {
+  return (
+    <Suspense>
+      <RegistroContent />
+    </Suspense>
   )
 }
