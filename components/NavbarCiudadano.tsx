@@ -93,20 +93,24 @@ export function NavbarCiudadano() {
       </header>
 
       {/* Bottom nav — mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-outline-variant/30 shadow-lg">
-        {/* Usamos items-end para que el FAB sobresalga hacia arriba */}
-        <div className="flex items-end">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-outline-variant/20 shadow-xl"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        {/* items-end: los tabs normales se alinean al fondo, el FAB sobresale por arriba */}
+        <div className="flex items-end h-16">
           {NAV_LEFT.map(({ href, label, icon: Icon }) => navLink(href, label, Icon))}
 
-          {/* FAB central — QR */}
+          {/* FAB central — QR scanner */}
           <Link href="/ciudadano/escanear"
-            className="flex-1 flex flex-col items-center pb-2 -mt-5 relative">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl active:scale-95 transition-transform"
-              style={{
-                background: 'linear-gradient(135deg, #b2f746 0%, #8ecf30 100%)',
-                boxShadow: '0 -2px 16px rgba(178,247,70,0.45), 0 4px 16px rgba(0,53,39,0.25)',
-              }}>
-              <QrCode size={24} style={{ color: '#002117' }} strokeWidth={2} />
+            className="flex-1 flex flex-col items-center justify-end pb-2 relative">
+            {/* El FAB flota sobre la barra */}
+            <div className="absolute -top-5 left-1/2 -translate-x-1/2">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl active:scale-95 transition-transform"
+                style={{
+                  background: 'linear-gradient(135deg, #b2f746 0%, #8ecf30 100%)',
+                  boxShadow: '0 -2px 20px rgba(178,247,70,0.5), 0 6px 18px rgba(0,53,39,0.3)',
+                }}>
+                <QrCode size={24} style={{ color: '#002117' }} strokeWidth={2.2} />
+              </div>
             </div>
             <span className="text-[10px] font-extrabold mt-1" style={{ color: '#446900' }}>Escanear</span>
           </Link>

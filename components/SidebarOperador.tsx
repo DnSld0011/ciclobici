@@ -5,18 +5,19 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Map, Bike, Building2, Wrench,
-  TrendingUp, Bell, Menu, X, LogOut
+  TrendingUp, Bell, Menu, X, LogOut, Activity
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const NAV = [
-  { href: '/operador',            label: 'Dashboard',    icon: LayoutDashboard, exact: true },
-  { href: '/operador/mapa',       label: 'Mapa en vivo', icon: Map },
-  { href: '/operador/alertas',    label: 'Alertas',      icon: Bell },
-  { href: '/operador/estaciones', label: 'Estaciones',   icon: Building2 },
-  { href: '/operador/bicicletas', label: 'Bicicletas',   icon: Bike },
-  { href: '/operador/mantenimiento', label: 'Mantenimiento', icon: Wrench },
-  { href: '/operador/prediccion', label: 'Predicción',   icon: TrendingUp },
+  { href: '/operador',                   label: 'Dashboard',      icon: LayoutDashboard, exact: true },
+  { href: '/operador/viajes-en-vivo',    label: 'Viajes en vivo', icon: Activity },
+  { href: '/operador/mapa',              label: 'Mapa en vivo',   icon: Map },
+  { href: '/operador/alertas',           label: 'Alertas',        icon: Bell },
+  { href: '/operador/estaciones',        label: 'Estaciones',     icon: Building2 },
+  { href: '/operador/bicicletas',        label: 'Bicicletas',     icon: Bike },
+  { href: '/operador/mantenimiento',     label: 'Mantenimiento',  icon: Wrench },
+  { href: '/operador/prediccion',        label: 'Predicción',     icon: TrendingUp },
 ]
 
 export function SidebarOperador() {
@@ -24,17 +25,24 @@ export function SidebarOperador() {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [alertasNoLeidas, setAlertasNoLeidas] = useState(0)
+  const [viajesActivos, setViajesActivos]     = useState(0)
   const supabase = createClient()
 
   useEffect(() => {
-    supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('leida', false)
-      .then(({ count }) => setAlertasNoLeidas(count ?? 0))
+    const refrescarAlertas = () =>
+      supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('leida', false)
+        .then(({ count }) => setAlertasNoLeidas(count ?? 0))
 
-    const ch = supabase.channel('alertas-badge')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, () => {
-        supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('leida', false)
-          .then(({ count }) => setAlertasNoLeidas(count ?? 0))
-      })
+    const refrescarViajes = () =>
+      supabase.from('viajes').select('*', { count: 'exact', head: true }).eq('estado', 'activo')
+        .then(({ count }) => setViajesActivos(count ?? 0))
+
+    refrescarAlertas()
+    refrescarViajes()
+
+    const ch = supabase.channel('sidebar-badges')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, refrescarAlertas)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, refrescarViajes)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [supabase])
@@ -81,6 +89,13 @@ export function SidebarOperador() {
                 <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full
                   ${active ? 'bg-white/20 text-white' : 'bg-error text-white'}`}>
                   {alertasNoLeidas > 9 ? '9+' : alertasNoLeidas}
+                </span>
+              )}
+              {label === 'Viajes en vivo' && viajesActivos > 0 && (
+                <span className={`ml-auto flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full
+                  ${active ? 'bg-white/20 text-white' : 'bg-[#064e3b] text-[#b2f746]'}`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#b2f746] animate-pulse" />
+                  {viajesActivos}
                 </span>
               )}
             </Link>
