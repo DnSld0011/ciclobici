@@ -1,6 +1,5 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
@@ -65,7 +64,7 @@ export default function MapaCiudadanoPage() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-3.5rem)]">
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-4rem)] md:h-[calc(100vh-3.5rem)]">
       {/* Map */}
       <div className="flex-1 relative">
         {loading ? (
