@@ -128,32 +128,24 @@ export default function MapaCiudadanoPage() {
           </div>
         </div>
 
-        {/* Panel lateral estaciones — mobile toggle */}
-        <button
-          onClick={() => setPanelAbierto(true)}
-          className="lg:hidden absolute bottom-24 right-3 z-10 flex items-center gap-2 h-11 px-4 rounded-xl shadow-lg font-bold text-sm"
-          style={{ background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.6)' }}>
-          <MapPin size={15} className="text-primary-container" />
-          <span className="text-on-surface">Estaciones</span>
-          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#166534] border border-[#bbf7d0]">{estaciones.length}</span>
-        </button>
-
-        {/* FAB Escanear QR */}
-        <Link
-          href="/ciudadano/escanear"
-          className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2.5 h-14 px-6 rounded-2xl shadow-xl font-extrabold text-sm transition-all active:scale-[.96] lg:hidden"
-          style={{
-            background: '#b2f746',
-            color: '#002117',
-            boxShadow: '0 8px 32px rgba(178,247,70,0.4)',
-          }}>
-          <QrCode size={20} />
-          Escanear bicicleta
-        </Link>
+        {/* Barra de acciones mobile — fija arriba del nav */}
+        <div className="lg:hidden absolute bottom-0 left-0 right-0 z-10 flex gap-2 px-3 pb-3 pt-2"
+          style={{ background: 'linear-gradient(to top, rgba(255,255,255,0.97) 70%, transparent)' }}>
+          <Link href="/ciudadano/escanear"
+            className="flex-1 h-12 rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 shadow-md active:scale-[.97] transition-all"
+            style={{ background: '#b2f746', color: '#002117' }}>
+            <QrCode size={18} /> Escanear QR
+          </Link>
+          <button onClick={() => setPanelAbierto(true)}
+            className="h-12 px-4 rounded-2xl font-bold text-sm flex items-center gap-2 shadow-md active:scale-[.97] transition-all border border-outline-variant/30 bg-white text-on-surface">
+            <MapPin size={16} className="text-primary-container" />
+            <span>{estaciones.length}</span>
+          </button>
+        </div>
 
         {/* Popup estación seleccionada */}
         {seleccionada && (
-          <div className="absolute bottom-3 left-3 right-3 z-20 lg:hidden">
+          <div className="absolute bottom-16 left-3 right-3 z-20 lg:hidden">
             <div className="glass-panel rounded-2xl border border-white/60 shadow-2xl p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
