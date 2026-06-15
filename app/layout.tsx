@@ -1,18 +1,28 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Manrope, Inter } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const manrope = Manrope({
+  subsets: ['latin'],
+  variable: '--font-manrope',
+  display: 'swap',
+})
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
-  title: 'CicloBici — Bicicletas Compartidas',
-  description: 'Sistema municipal de bicicletas compartidas CicloBici',
+  title: 'San Borja en Bici — CicloBici',
+  description: 'Sistema municipal de bicicletas compartidas en San Borja, Lima',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={`${inter.className} bg-slate-50 text-gray-900 antialiased`}>
+      <body className={`${manrope.variable} ${inter.variable} font-sans bg-surface text-on-surface antialiased`}>
         {children}
       </body>
     </html>

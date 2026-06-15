@@ -1,35 +1,151 @@
 @import "tailwindcss";
 
-:root {
-  --background: #F8FAFC;
-  --foreground: #111827;
-  --primary: #1E40AF;
-  --primary-hover: #1e3a8a;
-  --success: #16A34A;
-  --warning: #CA8A04;
-  --danger: #DC2626;
+/* ============================================================
+   Eco-Tech Urban Mobility — Design System
+   San Borja en Bici / CicloBici
+   ============================================================ */
+
+@theme {
+  /* --- Colores primarios --- */
+  --color-primary:            #003527;   /* Verde Bosque */
+  --color-on-primary:         #ffffff;
+  --color-primary-container:  #064e3b;
+  --color-on-primary-container: #80bea6;
+  --color-primary-fixed:      #b0f0d6;
+  --color-primary-fixed-dim:  #95d3ba;
+  --color-inverse-primary:    #95d3ba;
+
+  /* --- Colores secundarios (Lima Vibrante = disponibilidad/CTA) --- */
+  --color-secondary:           #446900;
+  --color-on-secondary:        #ffffff;
+  --color-secondary-container: #b2f746;
+  --color-on-secondary-container: #496f00;
+  --color-secondary-fixed:     #b2f746;
+  --color-secondary-fixed-dim: #98da27;
+
+  /* --- Colores terciarios (Azul Pizarra = datos técnicos) --- */
+  --color-tertiary:            #212f42;
+  --color-on-tertiary:         #ffffff;
+  --color-tertiary-container:  #374559;
+  --color-on-tertiary-container: #a4b2ca;
+
+  /* --- Superficies --- */
+  --color-surface:                  #f8f9ff;
+  --color-surface-dim:              #cbdbf5;
+  --color-surface-bright:           #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low:    #eff4ff;
+  --color-surface-container:        #e5eeff;
+  --color-surface-container-high:   #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+  --color-surface-variant:          #d3e4fe;
+  --color-surface-tint:             #2b6954;
+
+  /* --- Texto sobre superficie --- */
+  --color-on-surface:         #0b1c30;
+  --color-on-surface-variant: #404944;
+  --color-inverse-surface:    #213145;
+  --color-inverse-on-surface: #eaf1ff;
+
+  /* --- Bordes --- */
+  --color-outline:         #707974;
+  --color-outline-variant: #bfc9c3;
+
+  /* --- Error --- */
+  --color-error:            #ba1a1a;
+  --color-on-error:         #ffffff;
+  --color-error-container:  #ffdad6;
+  --color-on-error-container: #93000a;
+
+  /* --- Background --- */
+  --color-background:    #f8f9ff;
+  --color-on-background: #0b1c30;
+
+  /* --- Tipografía (Manrope + Inter) --- */
+  --font-sans:    var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    var(--font-inter), ui-monospace, monospace;
+
+  /* --- Border Radius --- */
+  --radius-sm:   0.25rem;   /* 4px */
+  --radius:      0.5rem;    /* 8px */
+  --radius-md:   0.75rem;   /* 12px */
+  --radius-lg:   1rem;      /* 16px */
+  --radius-xl:   1.5rem;    /* 24px */
+  --radius-2xl:  2rem;      /* 32px */
+  --radius-full: 9999px;
+
+  /* --- Sombras (ambient shadows) --- */
+  --shadow-card: 0px 4px 20px rgba(51, 65, 85, 0.08);
+  --shadow-card-lg: 0px 4px 30px rgba(0, 0, 0, 0.04);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+/* ============================================================
+   Componentes globales
+   ============================================================ */
+
+/* Glass panel — usado en mobile sobre mapa */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-/* Leaflet fix for Next.js */
+/* Chip de estado de bicicleta/estación */
+.chip-disponible {
+  @apply bg-[#dcfce7] text-[#166534] border border-[#bbf7d0];
+}
+.chip-en-uso {
+  @apply bg-[#dbeafe] text-[#1e40af] border border-[#bfdbfe];
+}
+.chip-mantenimiento {
+  @apply bg-[#fef9c3] text-[#854d0e] border border-[#fde68a];
+}
+.chip-baja {
+  @apply bg-[#fee2e2] text-[#991b1b] border border-[#fecaca];
+}
+
+/* Botón primario del design system */
+.btn-primary {
+  @apply bg-[#064e3b] text-white font-bold rounded-lg px-5 py-3
+         hover:bg-[#003527] active:scale-[0.98] transition-all;
+}
+
+/* Botón acción (CTA lima-vibrante) */
+.btn-action {
+  @apply bg-[#b2f746] text-[#003527] font-bold rounded-lg px-5 py-3
+         hover:bg-[#98da27] active:scale-[0.98] transition-all;
+}
+
+/* Card estándar */
+.card {
+  @apply bg-white rounded-xl border border-slate-200 shadow-[0px_4px_20px_rgba(51,65,85,0.08)];
+}
+
+/* ============================================================
+   Leaflet fix para Next.js
+   ============================================================ */
 .leaflet-container {
   height: 100%;
   width: 100%;
   z-index: 1;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
+/* ============================================================
+   Scrollbar sutil
+   ============================================================ */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ============================================================
+   Animaciones de entrada suaves
+   ============================================================ */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+.animate-fade-up {
+  animation: fade-up 0.25s ease-out both;
 }

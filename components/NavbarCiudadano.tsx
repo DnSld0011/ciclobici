@@ -2,19 +2,29 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Map, User, Home, Bike, LogOut } from 'lucide-react'
+import { Map, User, Home, Bike, AlertTriangle, LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useEffect, useState } from 'react'
 
 const NAV = [
-  { href: '/ciudadano',        label: 'Inicio',  icon: Home },
-  { href: '/ciudadano/mapa',   label: 'Mapa',    icon: Map  },
-  { href: '/ciudadano/viajes', label: 'Viajes',  icon: Bike },
-  { href: '/ciudadano/perfil', label: 'Perfil',  icon: User },
+  { href: '/ciudadano',             label: 'Inicio',   icon: Home },
+  { href: '/ciudadano/mapa',        label: 'Mapa',     icon: Map  },
+  { href: '/ciudadano/viajes',      label: 'Viajes',   icon: Bike },
+  { href: '/ciudadano/incidencias', label: 'Reportar', icon: AlertTriangle },
+  { href: '/ciudadano/perfil',      label: 'Perfil',   icon: User },
 ]
 
 export function NavbarCiudadano() {
   const router = useRouter()
   const pathname = usePathname()
+  const [viajeActivo, setViajeActivo] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/viajes/activo')
+      .then(r => r.json())
+      .then(({ viaje }) => setViajeActivo(!!viaje))
+      .catch(() => {})
+  }, [pathname])
 
   async function handleLogout() {
     const supabase = createClient()
@@ -24,35 +34,58 @@ export function NavbarCiudadano() {
 
   return (
     <>
+      {/* Banner viaje activo */}
+      {viajeActivo && (
+        <Link
+          href="/ciudadano/viaje-activo"
+          className="fixed top-0 left-0 right-0 z-50 bg-[#064e3b] text-white flex items-center justify-center gap-2 py-2 text-xs font-bold shadow-md md:hidden"
+        >
+          <div className="w-2 h-2 rounded-full bg-[#b2f746] animate-pulse" />
+          Viaje en curso — Toca para continuar
+        </Link>
+      )}
+
       {/* Top bar — desktop */}
       <header className="hidden md:flex bg-white border-b shadow-sm h-14 items-center justify-between px-6 sticky top-0 z-40">
-        <Link href="/ciudadano" className="flex items-center gap-2 font-bold text-blue-700 text-lg">
-          <span className="text-2xl">🚲</span> CicloBici
+        <Link href="/ciudadano" className="flex items-center gap-2 font-extrabold text-primary-container text-lg">
+          <span className="text-2xl">🚲</span> San Borja en Bici
         </Link>
         <nav className="flex items-center gap-1">
-          {NAV.map(({ href, label, icon: Icon }) => (
+          {NAV.map(({ href, label, icon: Icon }) => {
+            const active = pathname === href || (href !== '/ciudadano' && pathname.startsWith(href))
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors
+                  ${active
+                    ? 'bg-surface-container-low text-primary-container'
+                    : 'text-on-surface-variant hover:bg-surface-container-low'}`}
+              >
+                <Icon size={15} />{label}
+              </Link>
+            )
+          })}
+          {viajeActivo && (
             <Link
-              key={href}
-              href={href}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                ${pathname === href || (href !== '/ciudadano' && pathname.startsWith(href))
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'}`}
+              href="/ciudadano/viaje-activo"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-[#064e3b] bg-[#b2f746] hover:bg-[#98da27] transition-colors ml-1"
             >
-              <Icon size={16} />{label}
+              <div className="w-2 h-2 rounded-full bg-[#064e3b] animate-pulse" />
+              Viaje activo
             </Link>
-          ))}
+          )}
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors ml-2"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-error-container hover:text-error transition-colors ml-2"
           >
-            <LogOut size={16} /> Salir
+            <LogOut size={15} /> Salir
           </button>
         </nav>
       </header>
 
       {/* Bottom nav — mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-lg">
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-outline-variant/30 shadow-lg ${viajeActivo ? 'pb-0' : ''}`}>
         <div className="flex">
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href !== '/ciudadano' && pathname.startsWith(href))
@@ -60,10 +93,10 @@ export function NavbarCiudadano() {
               <Link
                 key={href}
                 href={href}
-                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-xs font-medium transition-colors
-                  ${active ? 'text-blue-700' : 'text-gray-500'}`}
+                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-semibold transition-colors
+                  ${active ? 'text-primary-container' : 'text-on-surface-variant'}`}
               >
-                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <Icon size={19} strokeWidth={active ? 2.5 : 1.8} />
                 {label}
               </Link>
             )
