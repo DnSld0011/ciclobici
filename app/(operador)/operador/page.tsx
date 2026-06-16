@@ -106,7 +106,7 @@ export default function DashboardOperadorPage() {
     if (alertasData) setAlertas(alertasData as Alerta[])
     setUltimaAct(new Date())
     setLoading(false)
-  }, [router, supabase])
+  }, [router])
 
   useEffect(() => {
     cargar()
