@@ -11,11 +11,9 @@ export async function loginAction(formData: FormData) {
     return { error: 'Ingresa tu correo/celular y contraseña' }
   }
 
-  const supabase = await createClient()
-  const admin    = createAdminClient()
+  const admin = createAdminClient()
   let emailToUse = identifier
 
-  // Si no es email, buscar por celular (admin client para saltarse RLS)
   if (!identifier.includes('@')) {
     const phone = identifier.replace(/\D/g, '')
     const { data: usuario } = await admin
@@ -26,6 +24,7 @@ export async function loginAction(formData: FormData) {
     emailToUse = usuario.correo
   }
 
+  const supabase = await createClient()
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: emailToUse,
     password,
@@ -41,11 +40,9 @@ export async function loginAction(formData: FormData) {
     return { error: signInError.message }
   }
 
-  // Obtener usuario de la sesión recién creada
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No se pudo obtener la sesión' }
 
-  // Perfil con admin client (sin restricciones de RLS)
   const { data: perfil } = await admin
     .from('usuarios').select('rol, estado').eq('id', user.id).maybeSingle()
 

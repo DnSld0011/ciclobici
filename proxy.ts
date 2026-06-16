@@ -56,15 +56,15 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/verificacion', request.url))
     }
 
-    if (pathname.startsWith('/operador') && perfil.rol !== 'operador') {
+    if (pathname.startsWith('/operador') && !['operador', 'administrador'].includes(perfil.rol)) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    if (pathname.startsWith('/tecnico') && !['tecnico', 'operador'].includes(perfil.rol)) {
+    if (pathname.startsWith('/tecnico') && !['tecnico', 'operador', 'administrador'].includes(perfil.rol)) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    if (pathname.startsWith('/ciudadano') && perfil.rol !== 'ciudadano') {
+    if (pathname.startsWith('/ciudadano') && !['ciudadano', 'administrador'].includes(perfil.rol)) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
