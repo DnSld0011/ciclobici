@@ -9,7 +9,7 @@ async function verificarOperador() {
   const admin = createAdminClient()
   const { data: perfil } = await admin
     .from('usuarios').select('rol').eq('id', user.id).single()
-  if (perfil?.rol !== 'operador') return null
+  if (!['operador', 'administrador'].includes(perfil?.rol ?? '')) return null
   return user
 }
 

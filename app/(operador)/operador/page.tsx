@@ -49,12 +49,13 @@ export default function DashboardOperadorPage() {
   const [kpis, setKpis] = useState<KPIs>({ bicisDisponibles: 0, bicisTotal: 0, viajesHoy: 0, viajesAyer: 0, estacionesActivas: 0, co2Ahorrado: 0 })
   const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
   const [alertas, setAlertas] = useState<Alerta[]>([])
-  const [ultimaAct, setUltimaAct] = useState(new Date())
+  const [ultimaAct, setUltimaAct] = useState<Date | null>(null)
+  const barHeights = useState(() => Array(7).fill(0).map(() => 20 + Math.floor(Math.random() * 24)))[0]
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.replace('/login'); return }
 
@@ -109,12 +110,13 @@ export default function DashboardOperadorPage() {
 
   useEffect(() => {
     cargar()
+    const supabase = createClient()
     const ch = supabase.channel('operador-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar, supabase])
+  }, [cargar])
 
   const pctDisp = kpis.bicisTotal > 0 ? Math.round((kpis.bicisDisponibles / kpis.bicisTotal) * 100) : 0
   const viajesDelta = kpis.viajesAyer > 0 ? Math.round(((kpis.viajesHoy - kpis.viajesAyer) / kpis.viajesAyer) * 100) : 0
@@ -131,7 +133,7 @@ export default function DashboardOperadorPage() {
         </div>
         <div className="flex items-center gap-2 text-xs text-outline bg-white border border-outline-variant/30 px-3 py-1.5 rounded-full shadow-sm">
           <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '4s' }} />
-          {ultimaAct.toLocaleTimeString('es-PE')}
+          {ultimaAct?.toLocaleTimeString('es-PE') ?? '—'}
         </div>
       </div>
 
@@ -167,8 +169,8 @@ export default function DashboardOperadorPage() {
             )}
           </div>
           <div className="flex gap-0.5 mt-1">
-            {Array(7).fill(0).map((_, i) => (
-              <div key={i} className="flex-1 bg-surface-container-low rounded-sm" style={{ height: `${20 + Math.random() * 24}px` }} />
+            {barHeights.map((h, i) => (
+              <div key={i} className="flex-1 bg-surface-container-low rounded-sm" style={{ height: `${h}px` }} />
             ))}
           </div>
           <p className="text-[10px] text-outline">vs {kpis.viajesAyer} ayer</p>

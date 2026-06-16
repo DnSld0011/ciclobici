@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const admin2 = createAdminClient()
   const { data: perfil } = await admin2
     .from('usuarios').select('rol').eq('id', user.id).single()
-  if (perfil?.rol !== 'operador')
+  if (!['operador', 'administrador'].includes(perfil?.rol ?? ''))
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const { id, newPassword } = await req.json()
