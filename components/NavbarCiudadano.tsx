@@ -48,8 +48,8 @@ export function NavbarCiudadano() {
 
   return (
     <>
-      {/* Banner viaje activo — mobile */}
-      {viajeActivo && (
+      {/* Banner viaje activo — mobile (oculto si ya estamos en esa pantalla) */}
+      {viajeActivo && pathname !== '/ciudadano/viaje-activo' && (
         <Link href="/ciudadano/viaje-activo"
           className="fixed top-0 left-0 right-0 z-50 bg-[#064e3b] text-white flex items-center justify-center gap-2 py-2 text-xs font-bold shadow-md md:hidden">
           <div className="w-2 h-2 rounded-full bg-[#b2f746] animate-pulse" />
