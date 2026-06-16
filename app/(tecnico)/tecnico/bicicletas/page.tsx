@@ -20,18 +20,25 @@ export default function TecnicoBicicletasPage() {
   const [filtro, setFiltro] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const { data } = await supabase
       .from('bicicletas')
       .select('*, estacion:estaciones(nombre)')
       .order('estado')
     if (data) setBicicletas(data)
     setLoading(false)
-  }, [supabase])
+  }, [])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => {
+    cargar()
+    const supabase = createClient()
+    const ch = supabase.channel('bicicletas-tecnico-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [cargar])
 
   const filtradas = bicicletas.filter(b =>
     b.codigo.toLowerCase().includes(filtro.toLowerCase()) &&

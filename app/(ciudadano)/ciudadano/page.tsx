@@ -15,11 +15,12 @@ export default function DashboardCiudadano() {
   const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
   const [viajeActivo, setViajeActivo] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [saludo, setSaludo] = useState('Hola')
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     async function cargar() {
+      const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace('/login'); return }
 
@@ -54,10 +55,15 @@ export default function DashboardCiudadano() {
       setLoading(false)
     }
     cargar()
-  }, [router, supabase])
+  }, [router])
 
-  const hora = new Date().getHours()
-  const saludo = hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches'
+  // El saludo depende de la hora local — calcularlo en el cliente tras montar
+  // evita que el render del servidor y el de hidratación muestren textos distintos.
+  useEffect(() => {
+    const hora = new Date().getHours()
+    setSaludo(hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches')
+  }, [])
+
   const totalLibres = estaciones.reduce((s, e) => s + e.bicicletas_disponibles, 0)
 
   return (

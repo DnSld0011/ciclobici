@@ -33,18 +33,27 @@ export default function BicicletasPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState('')
-  const supabase = createClient()
-
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const [{ data: bicis }, { data: ests }] = await Promise.all([
       supabase.from('bicicletas').select('*, estacion:estaciones(nombre)').order('created_at', { ascending: false }),
       supabase.from('estaciones').select('*').eq('estado', 'activa').order('nombre'),
     ])
     if (bicis) setBicicletas(bicis)
     if (ests) setEstaciones(ests)
-  }, [supabase])
+  }, [])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => {
+    cargar()
+    // Tiempo real: cuando un ciudadano escanea/inicia/finaliza un viaje, la bici
+    // cambia de estado (disponible → en_viaje → disponible) — sin esto, esta
+    // página solo se actualizaba al recargar manualmente.
+    const supabase = createClient()
+    const ch = supabase.channel('bicicletas-admin-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [cargar])
 
   async function generarQR(codigo: string): Promise<string> {
     const QRCode = (await import('qrcode')).default
@@ -71,6 +80,7 @@ export default function BicicletasPage() {
     if (!form.tipo.trim()) { setError('El tipo es requerido'); return }
     setLoading(true)
     try {
+      const supabase = createClient()
       const { count } = await supabase.from('bicicletas').select('*', { count: 'exact', head: true })
       const codigo = generarCodigoBicicleta((count ?? 0) + 1)
       const qrUrl = await generarQR(codigo)
@@ -91,6 +101,7 @@ export default function BicicletasPage() {
   }
 
   async function cambiarEstado(id: string, estado: BicicletaEstado) {
+    const supabase = createClient()
     await supabase.from('bicicletas').update({ estado }).eq('id', id)
     await cargar()
   }
