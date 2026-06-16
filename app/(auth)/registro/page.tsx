@@ -108,7 +108,6 @@ function RegistroContent() {
         email:    form.correo.trim().toLowerCase(),
         password: form.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             nombre:    form.nombre.trim(),
             documento: form.documento.trim(),
@@ -117,9 +116,18 @@ function RegistroContent() {
         },
       })
       if (signUpError) {
-        if (signUpError.message.includes('already registered') || signUpError.message.includes('User already'))
+        const msg = signUpError.message ?? ''
+        if (msg.includes('already registered') || msg.includes('User already') || signUpError.status === 422)
           throw new Error('Ya existe una cuenta con ese correo. ¿Quieres iniciar sesión?')
-        throw signUpError
+        if (msg.includes('Email rate limit') || msg.includes('over_email_send_rate_limit'))
+          throw new Error('Demasiados intentos. Espera unos minutos antes de volver a intentarlo.')
+        if (msg.includes('Password should') || msg.includes('password'))
+          throw new Error('La contraseña no cumple los requisitos mínimos de Supabase.')
+        if (msg.includes('Invalid email') || msg.includes('valid email') || msg.includes('email_address_invalid'))
+          throw new Error('El correo electrónico no tiene un formato válido.')
+        if (msg.includes('Signups not allowed') || msg.includes('signup_disabled'))
+          throw new Error('El registro está desactivado temporalmente. Contacta al administrador.')
+        throw new Error(msg || 'Error al crear la cuenta. Intenta de nuevo.')
       }
 
       if (data.session) {
@@ -139,10 +147,10 @@ function RegistroContent() {
         setEmailSent(true)
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al registrar'
-      if (msg.includes('rate limit') || msg.includes('429'))
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('rate limit') || msg.includes('429') || msg.includes('over_email_send_rate_limit'))
         setError('Demasiados intentos. Espera unos minutos y vuelve a intentarlo.')
-      else setError(msg)
+      else setError(msg || 'Error inesperado. Intenta de nuevo.')
     } finally { setLoading(false) }
   }
 
