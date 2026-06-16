@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
-import { MapPin, Bike, RefreshCw, X, Navigation, ChevronDown } from 'lucide-react'
+import { distanciaKm, formatoDistancia, minutosCaminando } from '@/lib/geo'
+import { MapPin, Bike, RefreshCw, X, Navigation, ChevronDown, AlertTriangle, Footprints, LocateFixed } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 const MapaEstaciones = dynamicImport(
@@ -19,16 +20,21 @@ const MapaEstaciones = dynamicImport(
   }
 )
 
+type EstacionConDistancia = EstacionConDisponibilidad & { distancia_km?: number }
+
 export default function MapaCiudadanoPage() {
-  const [estaciones, setEstaciones]   = useState<EstacionConDisponibilidad[]>([])
-  const [seleccionada, setSeleccionada] = useState<EstacionConDisponibilidad | null>(null)
+  const [estaciones, setEstaciones]   = useState<EstacionConDistancia[]>([])
+  const [seleccionada, setSeleccionada] = useState<EstacionConDistancia | null>(null)
   const [ultimaAct, setUltimaAct]     = useState(new Date())
   const [loading, setLoading]         = useState(true)
   const [listaAbierta, setListaAbierta] = useState(false)
-  const supabase = createClient()
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [geoError, setGeoError]       = useState('')
+  const autoSeleccionoRef = useRef(false)
   const router   = useRouter()
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const { data } = await supabase
       .from('estaciones')
       .select('*, bicicletas(id, estado)')
@@ -36,41 +42,71 @@ export default function MapaCiudadanoPage() {
       .order('nombre')
     if (data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mapped: EstacionConDisponibilidad[] = (data as any[]).map(est => ({
+      const mapped: EstacionConDistancia[] = (data as any[]).map(est => ({
         ...est,
         bicicletas_disponibles: Array.isArray(est.bicicletas)
           ? est.bicicletas.filter((b: { estado: string }) => b.estado === 'disponible').length : 0,
       }))
-      setEstaciones(mapped.sort((a, b) => b.bicicletas_disponibles - a.bicicletas_disponibles))
+      setEstaciones(mapped)
       setUltimaAct(new Date())
     }
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     cargar()
+    const supabase = createClient()
     const ch = supabase.channel('mapa-ciudadano-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar, supabase])
+  }, [cargar])
 
-  const pct = (est: EstacionConDisponibilidad) =>
+  // Pedir ubicación del usuario al entrar al mapa
+  useEffect(() => {
+    if (!('geolocation' in navigator)) {
+      setGeoError('Tu navegador no soporta geolocalización.')
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setGeoError('Activa el GPS para ver tu ubicación y recomendaciones cercanas.'),
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }, [])
+
+  // Estaciones con distancia calculada y ordenadas por cercanía (si hay ubicación)
+  const estacionesOrdenadas = useMemo(() => {
+    if (!userLocation) return estaciones
+    return estaciones
+      .map(e => ({ ...e, distancia_km: distanciaKm(userLocation.lat, userLocation.lng, e.latitud, e.longitud) }))
+      .sort((a, b) => (a.distancia_km ?? 0) - (b.distancia_km ?? 0))
+  }, [estaciones, userLocation])
+
+  // Auto-seleccionar la estación más cercana como tarjeta principal (solo una vez)
+  useEffect(() => {
+    if (autoSeleccionoRef.current || !userLocation || estacionesOrdenadas.length === 0) return
+    setSeleccionada(estacionesOrdenadas[0])
+    autoSeleccionoRef.current = true
+  }, [estacionesOrdenadas, userLocation])
+
+  // Recomendaciones proactivas: las siguientes estaciones más cercanas con bicis disponibles
+  const recomendaciones = useMemo(() => {
+    if (!userLocation || !seleccionada) return []
+    return estacionesOrdenadas
+      .filter(e => e.id !== seleccionada.id)
+      .slice(0, 3)
+  }, [estacionesOrdenadas, seleccionada, userLocation])
+
+  const pct = (est: EstacionConDistancia) =>
     est.capacidad > 0 ? est.bicicletas_disponibles / est.capacidad : 0
 
-  const barColor = (e: EstacionConDisponibilidad) =>
+  const barColor = (e: EstacionConDistancia) =>
     pct(e) === 0 ? '#ba1a1a' : pct(e) < 0.2 ? '#f59e0b' : '#b2f746'
 
-  const dotClass = (e: EstacionConDisponibilidad) =>
+  const dotClass = (e: EstacionConDistancia) =>
     pct(e) === 0 ? 'bg-error' : pct(e) < 0.2 ? 'bg-amber-400' : 'bg-[#b2f746]'
-
-  const chipClass = (e: EstacionConDisponibilidad) =>
-    pct(e) === 0
-      ? 'bg-[#ffdad6] text-error border-error/20'
-      : pct(e) < 0.2
-        ? 'bg-[#fef9c3] text-[#854d0e] border-[#fde68a]'
-        : 'bg-[#dcfce7] text-[#166534] border-[#bbf7d0]'
 
   const totalLibres = estaciones.reduce((s, e) => s + e.bicicletas_disponibles, 0)
 
@@ -81,7 +117,12 @@ export default function MapaCiudadanoPage() {
       <div className="absolute inset-0 lg:relative lg:flex-1">
         {loading
           ? <div className="w-full h-full bg-surface-container animate-pulse" />
-          : <MapaEstaciones estaciones={estaciones} onEstacionClick={e => { setSeleccionada(e); setListaAbierta(false) }} focusEstacion={seleccionada} />
+          : <MapaEstaciones
+              estaciones={estaciones}
+              userLocation={userLocation}
+              onEstacionClick={e => { setSeleccionada(e); setListaAbierta(false) }}
+              focusEstacion={seleccionada}
+            />
         }
 
         {/* Stats flotantes — top left */}
@@ -94,6 +135,12 @@ export default function MapaCiudadanoPage() {
             <MapPin size={11} className="text-primary-container" />
             <span className="text-xs font-bold text-on-surface">{estaciones.length} estaciones</span>
           </div>
+          {geoError && (
+            <div className="glass-panel px-3 py-1.5 rounded-xl border border-white/50 shadow-md flex items-center gap-2 max-w-[220px] pointer-events-auto">
+              <LocateFixed size={11} className="text-outline shrink-0" />
+              <span className="text-[10px] text-outline leading-tight">{geoError}</span>
+            </div>
+          )}
         </div>
 
         {/* Hora actualización — top right */}
@@ -104,57 +151,104 @@ export default function MapaCiudadanoPage() {
           </div>
         </div>
 
-        {/* Chip "Ver lista" — mobile, bottom center */}
-        <div className="lg:hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
-          <button onClick={() => setListaAbierta(true)}
-            className="glass-panel flex items-center gap-2 px-4 py-2 rounded-full border border-white/50 shadow-lg text-xs font-bold text-on-surface active:scale-[.97] transition-all">
-            <ChevronDown size={13} /> Ver {estaciones.length} estaciones
-          </button>
-        </div>
+        {/* Chip "Ver lista" — mobile, bottom center (solo si no hay tarjeta de recomendación) */}
+        {!seleccionada && (
+          <div className="lg:hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
+            <button onClick={() => setListaAbierta(true)}
+              className="glass-panel flex items-center gap-2 px-4 py-2 rounded-full border border-white/50 shadow-lg text-xs font-bold text-on-surface active:scale-[.97] transition-all">
+              <ChevronDown size={13} /> Ver {estaciones.length} estaciones
+            </button>
+          </div>
+        )}
 
-        {/* Popup estación seleccionada — mobile */}
+        {/* Tarjeta principal: estación seleccionada / más cercana + recomendaciones — mobile */}
         {seleccionada && (
-          <div className="absolute bottom-14 left-3 right-3 z-20 lg:hidden">
-            <div className="glass-panel rounded-2xl border border-white/60 shadow-2xl p-4">
-              <div className="flex items-start gap-3">
-                {/* Icono */}
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  pct(seleccionada) === 0 ? 'bg-[#ffdad6]' : pct(seleccionada) < 0.2 ? 'bg-[#fef9c3]' : 'bg-[#dcfce7]'
-                }`}>
-                  <Bike size={18} className={
-                    pct(seleccionada) === 0 ? 'text-error' : pct(seleccionada) < 0.2 ? 'text-[#854d0e]' : 'text-[#166534]'
-                  } />
+          <div className="absolute bottom-3 left-3 right-3 z-20 lg:hidden max-h-[60vh] overflow-y-auto">
+            <div className="glass-panel rounded-2xl border border-white/60 shadow-2xl p-4 space-y-4">
+
+              {/* Header: nombre + distancia + botón cerrar */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-extrabold leading-tight text-lg" style={{ color: '#003527' }}>
+                    {seleccionada.nombre}
+                  </h3>
+                  {seleccionada.distancia_km != null && (
+                    <p className="text-xs text-outline flex items-center gap-1 mt-1">
+                      <MapPin size={11} /> {formatoDistancia(seleccionada.distancia_km)}
+                    </p>
+                  )}
                 </div>
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-extrabold text-on-surface text-sm truncate">{seleccionada.nombre}</h3>
-                  <p className="text-xs text-outline truncate flex items-center gap-1 mt-0.5">
-                    <MapPin size={9} /> {seleccionada.direccion}
-                  </p>
-                  {/* Disponibilidad */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 rounded-full bg-outline-variant/20 overflow-hidden">
-                      <div className="h-full rounded-full"
-                        style={{ width: `${Math.min(100, pct(seleccionada) * 100)}%`, background: barColor(seleccionada) }} />
-                    </div>
-                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${chipClass(seleccionada)}`}>
-                      {seleccionada.bicicletas_disponibles}/{seleccionada.capacidad}
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  {(seleccionada.bicicletas_disponibles === 0 || seleccionada.capacidad - seleccionada.bicicletas_disponibles === 0) && (
+                    <span className="flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-[#ffdad6] text-error border border-error/20 whitespace-nowrap">
+                      <AlertTriangle size={10} />
+                      {seleccionada.bicicletas_disponibles === 0 ? 'Sin bicicletas' : 'Estación llena'}
                     </span>
-                  </div>
-                </div>
-                {/* Cierre + nav */}
-                <div className="flex flex-col gap-1.5 shrink-0">
+                  )}
                   <button onClick={() => setSeleccionada(null)}
-                    className="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center">
-                    <X size={13} className="text-outline" />
-                  </button>
-                  <button
-                    onClick={() => router.push(`/ciudadano/mapa?nav=${seleccionada.latitud},${seleccionada.longitud}`)}
-                    className="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center">
-                    <Navigation size={13} className="text-primary-container" />
+                    className="w-6 h-6 rounded-lg bg-surface-container flex items-center justify-center">
+                    <X size={12} className="text-outline" />
                   </button>
                 </div>
               </div>
+
+              {/* Stat boxes */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-surface-container-low rounded-xl p-3">
+                  <p className="text-[10px] text-outline">Bicicletas Disp.</p>
+                  <p className="text-2xl font-extrabold mt-0.5" style={{ color: '#002117' }}>
+                    {seleccionada.bicicletas_disponibles}
+                  </p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3">
+                  <p className="text-[10px] text-outline">Espacios Libres</p>
+                  <p className="text-2xl font-extrabold mt-0.5"
+                    style={{ color: seleccionada.capacidad - seleccionada.bicicletas_disponibles === 0 ? '#ba1a1a' : '#002117' }}>
+                    {Math.max(0, seleccionada.capacidad - seleccionada.bicicletas_disponibles)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Navegar */}
+              <button
+                onClick={() => router.push(`/ciudadano/mapa?nav=${seleccionada.latitud},${seleccionada.longitud}`)}
+                className="w-full h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-2"
+                style={{ background: '#b2f746', color: '#002117' }}
+              >
+                <Navigation size={13} /> Cómo llegar
+              </button>
+
+              {/* Recomendaciones proactivas */}
+              {recomendaciones.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-extrabold text-outline uppercase tracking-widest">
+                    Recomendaciones proactivas
+                  </p>
+                  {recomendaciones.map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => setSeleccionada(r)}
+                      className="w-full flex items-center gap-3 bg-white rounded-xl p-3 border border-outline-variant/15 text-left"
+                    >
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                        style={{ background: '#dcfce7' }}>
+                        <Bike size={16} style={{ color: '#003527' }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-on-surface truncate">{r.nombre}</p>
+                        <p className="text-[10px] text-outline flex items-center gap-1 mt-0.5">
+                          <Footprints size={10} />
+                          {r.distancia_km != null ? `A ${minutosCaminando(r.distancia_km)} min caminando` : '—'}
+                        </p>
+                      </div>
+                      <span className="flex items-center gap-1 text-xs font-extrabold px-2.5 py-1 rounded-full shrink-0"
+                        style={{ background: '#b2f746', color: '#002117' }}>
+                        <Bike size={11} /> {r.bicicletas_disponibles}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -184,7 +278,9 @@ export default function MapaCiudadanoPage() {
         <div className="px-4 py-3 border-b border-outline-variant/15 flex items-center justify-between">
           <div>
             <h2 className="font-extrabold text-sm text-on-surface">Estaciones</h2>
-            <p className="text-[10px] text-outline mt-0.5">{totalLibres} bicis disponibles</p>
+            <p className="text-[10px] text-outline mt-0.5">
+              {totalLibres} bicis disponibles{userLocation ? ' · ordenadas por cercanía' : ''}
+            </p>
           </div>
           <button className="lg:hidden w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center"
             onClick={() => setListaAbierta(false)}>
@@ -203,7 +299,7 @@ export default function MapaCiudadanoPage() {
               </div>
             </div>
           ))}
-          {estaciones.map(est => (
+          {estacionesOrdenadas.map(est => (
             <button key={est.id}
               onClick={() => { setSeleccionada(est); setListaAbierta(false) }}
               className={`w-full text-left px-4 py-3.5 flex items-center gap-3 hover:bg-surface-container-low/70 transition-colors ${
@@ -213,15 +309,16 @@ export default function MapaCiudadanoPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-on-surface truncate">{est.nombre}</p>
                 <p className="text-[10px] text-outline truncate mt-0.5 flex items-center gap-1">
-                  <MapPin size={9} className="shrink-0" /> {est.direccion}
+                  <MapPin size={9} className="shrink-0" />
+                  {est.distancia_km != null ? formatoDistancia(est.distancia_km) : est.direccion}
                 </p>
                 <div className="mt-1.5 h-1 rounded-full bg-outline-variant/15 overflow-hidden">
                   <div className="h-full rounded-full"
                     style={{ width: `${Math.min(100, pct(est) * 100)}%`, background: barColor(est) }} />
                 </div>
               </div>
-              <span className="font-extrabold text-xs text-on-surface shrink-0">
-                {est.bicicletas_disponibles}
+              <span className={`font-extrabold text-xs shrink-0 px-1.5 py-0.5 rounded ${pct(est) === 0 ? '' : ''}`}>
+                <span className="text-on-surface">{est.bicicletas_disponibles}</span>
                 <span className="text-outline font-normal">/{est.capacidad}</span>
               </span>
             </button>
