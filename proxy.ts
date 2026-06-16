@@ -29,7 +29,7 @@ export async function proxy(request: NextRequest) {
       },
     })
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
 
     const publicRoutes = ['/login', '/registro', '/verificacion', '/api/']
     const isPublic = publicRoutes.some(r => pathname.startsWith(r))
@@ -38,15 +38,26 @@ export async function proxy(request: NextRequest) {
       return supabaseResponse
     }
 
+    // Error de red/servidor al validar el token (no "no hay sesión") — no expulsar al usuario,
+    // dejar pasar y que la página lo reintente en el cliente.
+    if (userError && userError.name !== 'AuthSessionMissingError') {
+      return supabaseResponse
+    }
+
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    const { data: perfil } = await supabase
+    const { data: perfil, error: perfilError } = await supabase
       .from('usuarios')
       .select('rol, estado')
       .eq('id', user.id)
       .single()
+
+    // Error transitorio de base de datos — no es lo mismo que "el perfil no existe".
+    if (perfilError && perfilError.code !== 'PGRST116') {
+      return supabaseResponse
+    }
 
     if (!perfil) {
       return NextResponse.redirect(new URL('/login', request.url))
@@ -70,11 +81,8 @@ export async function proxy(request: NextRequest) {
 
     return supabaseResponse
   } catch {
-    // On Supabase error, redirect protected routes to login
-    const publicRoutes = ['/login', '/registro', '/verificacion', '/api/']
-    if (!publicRoutes.some(r => pathname.startsWith(r))) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
+    // Error inesperado (timeout, red, etc.) — NO expulsar al usuario a /login.
+    // La sesión real no se perdió; dejamos pasar y cada página valida por su cuenta.
     return supabaseResponse
   }
 }
