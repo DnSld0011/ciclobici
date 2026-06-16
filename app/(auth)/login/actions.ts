@@ -1,6 +1,5 @@
 'use server'
 
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -51,14 +50,14 @@ export async function loginAction(formData: FormData) {
     .from('usuarios').select('rol, estado').eq('id', user.id).maybeSingle()
 
   if (!perfil) {
-    redirect(`/registro?correo=${encodeURIComponent(user.email ?? '')}`)
+    return { redirectTo: `/registro?correo=${encodeURIComponent(user.email ?? '')}` }
   }
   if (perfil.estado === 'suspendido') {
     await supabase.auth.signOut()
     return { error: 'Tu cuenta está suspendida. Contacta al administrador.' }
   }
 
-  if (perfil.rol === 'administrador' || perfil.rol === 'operador') redirect('/operador')
-  if (perfil.rol === 'tecnico') redirect('/tecnico/mantenimiento')
-  redirect('/ciudadano')
+  if (perfil.rol === 'administrador' || perfil.rol === 'operador') return { redirectTo: '/operador' }
+  if (perfil.rol === 'tecnico') return { redirectTo: '/tecnico/mantenimiento' }
+  return { redirectTo: '/ciudadano' }
 }

@@ -32,14 +32,19 @@ function LoginContent() {
     setError(''); setLoading(true)
     try {
       const result = await loginAction(formData)
-      if (result?.error) setError(result.error)
-    } catch (err: unknown) {
-      // Next.js redirect() lanza un error interno — no mostrarlo como error de usuario
-      const msg = err instanceof Error ? err.message : String(err)
-      if (!msg.includes('NEXT_REDIRECT')) {
-        setError('Error inesperado al iniciar sesión. Intenta de nuevo.')
+      if (result?.error) {
+        setError(result.error)
+        setLoading(false)
+        return
       }
-    } finally {
+      if (result?.redirectTo) {
+        // Navegación completa para que el browser envíe las cookies de sesión
+        window.location.href = result.redirectTo
+        // No llamar setLoading(false) — el spinner permanece hasta que la página cambie
+        return
+      }
+    } catch {
+      setError('Error inesperado. Intenta de nuevo.')
       setLoading(false)
     }
   }
