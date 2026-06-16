@@ -29,6 +29,7 @@ export function MapaViaje({ estaciones, destino, userLocation, onEstacionClick }
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
   })
   const mapRef = useRef<google.maps.Map | null>(null)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const centeredOnUserRef = useRef(false)
 
@@ -39,9 +40,20 @@ export function MapaViaje({ estaciones, destino, userLocation, onEstacionClick }
       map.setZoom(16)
       centeredOnUserRef.current = true
     }
+    // Avisar a Google Maps si el contenedor cambia de tamaño tras el primer render
+    // (evita el hueco entre los tiles y la barra de atribución).
+    const ro = new ResizeObserver(() => {
+      google.maps.event.trigger(map, 'resize')
+    })
+    ro.observe(map.getDiv())
+    resizeObserverRef.current = ro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const onUnmount = useCallback(() => { mapRef.current = null }, [])
+  const onUnmount = useCallback(() => {
+    resizeObserverRef.current?.disconnect()
+    resizeObserverRef.current = null
+    mapRef.current = null
+  }, [])
 
   // Centrar en el usuario solo la primera vez que llega su ubicación
   useEffect(() => {
@@ -86,6 +98,7 @@ export function MapaViaje({ estaciones, destino, userLocation, onEstacionClick }
         streetViewControl: false,
         mapTypeControl: false,
         fullscreenControl: false,
+        gestureHandling: 'greedy',
       }}
     >
       {/* Estaciones — tenues, tocables para fijar destino */}

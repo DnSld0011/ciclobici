@@ -29,6 +29,7 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
   })
   const mapRef = useRef<google.maps.Map | null>(null)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const focusedOnUserRef = useRef(false)
 
@@ -39,9 +40,21 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
       map.setZoom(15)
       focusedOnUserRef.current = true
     }
+    // El contenedor puede cambiar de tamaño después de cargar el mapa (layout aún
+    // asentándose, safe-area, etc.) — sin avisarle a Google Maps, los tiles quedan
+    // más chicos que el div y se ve un hueco junto a la barra de atribución.
+    const ro = new ResizeObserver(() => {
+      google.maps.event.trigger(map, 'resize')
+    })
+    ro.observe(map.getDiv())
+    resizeObserverRef.current = ro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const onUnmount = useCallback(() => { mapRef.current = null }, [])
+  const onUnmount = useCallback(() => {
+    resizeObserverRef.current?.disconnect()
+    resizeObserverRef.current = null
+    mapRef.current = null
+  }, [])
 
   // Centrar en la ubicación del usuario la primera vez que llega (si no hay estación enfocada)
   useEffect(() => {
@@ -92,6 +105,7 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: false,
+          gestureHandling: 'greedy',
         }}
       >
         {estaciones.map(est => {
