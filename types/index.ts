@@ -17,6 +17,8 @@ export interface Usuario {
   estado: UsuarioEstado
   rol: UsuarioRol
   created_at: string
+  estacion_casa_id?: string | null
+  estacion_trabajo_id?: string | null
 }
 
 export interface Estacion {
@@ -68,6 +70,7 @@ export interface Viaje {
   estado: ViajeEstado
   distancia_km: number | null
   duracion_min: number | null
+  calificacion?: number | null
   bicicleta?: Bicicleta
   estacion_origen?: Estacion
   estacion_destino?: Estacion
