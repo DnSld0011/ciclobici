@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
+import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
-import { Bike, Clock, MapPin, Leaf, Star, ArrowRight } from 'lucide-react'
+import { Clock, Route, TreePine, Check, X, MapPin } from 'lucide-react'
+
+const MapaResumenViaje = dynamicImport(
+  () => import('@/components/maps/MapaResumenViaje').then(m => m.MapaResumenViaje),
+  { ssr: false, loading: () => <div className="w-full h-full bg-surface-container-low animate-pulse" /> }
+)
+
+interface EstacionResumen { nombre: string; latitud: number; longitud: number }
 
 interface ViajeResumen {
   id: string
@@ -13,8 +20,8 @@ interface ViajeResumen {
   duracion_min: number | null
   distancia_km: number | null
   bicicleta: { codigo: string; tipo: string } | null
-  estacion_origen: { nombre: string } | null
-  estacion_destino: { nombre: string } | null
+  estacion_origen: EstacionResumen | null
+  estacion_destino: EstacionResumen | null
 }
 
 export default function ResumenViajePage() {
@@ -22,10 +29,10 @@ export default function ResumenViajePage() {
   const [viaje, setViaje] = useState<ViajeResumen | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     async function cargar() {
+      const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace('/login'); return }
 
@@ -34,8 +41,8 @@ export default function ResumenViajePage() {
         .select(`
           id, inicio_at, fin_at, duracion_min, distancia_km,
           bicicleta:bicicleta_id(codigo, tipo),
-          estacion_origen:estacion_origen_id(nombre),
-          estacion_destino:estacion_destino_id(nombre)
+          estacion_origen:estacion_origen_id(nombre, latitud, longitud),
+          estacion_destino:estacion_destino_id(nombre, latitud, longitud)
         `)
         .eq('id', id as string)
         .eq('usuario_id', user.id)
@@ -45,7 +52,7 @@ export default function ResumenViajePage() {
       setLoading(false)
     }
     cargar()
-  }, [id, router, supabase])
+  }, [id, router])
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-surface">
@@ -56,121 +63,117 @@ export default function ResumenViajePage() {
   if (!viaje) return (
     <div className="h-screen flex flex-col items-center justify-center gap-4 px-6">
       <p className="text-on-surface-variant">Viaje no encontrado</p>
-      <Link href="/ciudadano" className="btn-primary text-sm px-6 py-2 rounded-lg">Volver al inicio</Link>
+      <button onClick={() => router.push('/ciudadano')} className="btn-primary text-sm px-6 py-2 rounded-lg">Volver al inicio</button>
     </div>
   )
 
   const dur = viaje.duracion_min ?? Math.round((new Date(viaje.fin_at).getTime() - new Date(viaje.inicio_at).getTime()) / 60000)
   const dist = viaje.distancia_km ?? Math.round(dur / 60 * 12 * 10) / 10
   const co2 = Math.round(dist * 0.21 * 10) / 10  // 210g CO₂/km en auto
-  const cal = Math.round(dist * 40)               // ~40 kcal/km en bici
+
+  const origenCoord = viaje.estacion_origen ? { lat: viaje.estacion_origen.latitud, lng: viaje.estacion_origen.longitud } : null
+  const destinoCoord = viaje.estacion_destino ? { lat: viaje.estacion_destino.latitud, lng: viaje.estacion_destino.longitud } : null
+
+  function cerrar() { router.push('/ciudadano') }
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
-      {/* Hero celebración */}
-      <div className="bg-primary-container px-6 pt-12 pb-8 text-center relative overflow-hidden">
-        {/* Círculos decorativos */}
-        <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/5" />
-        <div className="absolute -bottom-4 -left-4 w-24 h-24 rounded-full bg-[#b2f746]/20" />
+      <div className="flex-1 px-5 py-6 space-y-5 max-w-lg mx-auto w-full">
 
-        <div className="relative z-10">
-          <div className="w-20 h-20 rounded-full bg-[#b2f746] flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Bike size={36} className="text-primary-container" />
-          </div>
-          <h1 className="text-2xl font-extrabold text-white mb-1">¡Viaje completado!</h1>
-          <p className="text-on-primary-container text-sm opacity-80">
-            {new Date(viaje.inicio_at).toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex-1 px-4 py-6 space-y-4 max-w-lg mx-auto w-full">
-
-        {/* Stats principales */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="card p-4 text-center">
-            <div className="w-9 h-9 bg-surface-container-low rounded-lg flex items-center justify-center mx-auto mb-2">
-              <Clock size={16} className="text-primary-container" />
-            </div>
-            <p className="text-xl font-extrabold text-on-surface">{dur < 60 ? `${dur}m` : `${Math.floor(dur/60)}h ${dur%60}m`}</p>
-            <p className="text-[10px] text-outline uppercase font-semibold tracking-wide mt-0.5">Duración</p>
-          </div>
-          <div className="card p-4 text-center">
-            <div className="w-9 h-9 bg-surface-container-low rounded-lg flex items-center justify-center mx-auto mb-2">
-              <MapPin size={16} className="text-secondary" />
-            </div>
-            <p className="text-xl font-extrabold text-on-surface">{dist} km</p>
-            <p className="text-[10px] text-outline uppercase font-semibold tracking-wide mt-0.5">Distancia</p>
-          </div>
-          <div className="card p-4 text-center">
-            <div className="w-9 h-9 bg-[#dcfce7] rounded-lg flex items-center justify-center mx-auto mb-2">
-              <Leaf size={16} className="text-[#166534]" />
-            </div>
-            <p className="text-xl font-extrabold text-[#003527]">{co2} kg</p>
-            <p className="text-[10px] text-[#166534] uppercase font-semibold tracking-wide mt-0.5">CO₂ ahorrado</p>
-          </div>
-        </div>
-
-        {/* Ruta */}
-        <div className="card p-4">
-          <h2 className="text-xs font-bold text-outline uppercase tracking-wide mb-3">Ruta</h2>
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-primary-container" />
-              <div className="w-0.5 h-10 bg-outline-variant" />
-              <div className="w-3 h-3 rounded-full bg-[#b2f746] border-2 border-secondary" />
-            </div>
-            <div className="flex-1 space-y-3">
-              <div>
-                <p className="text-[10px] text-outline font-semibold uppercase">Origen</p>
-                <p className="text-sm font-semibold text-on-surface">{viaje.estacion_origen?.nombre ?? '—'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-outline font-semibold uppercase">Destino</p>
-                <p className="text-sm font-semibold text-on-surface">{viaje.estacion_destino?.nombre ?? '—'}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-outline">{viaje.bicicleta?.codigo}</p>
-              <p className="text-[10px] text-outline-variant">{viaje.bicicleta?.tipo}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Impacto ecológico */}
-        <div className="bg-primary-container rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Leaf size={16} className="text-[#b2f746]" />
-            <h3 className="text-sm font-bold text-white uppercase tracking-wide">Impacto Ecológico</h3>
-          </div>
-          <div className="flex gap-6">
-            <div>
-              <p className="text-2xl font-extrabold text-[#b2f746]">{co2} kg</p>
-              <p className="text-xs text-on-primary-container opacity-70">CO₂ que no emitiste</p>
-            </div>
-            <div className="w-px bg-white/20" />
-            <div>
-              <p className="text-2xl font-extrabold text-white">{cal}</p>
-              <p className="text-xs text-on-primary-container opacity-70">Calorías quemadas</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Acciones */}
-        <div className="space-y-3 pb-6">
-          <Link
-            href="/ciudadano"
-            className="w-full flex items-center justify-center gap-2 bg-[#064e3b] text-white font-bold py-4 rounded-2xl text-sm shadow-md active:scale-[0.98] transition-all"
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-extrabold" style={{ color: '#003527' }}>Resumen</h1>
+          <button
+            onClick={cerrar}
+            aria-label="Cerrar"
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: '#e5eeff' }}
           >
-            Volver al inicio <ArrowRight size={16} />
-          </Link>
-          <Link
-            href="/ciudadano/mapa"
-            className="w-full flex items-center justify-center gap-2 border-2 border-outline-variant text-on-surface font-semibold py-3.5 rounded-2xl text-sm hover:bg-surface-container-low transition-colors"
-          >
-            Buscar otra bicicleta
-          </Link>
+            <X size={18} className="text-on-surface" />
+          </button>
         </div>
+
+        {/* Check + título */}
+        <div className="flex flex-col items-center text-center pt-2 pb-1">
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
+            style={{ background: '#b2f746', boxShadow: '0 0 0 14px rgba(178,247,70,0.25)' }}
+          >
+            <Check size={36} style={{ color: '#002117' }} strokeWidth={3} />
+          </div>
+          <h2 className="text-3xl font-extrabold leading-tight" style={{ color: '#003527' }}>
+            ¡Viaje Finalizado!
+          </h2>
+          <p className="text-sm text-outline mt-2">Has completado tu recorrido con éxito.</p>
+        </div>
+
+        {/* Tiempo Total / Distancia */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-outline-variant/30 p-4">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-outline">
+              <Clock size={14} /> Tiempo Total
+            </div>
+            <p className="text-2xl font-extrabold mt-1" style={{ color: '#002117' }}>
+              {dur} <span className="text-sm font-normal text-outline">min</span>
+            </p>
+          </div>
+          <div className="rounded-2xl border border-outline-variant/30 p-4">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-outline">
+              <Route size={14} /> Distancia
+            </div>
+            <p className="text-2xl font-extrabold mt-1" style={{ color: '#002117' }}>
+              {dist} <span className="text-sm font-normal text-outline">km</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Impacto Ambiental */}
+        <div className="rounded-2xl p-4 flex items-center justify-between" style={{ background: '#003527' }}>
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: '#95d3ba' }}>
+              <TreePine size={14} /> Impacto Ambiental
+            </div>
+            <p className="text-2xl font-extrabold mt-1 text-white">
+              {co2} <span className="text-sm font-normal" style={{ color: '#95d3ba' }}>kg CO2 evitado</span>
+            </p>
+          </div>
+          <div
+            className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: 'rgba(178,247,70,0.15)' }}
+          >
+            <TreePine size={20} style={{ color: '#b2f746' }} />
+          </div>
+        </div>
+
+        {/* Mapa con la ruta */}
+        <div className="relative rounded-2xl overflow-hidden border border-outline-variant/20" style={{ height: 280 }}>
+          {origenCoord && destinoCoord ? (
+            <MapaResumenViaje origen={origenCoord} destino={destinoCoord} />
+          ) : (
+            <div className="w-full h-full bg-surface-container-low flex items-center justify-center">
+              <p className="text-xs text-outline">Ruta no disponible</p>
+            </div>
+          )}
+          {viaje.estacion_destino && (
+            <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 shadow-md">
+              <span className="w-2 h-2 rounded-full bg-[#16a34a]" />
+              <span className="text-xs font-semibold text-on-surface flex items-center gap-1">
+                <MapPin size={11} className="text-[#16a34a]" />
+                Ruta {viaje.estacion_destino.nombre}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Cerrar */}
+        <button
+          onClick={cerrar}
+          className="w-full h-14 rounded-2xl font-bold text-base active:scale-[0.98] transition-all"
+          style={{ background: '#b2f746', color: '#002117' }}
+        >
+          Cerrar
+        </button>
+
       </div>
     </div>
   )
