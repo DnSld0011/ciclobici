@@ -32,9 +32,10 @@ export function SidebarOperador() {
   const [alertasNoLeidas, setAlertasNoLeidas] = useState(0)
   const [viajesActivos, setViajesActivos] = useState(0)
   const [rolUsuario, setRolUsuario]       = useState<string>('')
-  const supabase = createClient()
 
   useEffect(() => {
+    const supabase = createClient()
+
     const refrescarAlertas = () =>
       supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('leida', false)
         .then(({ count }) => setAlertasNoLeidas(count ?? 0))
@@ -46,7 +47,6 @@ export function SidebarOperador() {
     refrescarAlertas()
     refrescarViajes()
 
-    // Obtener rol del usuario actual
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         supabase.from('usuarios').select('rol').eq('id', user.id).single()
@@ -59,9 +59,10 @@ export function SidebarOperador() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, refrescarViajes)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [supabase])
+  }, [])
 
   async function handleLogout() {
+    const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
   }
@@ -107,25 +108,32 @@ export function SidebarOperador() {
           </div>
         </div>
         {/* Badge de rol */}
-        {esAdmin && (
+        {esAdmin ? (
           <div className="mt-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: '#ede9fe' }}>
             <Crown size={12} style={{ color: '#6d28d9' }} />
             <span className="text-[11px] font-extrabold" style={{ color: '#6d28d9' }}>Administrador</span>
           </div>
-        )}
+        ) : rolUsuario === 'operador' ? (
+          <div className="mt-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: '#e5eeff' }}>
+            <Shield size={12} style={{ color: '#1a56db' }} />
+            <span className="text-[11px] font-extrabold" style={{ color: '#1a56db' }}>Operador</span>
+          </div>
+        ) : null}
       </div>
 
       {/* Nav principal */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {NAV_OPERADOR.map(item => <NavItem key={item.href} {...item} />)}
 
-        {/* Sección Administración */}
-        <div className="pt-3 mt-1">
-          <p className="text-[10px] font-extrabold tracking-widest text-outline uppercase px-3 pb-1.5">
-            Administración
-          </p>
-          {NAV_ADMIN.map(item => <NavItem key={item.href} {...item} />)}
-        </div>
+        {/* Sección Administración — solo para administradores */}
+        {esAdmin && (
+          <div className="pt-3 mt-1">
+            <p className="text-[10px] font-extrabold tracking-widest text-outline uppercase px-3 pb-1.5">
+              Administración
+            </p>
+            {NAV_ADMIN.map(item => <NavItem key={item.href} {...item} />)}
+          </div>
+        )}
       </nav>
 
       {/* Footer */}

@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Wrench, AlertTriangle, Bike, Menu, X, ClipboardList, LogOut } from 'lucide-react'
+import { Wrench, AlertTriangle, Bike, Menu, X, ClipboardList, LogOut, HardHat } from 'lucide-react'
 
 const NAV = [
   { href: '/tecnico/mantenimiento', label: 'Mantenimiento',  icon: Wrench },
@@ -15,29 +15,32 @@ const NAV = [
 
 export function SidebarTecnico() {
   const pathname = usePathname()
+  const router   = useRouter()
   const [open, setOpen] = useState(false)
   const [pendientes, setPendientes] = useState(0)
-  const supabase = createClient()
 
   const cargarPendientes = useCallback(async () => {
+    const supabase = createClient()
     const { count } = await supabase
       .from('incidencias')
       .select('*', { count: 'exact', head: true })
       .eq('estado', 'pendiente')
     setPendientes(count ?? 0)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     cargarPendientes()
+    const supabase = createClient()
     const ch = supabase.channel('tecnico-incidencias')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias' }, cargarPendientes)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargarPendientes, supabase])
+  }, [cargarPendientes])
 
   async function cerrarSesion() {
+    const supabase = createClient()
     await supabase.auth.signOut()
-    window.location.href = '/login'
+    router.push('/login')
   }
 
   const SidebarContent = () => (
@@ -50,9 +53,13 @@ export function SidebarTecnico() {
             <Wrench size={18} style={{ color: '#002117' }} />
           </div>
           <div>
-            <p className="font-extrabold text-sm text-on-surface leading-none">Panel Técnico</p>
-            <p className="text-[10px] text-outline mt-0.5">San Borja en Bici</p>
+            <p className="font-extrabold text-sm text-on-surface leading-none">San Borja en Bici</p>
+            <p className="text-[10px] text-outline mt-0.5">Panel de trabajo</p>
           </div>
+        </div>
+        <div className="mt-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: '#fef9c3' }}>
+          <HardHat size={12} style={{ color: '#854d0e' }} />
+          <span className="text-[11px] font-extrabold" style={{ color: '#854d0e' }}>Técnico</span>
         </div>
       </div>
 
