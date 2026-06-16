@@ -68,7 +68,6 @@ export default function ViajeActivoPage() {
 
   const tiempo  = useTiempo(viaje?.inicio_at ?? null)
   const router  = useRouter()
-  const supabase = createClient()
 
   // ETA al destino desde ubicación actual
   const eta = useMemo(() => {
@@ -79,6 +78,7 @@ export default function ViajeActivoPage() {
 
   // Cargar estaciones
   const cargarEstaciones = useCallback(async () => {
+    const supabase = createClient()
     const { data } = await supabase.from('estaciones')
       .select('*, bicicletas(id,estado)').eq('estado', 'activa')
     if (data) {
@@ -89,7 +89,7 @@ export default function ViajeActivoPage() {
           ? e.bicicletas.filter((b: { estado: string }) => b.estado === 'disponible').length : 0,
       })))
     }
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     async function init() {

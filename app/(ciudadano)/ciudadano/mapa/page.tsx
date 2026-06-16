@@ -25,7 +25,7 @@ type EstacionConDistancia = EstacionConDisponibilidad & { distancia_km?: number 
 export default function MapaCiudadanoPage() {
   const [estaciones, setEstaciones]   = useState<EstacionConDistancia[]>([])
   const [seleccionada, setSeleccionada] = useState<EstacionConDistancia | null>(null)
-  const [ultimaAct, setUltimaAct]     = useState(new Date())
+  const [ultimaAct, setUltimaAct]     = useState<Date | null>(null)
   const [loading, setLoading]         = useState(true)
   const [listaAbierta, setListaAbierta] = useState(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
@@ -147,7 +147,7 @@ export default function MapaCiudadanoPage() {
         <div className="absolute top-3 right-3 z-10 pointer-events-none">
           <div className="glass-panel px-3 py-1.5 rounded-xl border border-white/50 shadow-md flex items-center gap-1.5 text-xs text-outline">
             <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '4s' }} />
-            {ultimaAct.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+            {ultimaAct ? ultimaAct.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '—'}
           </div>
         </div>
 
