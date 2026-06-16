@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Bike, MapPin, Clock, ChevronRight, CalendarDays } from 'lucide-react'
+import { Bike, Clock, CalendarDays } from 'lucide-react'
 
 interface Viaje {
   id: string
-  inicio: string
-  fin: string | null
+  inicio_at: string
+  fin_at: string | null
   estacion_origen: { nombre: string } | null
   estacion_destino: { nombre: string } | null
   bicicleta: { codigo: string } | null
@@ -33,30 +33,30 @@ export default function ViajesPage() {
   const [viajes, setViajes] = useState<Viaje[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     async function cargar() {
+      const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace('/login'); return }
 
       const { data } = await supabase
         .from('viajes')
         .select(`
-          id, inicio, fin,
+          id, inicio_at, fin_at,
           estacion_origen:estacion_origen_id(nombre),
           estacion_destino:estacion_destino_id(nombre),
           bicicleta:bicicleta_id(codigo)
         `)
         .eq('usuario_id', user.id)
-        .order('inicio', { ascending: false })
+        .order('inicio_at', { ascending: false })
         .limit(50)
 
       if (data) setViajes(data as unknown as Viaje[])
       setLoading(false)
     }
     cargar()
-  }, [router, supabase])
+  }, [router])
 
   if (loading) return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-3">
@@ -89,7 +89,7 @@ export default function ViajesPage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-1.5 text-xs text-gray-500">
                   <CalendarDays size={12} />
-                  {fechaCorta(v.inicio)}
+                  {fechaCorta(v.inicio_at)}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
                   <Bike size={11} />
@@ -106,18 +106,18 @@ export default function ViajesPage() {
                 </div>
                 <div className="flex-1 space-y-2">
                   <div>
-                    <p className="text-xs text-gray-400">Origen · {horaCorta(v.inicio)}</p>
+                    <p className="text-xs text-gray-400">Origen · {horaCorta(v.inicio_at)}</p>
                     <p className="text-sm font-medium text-gray-800">{v.estacion_origen?.nombre ?? 'Sin registro'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-400">Destino{v.fin ? ` · ${horaCorta(v.fin)}` : ''}</p>
-                    <p className="text-sm font-medium text-gray-800">{v.estacion_destino?.nombre ?? (v.fin ? 'Sin registro' : 'En curso')}</p>
+                    <p className="text-xs text-gray-400">Destino{v.fin_at ? ` · ${horaCorta(v.fin_at)}` : ''}</p>
+                    <p className="text-sm font-medium text-gray-800">{v.estacion_destino?.nombre ?? (v.fin_at ? 'Sin registro' : 'En curso')}</p>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg ${v.fin ? 'bg-gray-50 text-gray-600' : 'bg-blue-50 text-blue-600'}`}>
+                  <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg ${v.fin_at ? 'bg-gray-50 text-gray-600' : 'bg-blue-50 text-blue-600'}`}>
                     <Clock size={11} />
-                    {duracion(v.inicio, v.fin)}
+                    {duracion(v.inicio_at, v.fin_at)}
                   </div>
                 </div>
               </div>

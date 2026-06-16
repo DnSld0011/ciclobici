@@ -17,8 +17,8 @@ interface Perfil {
 
 interface ViajeHistorial {
   id: string
-  inicio: string
-  fin: string | null
+  inicio_at: string
+  fin_at: string | null
   distancia_km: number | null
   duracion_min: number | null
   estacion_origen: { nombre: string } | null
@@ -66,13 +66,13 @@ export default function PerfilCiudadanoPage() {
         supabase
           .from('viajes')
           .select(`
-            id, inicio, fin, distancia_km, duracion_min,
+            id, inicio_at, fin_at, distancia_km, duracion_min,
             estacion_origen:estacion_origen_id(nombre),
             estacion_destino:estacion_destino_id(nombre)
           `)
           .eq('usuario_id', user.id)
           .eq('estado', 'finalizado')
-          .order('inicio', { ascending: false })
+          .order('inicio_at', { ascending: false })
           .limit(20),
       ])
 
@@ -252,7 +252,7 @@ export default function PerfilCiudadanoPage() {
                 style={{ borderLeftColor: '#003527' }}
               >
                 <p className="text-xs mb-3" style={{ color: '#9ca3af' }}>
-                  {fechaRelativa(v.inicio)}
+                  {fechaRelativa(v.inicio_at)}
                 </p>
                 <div className="flex items-start gap-3">
                   <div
@@ -276,7 +276,7 @@ export default function PerfilCiudadanoPage() {
                         {v.distancia_km != null ? `${v.distancia_km} km` : '—'}
                       </span>
                       <span className="text-xs" style={{ color: '#9ca3af' }}>
-                        {duracionStr(v.inicio, v.fin, v.duracion_min)}
+                        {duracionStr(v.inicio_at, v.fin_at, v.duracion_min)}
                       </span>
                     </div>
                   </div>
