@@ -5,8 +5,7 @@ import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
 import { distanciaKm, formatoDistancia, minutosCaminando } from '@/lib/geo'
-import { MapPin, Bike, RefreshCw, X, Navigation, ChevronDown, AlertTriangle, Footprints, LocateFixed } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { MapPin, Bike, RefreshCw, X, ChevronDown, AlertTriangle, Footprints, LocateFixed } from 'lucide-react'
 
 const MapaEstaciones = dynamicImport(
   () => import('@/components/maps/MapaEstaciones').then(m => m.MapaEstaciones),
@@ -31,7 +30,6 @@ export default function MapaCiudadanoPage() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [geoError, setGeoError]       = useState('')
   const autoSeleccionoRef = useRef(false)
-  const router   = useRouter()
 
   const cargar = useCallback(async () => {
     const supabase = createClient()
@@ -96,7 +94,7 @@ export default function MapaCiudadanoPage() {
     if (!userLocation || !seleccionada) return []
     return estacionesOrdenadas
       .filter(e => e.id !== seleccionada.id)
-      .slice(0, 3)
+      .slice(0, 2)
   }, [estacionesOrdenadas, seleccionada, userLocation])
 
   const pct = (est: EstacionConDistancia) =>
@@ -208,15 +206,6 @@ export default function MapaCiudadanoPage() {
                   </p>
                 </div>
               </div>
-
-              {/* Navegar */}
-              <button
-                onClick={() => router.push(`/ciudadano/mapa?nav=${seleccionada.latitud},${seleccionada.longitud}`)}
-                className="w-full h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-2"
-                style={{ background: '#b2f746', color: '#002117' }}
-              >
-                <Navigation size={13} /> Cómo llegar
-              </button>
 
               {/* Recomendaciones proactivas */}
               {recomendaciones.length > 0 && (

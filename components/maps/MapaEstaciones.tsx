@@ -118,7 +118,9 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
           )
         })}
 
-        {activa && (
+        {/* En modo ciudadano la tarjeta inferior de la página ya muestra estos datos —
+            el InfoWindow nativo solo se usa en el panel del operador. */}
+        {activa && modoOperador && (
           <InfoWindow
             position={{ lat: activa.latitud, lng: activa.longitud }}
             onCloseClick={() => setActiveId(null)}
