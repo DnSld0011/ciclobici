@@ -154,8 +154,12 @@ export default function MapaCiudadanoPage() {
         </div>
 
         {/* Chip "Ver lista" — mobile, bottom center (solo si no hay tarjeta de recomendación) */}
+        {/* mismo offset que la tarjeta: despeja la barra de navegación inferior */}
         {!seleccionada && (
-          <div className="lg:hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
+          <div
+            className="lg:hidden absolute left-1/2 -translate-x-1/2 z-10"
+            style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px) + 12px)' }}
+          >
             <button onClick={() => setListaAbierta(true)}
               className="glass-panel flex items-center gap-2 px-4 py-2 rounded-full border border-white/50 shadow-lg text-xs font-bold text-on-surface active:scale-[.97] transition-all">
               <ChevronDown size={13} /> Ver {estaciones.length} estaciones
@@ -164,8 +168,13 @@ export default function MapaCiudadanoPage() {
         )}
 
         {/* Tarjeta principal: estación seleccionada / más cercana + recomendaciones — mobile */}
+        {/* bottom calculado para despejar la barra de navegación inferior (z-40, h-16 + safe-area)
+            que de otro modo tapa la parte baja de la tarjeta (la 2da recomendación quedaba oculta). */}
         {seleccionada && (
-          <div className="absolute bottom-3 left-3 right-3 z-20 lg:hidden max-h-[60vh] overflow-y-auto">
+          <div
+            className="absolute left-3 right-3 z-20 lg:hidden max-h-[55vh] overflow-y-auto"
+            style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px) + 12px)' }}
+          >
             <div className="glass-panel rounded-2xl border border-white/60 shadow-2xl p-4 space-y-4">
 
               {/* Header: nombre + distancia + botón cerrar */}

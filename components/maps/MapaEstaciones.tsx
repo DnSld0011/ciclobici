@@ -195,10 +195,12 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
       </GoogleMap>
 
       {userLocation && !modoOperador && (
+        // bottom despeja la barra de navegación inferior del panel ciudadano (h-16 + safe-area)
         <button
           onClick={centrarEnMiUbicacion}
           aria-label="Centrar en mi ubicación"
-          className="absolute bottom-4 right-3 z-[400] w-10 h-10 rounded-full bg-white shadow-lg border border-outline-variant/30 flex items-center justify-center active:scale-95 transition-transform"
+          className="absolute right-3 z-[400] w-10 h-10 rounded-full bg-white shadow-lg border border-outline-variant/30 flex items-center justify-center active:scale-95 transition-transform"
+          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px) + 16px)' }}
         >
           <LocateFixed size={18} className="text-primary-container" />
         </button>
