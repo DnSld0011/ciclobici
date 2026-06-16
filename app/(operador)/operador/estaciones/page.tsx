@@ -34,12 +34,12 @@ export default function EstacionesPage() {
   const [form, setForm] = useState<FormEstacion>(formVacio)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const supabase = createClient()
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const { data } = await supabase.from('estaciones').select('*').order('nombre')
     if (data) setEstaciones(data)
-  }, [supabase])
+  }, [])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -64,6 +64,7 @@ export default function EstacionesPage() {
     if (!validarCoordenadas(lat, lng)) { setError('Coordenadas inválidas'); return }
     if (!cap || cap <= 0) { setError('La capacidad debe ser mayor a 0'); return }
     setLoading(true)
+    const supabase = createClient()
     const payload = {
       nombre: form.nombre.trim(), direccion: form.direccion.trim(),
       latitud: lat, longitud: lng, capacidad: cap, estado: form.estado,
@@ -86,12 +87,14 @@ export default function EstacionesPage() {
 
   async function eliminar(id: string) {
     if (!confirm('¿Eliminar esta estación?')) return
+    const supabase = createClient()
     await supabase.from('estaciones').delete().eq('id', id)
     await cargar()
   }
 
   async function toggleEstado(est: Estacion) {
     const nuevo = est.estado === 'activa' ? 'inactiva' : 'activa'
+    const supabase = createClient()
     await supabase.from('estaciones').update({ estado: nuevo }).eq('id', est.id)
     await cargar()
   }

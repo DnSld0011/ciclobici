@@ -16,9 +16,9 @@ export default function MapaOperadorPage() {
   const [seleccionada, setSeleccionada] = useState<EstacionConDisponibilidad | null>(null)
   const [ultimaAct, setUltimaAct] = useState(new Date())
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const { data } = await supabase
       .from('estaciones')
       .select('*, bicicletas(id, estado)')
@@ -33,16 +33,17 @@ export default function MapaOperadorPage() {
       setUltimaAct(new Date())
     }
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
+    const supabase = createClient()
     cargar()
     const ch = supabase.channel('mapa-op-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar, supabase])
+  }, [cargar])
 
   const activas      = estaciones.filter(e => e.estado === 'activa').length
   const enMantenimiento = estaciones.filter(e => e.estado === 'mantenimiento').length

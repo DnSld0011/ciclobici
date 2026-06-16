@@ -44,11 +44,11 @@ export default function ViajesEnVivoPage() {
   const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
   const [loading, setLoading]   = useState(true)
   const [ultimaAct, setUltimaAct] = useState(new Date())
-  const supabase = createClient()
 
   useTick(viajes.length > 0)
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const [{ data: viajesData }, { data: estData }] = await Promise.all([
       supabase
         .from('viajes')
@@ -77,16 +77,17 @@ export default function ViajesEnVivoPage() {
     }
     setUltimaAct(new Date())
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
+    const supabase = createClient()
     cargar()
     const ch = supabase.channel('viajes-vivo-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, cargar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar, supabase])
+  }, [cargar])
 
   // Estadísticas
   const totalActivos = viajes.length

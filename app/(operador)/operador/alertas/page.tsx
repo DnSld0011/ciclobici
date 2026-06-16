@@ -32,9 +32,8 @@ export default function AlertasOperadorPage() {
   const [loading, setLoading] = useState(true)
   const [filtroNivel, setFiltroNivel] = useState<AlertaNivel | 'todos'>('todos')
   const [filtroLeida, setFiltroLeida] = useState<'pendiente' | 'leida' | 'todos'>('pendiente')
-  const supabase = createClient()
-
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     let q = supabase.from('alertas')
       .select('*, estacion:estacion_id(id, nombre), bicicleta:bicicleta_id(id, codigo)')
       .order('created_at', { ascending: false })
@@ -47,28 +46,32 @@ export default function AlertasOperadorPage() {
     const { data } = await q
     if (data) setAlertas(data as Alerta[])
     setLoading(false)
-  }, [supabase, filtroNivel, filtroLeida])
+  }, [filtroNivel, filtroLeida])
 
   useEffect(() => { cargar() }, [cargar])
 
   useEffect(() => {
+    const supabase = createClient()
     const ch = supabase.channel('alertas-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar, supabase])
+  }, [cargar])
 
   async function marcarLeida(id: string) {
+    const supabase = createClient()
     await supabase.from('alertas').update({ leida: true }).eq('id', id)
     setAlertas(prev => prev.map(a => a.id === id ? { ...a, leida: true } : a))
   }
 
   async function marcarResuelta(id: string) {
+    const supabase = createClient()
     await supabase.from('alertas').update({ leida: true, resuelta: true }).eq('id', id)
     setAlertas(prev => prev.filter(a => a.id !== id))
   }
 
   async function marcarTodasLeidas() {
+    const supabase = createClient()
     await supabase.from('alertas').update({ leida: true }).eq('leida', false)
     setAlertas(prev => prev.map(a => ({ ...a, leida: true })))
   }

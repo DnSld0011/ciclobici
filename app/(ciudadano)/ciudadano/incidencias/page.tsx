@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { IncidenciaTipo } from '@/types'
 import {
@@ -11,15 +12,15 @@ import {
 
 /* ── tipos de problema ── */
 const TIPOS: { value: IncidenciaTipo; label: string; icon: string }[] = [
-  { value: 'frenos',      label: 'Frenos',             icon: '🛑' },
-  { value: 'llanta',      label: 'Llanta',             icon: '🔴' },
-  { value: 'cadena',      label: 'Cadena',             icon: '⛓️' },
-  { value: 'manillar',    label: 'Manillar',           icon: '🚲' },
-  { value: 'asiento',     label: 'Asiento',            icon: '💺' },
-  { value: 'iluminacion', label: 'Iluminación',        icon: '💡' },
-  { value: 'electrico',   label: 'Eléctrico',          icon: '⚡' },
-  { value: 'estructura',  label: 'Estructura',         icon: '🔧' },
-  { value: 'otro',        label: 'Otro',               icon: '❓' },
+  { value: 'frenos',      label: 'Frenos',      icon: '🛑' },
+  { value: 'llanta',      label: 'Llanta',      icon: '🔴' },
+  { value: 'cadena',      label: 'Cadena',      icon: '⛓️' },
+  { value: 'manillar',    label: 'Manillar',    icon: '🚲' },
+  { value: 'asiento',     label: 'Asiento',     icon: '💺' },
+  { value: 'iluminacion', label: 'Iluminación', icon: '💡' },
+  { value: 'electrico',   label: 'Eléctrico',   icon: '⚡' },
+  { value: 'estructura',  label: 'Estructura',  icon: '🔧' },
+  { value: 'otro',        label: 'Otro',        icon: '❓' },
 ]
 
 type Paso = 'scanner' | 'formulario'
@@ -31,29 +32,49 @@ interface BiciEscaneada {
   estacion_nombre: string | null
 }
 
+/* Tab switcher — "Mis reportes" navega a la página dedicada */
+function TabSwitcher({ dark }: { dark?: boolean }) {
+  const base = dark
+    ? 'flex rounded-xl overflow-hidden border border-white/15 text-xs font-bold'
+    : 'flex rounded-xl overflow-hidden border border-outline-variant/30 text-xs font-bold'
+  return (
+    <div className={base}>
+      <span className={`px-4 py-2 ${dark ? 'bg-[#b2f746] text-[#002117]' : 'bg-[#003527] text-white'}`}>
+        Reportar
+      </span>
+      <Link
+        href="/ciudadano/incidencias/historial"
+        className={`px-4 py-2 ${dark ? 'text-white/50' : 'text-outline'}`}
+      >
+        Mis reportes
+      </Link>
+    </div>
+  )
+}
+
 export default function ReportarIncidenciaPage() {
-  const [paso, setPaso]         = useState<Paso>('scanner')
+  const [paso, setPaso]             = useState<Paso>('scanner')
   const [modoManual, setModoManual] = useState(false)
   const [codigoManual, setCodigoManual] = useState('')
-  const [buscando, setBuscando] = useState(false)
-  const [errorQr, setErrorQr]   = useState('')
+  const [buscando, setBuscando]     = useState(false)
+  const [errorQr, setErrorQr]       = useState('')
 
-  const [bici, setBici]         = useState<BiciEscaneada | null>(null)
-  const [tipo, setTipo]         = useState<IncidenciaTipo | ''>('')
+  const [bici, setBici]             = useState<BiciEscaneada | null>(null)
+  const [tipo, setTipo]             = useState<IncidenciaTipo | ''>('')
   const [descripcion, setDescripcion] = useState('')
-  const [foto, setFoto]         = useState<File | null>(null)
+  const [foto, setFoto]             = useState<File | null>(null)
   const [fotoPreview, setFotoPreview] = useState<string | null>(null)
 
-  const [enviando, setEnviando] = useState(false)
-  const [exito, setExito]       = useState(false)
-  const [errorForm, setErrorForm] = useState<string | null>(null)
+  const [enviando, setEnviando]     = useState(false)
+  const [exito, setExito]           = useState(false)
+  const [errorForm, setErrorForm]   = useState<string | null>(null)
 
-  const scannerRef    = useRef<import('html5-qrcode').Html5Qrcode | null>(null)
-  const scannerStarted = useRef(false)
-  const fileInputRef  = useRef<HTMLInputElement>(null)
-  const router        = useRouter()
+  const scannerRef      = useRef<import('html5-qrcode').Html5Qrcode | null>(null)
+  const scannerStarted  = useRef(false)
+  const fileInputRef    = useRef<HTMLInputElement>(null)
+  const router          = useRouter()
 
-  /* ── iniciar / detener cámara QR ── */
+  /* ── cámara QR ── */
   useEffect(() => {
     if (paso !== 'scanner' || modoManual) return
     let stopped = false
@@ -150,7 +171,6 @@ export default function ReportarIncidenciaPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.replace('/login'); return }
 
-    /* subir foto si hay */
     let foto_url: string | null = null
     if (foto) {
       const ext = foto.name.split('.').pop() ?? 'jpg'
@@ -159,8 +179,7 @@ export default function ReportarIncidenciaPage() {
         .from('evidencias')
         .upload(path, foto, { contentType: foto.type })
       if (!upErr) {
-        const { data: { publicUrl } } = supabase.storage
-          .from('evidencias').getPublicUrl(path)
+        const { data: { publicUrl } } = supabase.storage.from('evidencias').getPublicUrl(path)
         foto_url = publicUrl
       }
     }
@@ -178,7 +197,7 @@ export default function ReportarIncidenciaPage() {
     setExito(true)
   }
 
-  /* ── pantalla de éxito ── */
+  /* ── pantalla éxito ── */
   if (exito) return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 text-center gap-5">
       <div className="w-20 h-20 rounded-full bg-[#dcfce7] flex items-center justify-center">
@@ -190,10 +209,16 @@ export default function ReportarIncidenciaPage() {
           El equipo técnico revisará la incidencia pronto. ¡Gracias por ayudarnos!
         </p>
       </div>
+      <Link
+        href="/ciudadano/incidencias/historial"
+        className="h-12 px-8 rounded-2xl font-bold text-sm flex items-center"
+        style={{ background: '#b2f746', color: '#002117' }}
+      >
+        Ver mis reportes
+      </Link>
       <button
         onClick={() => router.push('/ciudadano')}
-        className="h-12 px-8 rounded-2xl font-bold text-sm"
-        style={{ background: '#b2f746', color: '#002117' }}
+        className="text-sm text-outline font-semibold"
       >
         Volver al inicio
       </button>
@@ -204,22 +229,19 @@ export default function ReportarIncidenciaPage() {
   if (paso === 'scanner') return (
     <div className="min-h-screen flex flex-col" style={{ background: '#0f1f18' }}>
 
-      {/* header */}
       <div className="flex items-center gap-3 p-4">
         <button
           onClick={() => router.back()}
-          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
           style={{ background: 'rgba(255,255,255,0.1)' }}
         >
           <ArrowLeft size={18} className="text-white" />
         </button>
-        <div>
-          <h1 className="font-extrabold text-white text-base">Reportar incidencia</h1>
-          <p className="text-white/50 text-xs">Escanea el QR de la bicicleta</p>
+        <div className="flex-1">
+          <TabSwitcher dark />
         </div>
       </div>
 
-      {/* buscando */}
       {buscando && (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
@@ -229,7 +251,6 @@ export default function ReportarIncidenciaPage() {
         </div>
       )}
 
-      {/* cámara */}
       {!buscando && !modoManual && (
         <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-6">
           <div className="relative w-64 h-64">
@@ -246,9 +267,7 @@ export default function ReportarIncidenciaPage() {
               style={{ background: 'linear-gradient(90deg, transparent, #b2f746, transparent)' }} />
           </div>
 
-          {errorQr && (
-            <p className="text-red-400 text-sm text-center max-w-xs">{errorQr}</p>
-          )}
+          {errorQr && <p className="text-red-400 text-sm text-center max-w-xs">{errorQr}</p>}
 
           <p className="text-white/50 text-sm text-center">
             Centra el código QR de la bicicleta<br />dentro del recuadro
@@ -263,7 +282,6 @@ export default function ReportarIncidenciaPage() {
         </div>
       )}
 
-      {/* modo manual */}
       {!buscando && modoManual && (
         <div className="flex-1 flex flex-col items-center justify-center px-6 space-y-6">
           <div className="w-20 h-20 rounded-2xl flex items-center justify-center"
@@ -322,7 +340,6 @@ export default function ReportarIncidenciaPage() {
   return (
     <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
 
-      {/* header */}
       <div className="flex items-center gap-3">
         <button
           onClick={() => { setPaso('scanner'); setModoManual(false); setErrorQr('') }}
@@ -330,15 +347,13 @@ export default function ReportarIncidenciaPage() {
         >
           <ArrowLeft size={18} className="text-on-surface-variant" />
         </button>
-        <div>
-          <h1 className="text-lg font-extrabold text-on-surface">Reportar incidencia</h1>
-          <p className="text-xs text-on-surface-variant">Completa los detalles del problema</p>
+        <div className="flex-1">
+          <TabSwitcher />
         </div>
       </div>
 
       <form onSubmit={enviar} className="space-y-5">
 
-        {/* Bicicleta escaneada — read-only */}
         <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: '#dcfce7' }}>
@@ -364,7 +379,6 @@ export default function ReportarIncidenciaPage() {
           </button>
         </div>
 
-        {/* Tipo de problema */}
         <div>
           <p className="text-xs font-extrabold text-on-surface-variant uppercase tracking-widest mb-2.5">
             Tipo de problema *
@@ -387,7 +401,6 @@ export default function ReportarIncidenciaPage() {
           </div>
         </div>
 
-        {/* Descripción */}
         <div>
           <label className="block text-xs font-extrabold text-on-surface-variant uppercase tracking-widest mb-2">
             Descripción adicional
@@ -401,12 +414,10 @@ export default function ReportarIncidenciaPage() {
           />
         </div>
 
-        {/* Evidencia fotográfica */}
         <div>
           <p className="text-xs font-extrabold text-on-surface-variant uppercase tracking-widest mb-2">
             Evidencia fotográfica
           </p>
-
           {fotoPreview ? (
             <div className="relative rounded-2xl overflow-hidden border border-outline-variant/30">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -425,7 +436,6 @@ export default function ReportarIncidenciaPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {/* Tomar foto */}
               <button
                 type="button"
                 onClick={() => {
@@ -434,13 +444,11 @@ export default function ReportarIncidenciaPage() {
                     fileInputRef.current.click()
                   }
                 }}
-                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-dashed border-outline-variant/50 bg-white text-on-surface-variant hover:border-primary-container/40 transition-all"
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-dashed border-outline-variant/50 bg-white text-on-surface-variant"
               >
                 <Camera size={24} className="text-outline" />
                 <span className="text-xs font-semibold">Tomar foto</span>
               </button>
-
-              {/* Adjuntar desde galería */}
               <button
                 type="button"
                 onClick={() => {
@@ -449,21 +457,14 @@ export default function ReportarIncidenciaPage() {
                     fileInputRef.current.click()
                   }
                 }}
-                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-dashed border-outline-variant/50 bg-white text-on-surface-variant hover:border-primary-container/40 transition-all"
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-dashed border-outline-variant/50 bg-white text-on-surface-variant"
               >
                 <ImagePlus size={24} className="text-outline" />
                 <span className="text-xs font-semibold">Adjuntar foto</span>
               </button>
             </div>
           )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={seleccionarFoto}
-          />
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={seleccionarFoto} />
           <p className="text-[10px] text-outline mt-1.5">Opcional — máx. 10 MB</p>
         </div>
 

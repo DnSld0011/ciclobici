@@ -16,12 +16,11 @@ export default function PrediccionPage() {
   const [datos, setDatos] = useState<PrediccionHora[]>([])
   const [loading, setLoading] = useState(false)
   const [sinDatos, setSinDatos] = useState(false)
-  const supabase = createClient()
-
   useEffect(() => {
+    const supabase = createClient()
     supabase.from('estaciones').select('*').eq('estado', 'activa').order('nombre')
       .then(({ data }) => { if (data) setEstaciones(data) })
-  }, [supabase])
+  }, [])
 
   const consultar = useCallback(async () => {
     if (!estacionId) return

@@ -31,20 +31,21 @@ export default function MantenimientoPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [busquedaBici, setBusquedaBici] = useState('')
-  const supabase = createClient()
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const { data } = await supabase
       .from('mantenimientos')
       .select('*, bicicleta:bicicletas(codigo, tipo, marca)')
       .order('fecha', { ascending: false })
     if (data) setMantenimientos(data)
-  }, [supabase])
+  }, [])
 
   const cargarBicis = useCallback(async (busqueda: string) => {
+    const supabase = createClient()
     const { data } = await supabase.from('bicicletas').select('*').ilike('codigo', `%${busqueda}%`).limit(10)
     if (data) setBicicletas(data)
-  }, [supabase])
+  }, [])
 
   useEffect(() => { cargar() }, [cargar])
   useEffect(() => { if (busquedaBici.length >= 2) cargarBicis(busquedaBici) }, [busquedaBici, cargarBicis])
@@ -56,6 +57,7 @@ export default function MantenimientoPage() {
     if (!form.responsable.trim()) { setError('El responsable es requerido'); return }
     setLoading(true)
     try {
+      const supabase = createClient()
       const { error: err } = await supabase.from('mantenimientos').insert({
         bicicleta_id: form.bicicleta_id,
         tipo_intervencion: form.tipo_intervencion,
