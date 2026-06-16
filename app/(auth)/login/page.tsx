@@ -17,7 +17,6 @@ function LoginContent() {
   const [resetSent, setResetSent] = useState(false)
   const [identifier, setIdentifier] = useState('')
   const searchParams = useSearchParams()
-  const supabase     = createClient()
 
   const isEmail = identifier.includes('@')
 
@@ -28,9 +27,11 @@ function LoginContent() {
     else if (err)                  setError('Error al iniciar sesión. Intenta nuevamente.')
   }, [searchParams])
 
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
     setError(''); setLoading(true)
     try {
+      const formData = new FormData(e.currentTarget)
       const result = await loginAction(formData)
       if (result?.error) {
         setError(result.error)
@@ -38,9 +39,7 @@ function LoginContent() {
         return
       }
       if (result?.redirectTo) {
-        // Navegación completa para que el browser envíe las cookies de sesión
         window.location.href = result.redirectTo
-        // No llamar setLoading(false) — el spinner permanece hasta que la página cambie
         return
       }
     } catch {
@@ -56,6 +55,7 @@ function LoginContent() {
     }
     setLoading(true); setError('')
     try {
+      const supabase = createClient()
       const { error } = await supabase.auth.resetPasswordForEmail(
         identifier.trim().toLowerCase(),
         { redirectTo: `${window.location.origin}/auth/reset-password` }
@@ -137,7 +137,7 @@ function LoginContent() {
             </div>
           ) : null}
 
-          <form action={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Identificador */}
             <div>
               <label className={labelCls}>Correo o celular</label>
