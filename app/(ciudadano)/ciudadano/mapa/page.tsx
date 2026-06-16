@@ -109,7 +109,11 @@ export default function MapaCiudadanoPage() {
   const totalLibres = estaciones.reduce((s, e) => s + e.bicicletas_disponibles, 0)
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-4rem)] md:h-[calc(100vh-3.5rem)] relative">
+    // fixed en mobile: el <main> del layout aplica pb-24 para páginas con scroll normal,
+    // pero esto es una vista de pantalla completa — con esa altura inherente, el documento
+    // queda más alto que el viewport y el navegador permite "arrastrar" revelando un hueco
+    // bajo el mapa. fixed inset-0 saca esta vista del flujo y evita ese desborde.
+    <div className="fixed inset-0 flex flex-col lg:static lg:flex-row lg:h-[calc(100vh-3.5rem)]">
 
       {/* ── MAPA — full screen ── */}
       <div className="absolute inset-0 lg:relative lg:flex-1">

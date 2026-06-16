@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { GoogleMap, Marker, InfoWindow, OverlayView, useJsApiLoader } from '@react-google-maps/api'
+import { GoogleMap, InfoWindow, OverlayView, useJsApiLoader } from '@react-google-maps/api'
 import { EstacionConDisponibilidad } from '@/types'
 import { LocateFixed } from 'lucide-react'
 
@@ -16,11 +16,12 @@ interface MapaEstacionesProps {
 const containerStyle = { width: '100%', height: '100%' }
 const DEFAULT_CENTER = { lat: -12.1028, lng: -76.9943 } // San Borja, Lima (fallback)
 
-function colorPorDisponibilidad(disponibles: number, capacidad: number) {
+// Paleta de marca en vez de rojo/amarillo/verde genéricos
+function estiloPorDisponibilidad(disponibles: number, capacidad: number) {
   const pct = capacidad > 0 ? disponibles / capacidad : 0
-  if (pct === 0) return '#DC2626'
-  if (pct < 0.5) return '#CA8A04'
-  return '#16A34A'
+  if (pct === 0)  return { gradient: 'linear-gradient(135deg, #f87171, #ba1a1a)', solid: '#ba1a1a', text: '#ffffff' }
+  if (pct < 0.2)  return { gradient: 'linear-gradient(135deg, #fbbf24, #f59e0b)', solid: '#f59e0b', text: '#ffffff' }
+  return { gradient: 'linear-gradient(135deg, #cdff7a, #b2f746)', solid: '#b2f746', text: '#002117' }
 }
 
 export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = false, focusEstacion, userLocation }: MapaEstacionesProps) {
@@ -110,25 +111,44 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
       >
         {estaciones.map(est => {
           const disponibles = est.bicicletas_disponibles ?? 0
-          const color = colorPorDisponibilidad(disponibles, est.capacidad)
+          const { gradient, solid, text } = estiloPorDisponibilidad(disponibles, est.capacidad)
+          const activo = activeId === est.id
           return (
-            <Marker
+            <OverlayView
               key={est.id}
               position={{ lat: est.latitud, lng: est.longitud }}
-              icon={{
-                path: google.maps.SymbolPath.CIRCLE,
-                fillColor: color,
-                fillOpacity: 1,
-                strokeColor: '#fff',
-                strokeWeight: 3,
-                scale: 14,
-              }}
-              label={{ text: String(disponibles), color: '#fff', fontWeight: '700', fontSize: '11px' }}
-              onClick={() => {
-                setActiveId(est.id)
-                onEstacionClick?.(est)
-              }}
-            />
+              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            >
+              <div
+                onClick={() => { setActiveId(est.id); onEstacionClick?.(est) }}
+                style={{
+                  transform: `translate(-50%, -100%) scale(${activo ? 1.12 : 1})`,
+                  transition: 'transform 0.15s ease-out',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: gradient,
+                  border: '3px solid #fff',
+                  boxShadow: activo ? '0 4px 14px rgba(0,0,0,0.45)' : '0 3px 10px rgba(0,0,0,0.32)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: text, fontWeight: 800, fontSize: 13, lineHeight: 1,
+                  fontFamily: 'inherit',
+                }}>
+                  {disponibles}
+                </div>
+                {/* colita del pin */}
+                <div style={{
+                  width: 0, height: 0, marginTop: -2,
+                  borderLeft: '6px solid transparent',
+                  borderRight: '6px solid transparent',
+                  borderTop: `8px solid ${solid}`,
+                  filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.25))',
+                }} />
+              </div>
+            </OverlayView>
           )
         })}
 

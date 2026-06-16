@@ -104,25 +104,30 @@ export function MapaViaje({ estaciones, destino, userLocation, onEstacionClick }
       {/* Estaciones — tenues, tocables para fijar destino */}
       {estaciones.map(est => {
         const pct = est.capacidad > 0 ? est.bicicletas_disponibles / est.capacidad : 0
-        const color = pct === 0 ? '#ba1a1a' : pct < 0.25 ? '#f59e0b' : '#16a34a'
+        const solid = pct === 0 ? '#ba1a1a' : pct < 0.25 ? '#f59e0b' : '#b2f746'
+        const text = pct < 0.25 ? '#ffffff' : '#002117'
         return (
-          <Marker
+          <OverlayView
             key={est.id}
             position={{ lat: est.latitud, lng: est.longitud }}
-            icon={{
-              path: google.maps.SymbolPath.CIRCLE,
-              fillColor: color,
-              fillOpacity: 0.55,
-              strokeColor: 'rgba(255,255,255,0.7)',
-              strokeWeight: 2.5,
-              scale: 13,
-            }}
-            label={{ text: String(est.bicicletas_disponibles), color: '#fff', fontWeight: '700', fontSize: '10px' }}
-            onClick={() => {
-              setActiveId(est.id)
-              onEstacionClick?.(est)
-            }}
-          />
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+          >
+            <div
+              onClick={() => { setActiveId(est.id); onEstacionClick?.(est) }}
+              style={{ transform: 'translate(-50%, -50%)', cursor: 'pointer' }}
+            >
+              <div style={{
+                width: 30, height: 30, borderRadius: '50%',
+                background: solid, opacity: 0.65,
+                border: '2.5px solid rgba(255,255,255,0.8)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: text, fontWeight: 700, fontSize: 11, fontFamily: 'inherit',
+              }}>
+                {est.bicicletas_disponibles}
+              </div>
+            </div>
+          </OverlayView>
         )
       })}
 
