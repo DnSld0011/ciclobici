@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { GoogleMap, Marker, InfoWindow, OverlayView, useJsApiLoader } from '@react-google-maps/api'
 import { EstacionConDisponibilidad } from '@/types'
 import { LocateFixed } from 'lucide-react'
 
@@ -12,176 +13,59 @@ interface MapaEstacionesProps {
   userLocation?: { lat: number; lng: number } | null
 }
 
+const containerStyle = { width: '100%', height: '100%' }
+const DEFAULT_CENTER = { lat: -12.1028, lng: -76.9943 } // San Borja, Lima (fallback)
+
+function colorPorDisponibilidad(disponibles: number, capacidad: number) {
+  const pct = capacidad > 0 ? disponibles / capacidad : 0
+  if (pct === 0) return '#DC2626'
+  if (pct < 0.5) return '#CA8A04'
+  return '#16A34A'
+}
+
 export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = false, focusEstacion, userLocation }: MapaEstacionesProps) {
-  const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<unknown>(null)
-  const markersRef = useRef<unknown[]>([])
-  const userMarkerRef = useRef<unknown>(null)
-  const [mounted, setMounted] = useState(false)
+  const { isLoaded } = useJsApiLoader({
+    id: 'sbbici-google-maps',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
+  })
+  const mapRef = useRef<google.maps.Map | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(null)
   const focusedOnUserRef = useRef(false)
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!mounted || !mapRef.current) return
-
-    async function initMap() {
-      const L = (await import('leaflet')).default
-      await import('leaflet/dist/leaflet.css')
-
-      // Fix default icon paths
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (L.Icon.Default.prototype as any)._getIconUrl
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      })
-
-      if (mapInstanceRef.current) {
-        ;(mapInstanceRef.current as { remove: () => void }).remove()
-      }
-
-      const defaultCenter: [number, number] = userLocation
-        ? [userLocation.lat, userLocation.lng]
-        : estaciones.length > 0
-          ? [estaciones[0].latitud, estaciones[0].longitud]
-          : [4.711, -74.0721] // Bogotá
-
-      const map = L.map(mapRef.current!, {
-        center: defaultCenter,
-        zoom: userLocation ? 15 : 13,
-        zoomControl: true,
-      })
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-      }).addTo(map)
-
-      mapInstanceRef.current = map
-
-      // Add markers de estaciones
-      markersRef.current.forEach((m: unknown) => (m as { remove: () => void }).remove())
-      markersRef.current = []
-
-      estaciones.forEach(est => {
-        const disponibles = est.bicicletas_disponibles ?? 0
-        const porcentaje = disponibles / est.capacidad
-
-        let color = '#DC2626' // rojo
-        if (porcentaje >= 0.5) color = '#16A34A' // verde
-        else if (porcentaje > 0) color = '#CA8A04' // amarillo
-
-        const icon = L.divIcon({
-          className: '',
-          html: `
-            <div style="
-              width: 32px; height: 32px; border-radius: 50%;
-              background: ${color}; border: 3px solid white;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-              display: flex; align-items: center; justify-content: center;
-              color: white; font-weight: bold; font-size: 11px;
-            ">${disponibles}</div>
-          `,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
-        })
-
-        const estadoBadge = est.estado === 'activa'
-          ? '<span style="background:#16A34A;color:white;padding:2px 6px;border-radius:4px;font-size:11px">Activa</span>'
-          : est.estado === 'mantenimiento'
-            ? '<span style="background:#CA8A04;color:white;padding:2px 6px;border-radius:4px;font-size:11px">Mantenimiento</span>'
-            : '<span style="background:#DC2626;color:white;padding:2px 6px;border-radius:4px;font-size:11px">Inactiva</span>'
-
-        const popupContent = `
-          <div style="font-family:sans-serif;min-width:180px">
-            <div style="font-weight:bold;font-size:14px;margin-bottom:4px">${est.nombre}</div>
-            <div style="font-size:12px;color:#666;margin-bottom:6px">${est.direccion}</div>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
-              ${estadoBadge}
-            </div>
-            <div style="font-size:13px">
-              🚲 <strong>${disponibles}</strong> disponibles de <strong>${est.capacidad}</strong>
-            </div>
-          </div>
-        `
-
-        const marker = L.marker([est.latitud, est.longitud], { icon })
-          .addTo(map)
-          .bindPopup(popupContent)
-
-        if (onEstacionClick) {
-          marker.on('click', () => onEstacionClick(est))
-        }
-
-        markersRef.current.push(marker)
-      })
-
-      // Marcador de "mi ubicación" — punto azul pulsante estilo Google Maps
-      if (userLocation && !modoOperador) {
-        const userIcon = L.divIcon({
-          className: '',
-          html: `
-            <div style="position:relative; width:22px; height:22px;">
-              <div style="
-                position:absolute; inset:-10px; border-radius:50%;
-                background: rgba(37,99,235,0.25); animation: sbbici-pulse 2s ease-out infinite;
-              "></div>
-              <div style="
-                position:absolute; inset:0; border-radius:50%;
-                background:#2563eb; border:3px solid white;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-              "></div>
-            </div>
-          `,
-          iconSize: [22, 22],
-          iconAnchor: [11, 11],
-        })
-        userMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon, zIndexOffset: 1000 })
-          .addTo(map)
-          .bindPopup('Tu ubicación')
-      }
-    }
-
-    initMap()
-
-    return () => {
-      if (mapInstanceRef.current) {
-        ;(mapInstanceRef.current as { remove: () => void }).remove()
-        mapInstanceRef.current = null
-      }
+  const onLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map
+    if (userLocation && !focusEstacion) {
+      map.panTo(userLocation)
+      map.setZoom(15)
+      focusedOnUserRef.current = true
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, estaciones, onEstacionClick, modoOperador])
+  }, [])
+  const onUnmount = useCallback(() => { mapRef.current = null }, [])
 
-  // Centrar suavemente en la ubicación del usuario la primera vez que llega (sin re-inicializar el mapa)
+  // Centrar en la ubicación del usuario la primera vez que llega (si no hay estación enfocada)
   useEffect(() => {
-    if (!userLocation || !mapInstanceRef.current || focusedOnUserRef.current || focusEstacion) return
-    const map = mapInstanceRef.current as { flyTo: (latlng: [number, number], zoom: number) => void }
-    map.flyTo([userLocation.lat, userLocation.lng], 15)
+    if (!userLocation || !mapRef.current || focusedOnUserRef.current || focusEstacion) return
+    mapRef.current.panTo(userLocation)
+    mapRef.current.setZoom(15)
     focusedOnUserRef.current = true
   }, [userLocation, focusEstacion])
 
+  // Centrar/zoom en la estación enfocada
   useEffect(() => {
-    if (!focusEstacion || !mapInstanceRef.current) return
-    const map = mapInstanceRef.current as { flyTo: (latlng: [number, number], zoom: number) => void }
-    map.flyTo([focusEstacion.latitud, focusEstacion.longitud], 16)
-
-    // Open popup of matching marker
-    const idx = estaciones.findIndex(e => e.id === focusEstacion.id)
-    const marker = markersRef.current[idx] as { openPopup: () => void } | undefined
-    marker?.openPopup()
-  }, [focusEstacion, estaciones])
+    if (!focusEstacion || !mapRef.current) return
+    mapRef.current.panTo({ lat: focusEstacion.latitud, lng: focusEstacion.longitud })
+    mapRef.current.setZoom(16)
+    setActiveId(focusEstacion.id)
+  }, [focusEstacion])
 
   function centrarEnMiUbicacion() {
-    if (!userLocation || !mapInstanceRef.current) return
-    const map = mapInstanceRef.current as { flyTo: (latlng: [number, number], zoom: number) => void }
-    map.flyTo([userLocation.lat, userLocation.lng], 16)
+    if (!userLocation || !mapRef.current) return
+    mapRef.current.panTo(userLocation)
+    mapRef.current.setZoom(16)
   }
 
-  if (!mounted) {
+  if (!isLoaded) {
     return (
       <div className="w-full h-full bg-gray-100 flex items-center justify-center rounded-lg">
         <div className="text-gray-500">Cargando mapa...</div>
@@ -189,9 +73,91 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
     )
   }
 
+  const initialCenter = userLocation ?? (estaciones.length > 0
+    ? { lat: estaciones[0].latitud, lng: estaciones[0].longitud }
+    : DEFAULT_CENTER)
+
+  const activa = estaciones.find(e => e.id === activeId) ?? null
+
   return (
     <div className="relative w-full h-full">
-      <div ref={mapRef} className="w-full h-full rounded-lg" style={{ minHeight: '400px' }} />
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={initialCenter}
+        zoom={userLocation ? 15 : 13}
+        onLoad={onLoad}
+        onUnmount={onUnmount}
+        options={{
+          zoomControl: true,
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false,
+        }}
+      >
+        {estaciones.map(est => {
+          const disponibles = est.bicicletas_disponibles ?? 0
+          const color = colorPorDisponibilidad(disponibles, est.capacidad)
+          return (
+            <Marker
+              key={est.id}
+              position={{ lat: est.latitud, lng: est.longitud }}
+              icon={{
+                path: google.maps.SymbolPath.CIRCLE,
+                fillColor: color,
+                fillOpacity: 1,
+                strokeColor: '#fff',
+                strokeWeight: 3,
+                scale: 14,
+              }}
+              label={{ text: String(disponibles), color: '#fff', fontWeight: '700', fontSize: '11px' }}
+              onClick={() => {
+                setActiveId(est.id)
+                onEstacionClick?.(est)
+              }}
+            />
+          )
+        })}
+
+        {activa && (
+          <InfoWindow
+            position={{ lat: activa.latitud, lng: activa.longitud }}
+            onCloseClick={() => setActiveId(null)}
+          >
+            <div style={{ fontFamily: 'sans-serif', minWidth: 180 }}>
+              <div style={{ fontWeight: 'bold', fontSize: 14, marginBottom: 4 }}>{activa.nombre}</div>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>{activa.direccion}</div>
+              <div style={{ marginBottom: 4 }}>
+                <span style={{
+                  background: activa.estado === 'activa' ? '#16A34A' : activa.estado === 'mantenimiento' ? '#CA8A04' : '#DC2626',
+                  color: 'white', padding: '2px 6px', borderRadius: 4, fontSize: 11,
+                }}>
+                  {activa.estado === 'activa' ? 'Activa' : activa.estado === 'mantenimiento' ? 'Mantenimiento' : 'Inactiva'}
+                </span>
+              </div>
+              <div style={{ fontSize: 13 }}>
+                🚲 <strong>{activa.bicicletas_disponibles}</strong> disponibles de <strong>{activa.capacidad}</strong>
+              </div>
+            </div>
+          </InfoWindow>
+        )}
+
+        {userLocation && !modoOperador && (
+          <OverlayView position={userLocation} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+            <div style={{ position: 'relative', width: 22, height: 22, transform: 'translate(-11px, -11px)' }}>
+              <div style={{
+                position: 'absolute', inset: -10, borderRadius: '50%',
+                background: 'rgba(37,99,235,0.25)', animation: 'sbbici-pulse 2s ease-out infinite',
+              }} />
+              <div style={{
+                position: 'absolute', inset: 0, borderRadius: '50%',
+                background: '#2563eb', border: '3px solid white',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              }} />
+            </div>
+          </OverlayView>
+        )}
+      </GoogleMap>
+
       {userLocation && !modoOperador && (
         <button
           onClick={centrarEnMiUbicacion}
@@ -201,6 +167,7 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
           <LocateFixed size={18} className="text-primary-container" />
         </button>
       )}
+
       <style jsx global>{`
         @keyframes sbbici-pulse {
           0%   { transform: scale(0.4); opacity: 0.8; }
