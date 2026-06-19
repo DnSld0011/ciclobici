@@ -22,20 +22,21 @@ const NAV_OPERADOR = [
 ]
 
 const NAV_ADMIN = [
-  { href: '/operador/kpis',     label: 'KPIs',          icon: BarChart2 },
-  { href: '/operador/stock',    label: 'Stock Óptimo',  icon: PackageSearch },
-  { href: '/operador/usuarios', label: 'Usuarios',      icon: Users },
-  { href: '/operador/roles',    label: 'Roles',         icon: Shield },
+  { href: '/operador/kpis',     label: 'KPIs',         icon: BarChart2 },
+  { href: '/operador/stock',    label: 'Stock Óptimo', icon: PackageSearch },
+  { href: '/operador/usuarios', label: 'Usuarios',     icon: Users },
+  { href: '/operador/roles',    label: 'Roles',        icon: Shield },
 ]
 
 export function SidebarOperador() {
   const pathname = usePathname()
   const router   = useRouter()
-  const [mobileOpen, setMobileOpen]       = useState(false)
+  const [mobileOpen, setMobileOpen]           = useState(false)
   const [alertasNoLeidas, setAlertasNoLeidas] = useState(0)
-  const [viajesActivos, setViajesActivos] = useState(0)
-  const [rolUsuario, setRolUsuario]       = useState<string>('')
-  const [nombreUsuario, setNombreUsuario] = useState<string>('')
+  const [viajesActivos, setViajesActivos]     = useState(0)
+  const [rolUsuario, setRolUsuario]           = useState<string>('')
+  const [nombreUsuario, setNombreUsuario]     = useState<string>('')
+  const [vistas, setVistas]                   = useState<string[] | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -52,15 +53,20 @@ export function SidebarOperador() {
     refrescarViajes()
 
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase.from('usuarios').select('rol, nombre').eq('id', user.id).single()
-          .then(({ data }) => {
-            if (data) {
-              setRolUsuario(data.rol)
-              setNombreUsuario(data.nombre ?? '')
-            }
-          })
-      }
+      if (!user) return
+      supabase.from('usuarios').select('rol, nombre').eq('id', user.id).single()
+        .then(({ data }) => {
+          if (data) {
+            setRolUsuario(data.rol)
+            setNombreUsuario(data.nombre ?? '')
+          }
+        })
+
+      // Cargar vistas permitidas para el rol del usuario
+      fetch('/api/auth/vistas')
+        .then(r => r.json())
+        .then(({ vistas }) => setVistas(vistas ?? []))
+        .catch(() => setVistas([]))
     })
 
     const ch = supabase.channel('sidebar-badges')
@@ -80,7 +86,12 @@ export function SidebarOperador() {
     return exact ? pathname === href : (pathname === href || pathname.startsWith(href + '/'))
   }
 
+  // Si vistas aún no cargó, mostrar todo (evita flash vacío)
+  const vistasCargadas = vistas !== null
+  const puedeVer = (href: string) => !vistasCargadas || vistas!.includes(href)
+
   const esAdmin = rolUsuario === 'administrador'
+  const navAdminVisible = NAV_ADMIN.filter(item => puedeVer(item.href))
 
   function NavItem({ href, label, icon: Icon, exact }: { href: string; label: string; icon: React.ElementType; exact?: boolean }) {
     const active = isActive(href, exact)
@@ -132,15 +143,17 @@ export function SidebarOperador() {
 
       {/* Nav principal */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_OPERADOR.map(item => <NavItem key={item.href} {...item} />)}
+        {NAV_OPERADOR.filter(item => puedeVer(item.href)).map(item => (
+          <NavItem key={item.href} {...item} />
+        ))}
 
-        {/* Sección Administración — solo para administradores */}
-        {esAdmin && (
+        {/* Sección Administración — solo ítems que el rol tiene habilitados */}
+        {esAdmin && navAdminVisible.length > 0 && (
           <div className="pt-3 mt-1">
             <p className="text-[10px] font-extrabold tracking-widest text-outline uppercase px-3 pb-1.5">
               Administración
             </p>
-            {NAV_ADMIN.map(item => <NavItem key={item.href} {...item} />)}
+            {navAdminVisible.map(item => <NavItem key={item.href} {...item} />)}
           </div>
         )}
       </nav>
