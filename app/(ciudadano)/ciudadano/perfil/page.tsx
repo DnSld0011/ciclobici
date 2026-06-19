@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Bike, Leaf, Map, SlidersHorizontal, LogOut, CheckCircle, AlertCircle, Home, Briefcase, ChevronDown } from 'lucide-react'
+import { Bike, Leaf, Map, SlidersHorizontal, LogOut, CheckCircle, AlertCircle, Home, Briefcase, ChevronDown, Bell, BellOff } from 'lucide-react'
 
 interface Perfil {
   id: string
@@ -64,7 +64,65 @@ export default function PerfilCiudadanoPage() {
   const [savingFav, setSavingFav] = useState(false)
   const [mensajeFav, setMensajeFav] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
 
+  const [pushActivo, setPushActivo] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+  const [pushSoportado, setPushSoportado] = useState(false)
+
   const router = useRouter()
+
+  /* ── detectar soporte y estado de push ── */
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'PushManager' in window && 'serviceWorker' in navigator) {
+      setPushSoportado(true)
+      navigator.serviceWorker.ready.then(reg => {
+        reg.pushManager.getSubscription().then(sub => {
+          setPushActivo(!!sub)
+        })
+      }).catch(() => {})
+    }
+  }, [])
+
+  async function togglePush() {
+    if (!pushSoportado) return
+    setPushLoading(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        })
+        await sub.unsubscribe()
+        setPushActivo(false)
+      } else {
+        const res = await fetch('/api/push/vapid-key')
+        const { publicKey } = await res.json()
+        if (!publicKey) { setPushLoading(false); return }
+
+        const newSub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: publicKey,
+        })
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: newSub.endpoint,
+            keys: {
+              p256dh: btoa(String.fromCharCode(...new Uint8Array(newSub.getKey('p256dh')!))),
+              auth:   btoa(String.fromCharCode(...new Uint8Array(newSub.getKey('auth')!))),
+            },
+          }),
+        })
+        setPushActivo(true)
+      }
+    } catch {
+      // usuario rechazó permiso o push no disponible
+    }
+    setPushLoading(false)
+  }
 
   useEffect(() => {
     async function cargar() {
@@ -392,6 +450,31 @@ export default function PerfilCiudadanoPage() {
           </div>
         )}
       </div>
+
+      {/* Notificaciones Push */}
+      {pushSoportado && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: pushActivo ? '#dcfce7' : '#f3f4f6' }}>
+              {pushActivo ? <Bell size={18} style={{ color: '#003527' }} /> : <BellOff size={18} style={{ color: '#9ca3af' }} />}
+            </div>
+            <div>
+              <p className="text-sm font-extrabold" style={{ color: '#002117' }}>Notificaciones</p>
+              <p className="text-xs mt-0.5" style={{ color: '#6b7280' }}>
+                {pushActivo ? 'Activas — recibirás alertas de tus reportes' : 'Desactivadas'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={togglePush}
+            disabled={pushLoading}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${pushActivo ? 'bg-[#003527]' : 'bg-gray-200'}`}
+          >
+            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${pushActivo ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+        </div>
+      )}
 
       {/* Cerrar sesión */}
       <button

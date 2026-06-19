@@ -1,8 +1,36 @@
-const CACHE_NAME = 'sbbici-v1'
+const CACHE_NAME = 'sbbici-v2'
 const OFFLINE_URL = '/'
 
 self.addEventListener('install', () => {
   self.skipWaiting()
+})
+
+/* ── Push notifications ── */
+self.addEventListener('push', (event) => {
+  let data = { titulo: 'San Borja en Bici', cuerpo: '', url: '/' }
+  try { data = JSON.parse(event.data?.text() ?? '{}') } catch {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.titulo, {
+      body: data.cuerpo,
+      icon: '/icon-192x192.png',
+      badge: '/icon-192x192.png',
+      data: { url: data.url },
+      vibrate: [100, 50, 100],
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url ?? '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find(c => c.url.includes(self.location.origin))
+      if (existing) { existing.focus(); existing.navigate(url) }
+      else self.clients.openWindow(url)
+    })
+  )
 })
 
 self.addEventListener('activate', (event) => {

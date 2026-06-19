@@ -52,6 +52,23 @@ export default function TecnicoIncidenciasPage() {
     await supabase.from('incidencias').update({ estado }).eq('id', id)
     await cargar()
     if (seleccionada?.id === id) setSeleccionada(prev => prev ? { ...prev, estado } : null)
+
+    // Si el técnico marca como resuelta, enviar push al ciudadano
+    if (estado === 'resuelta') {
+      const inc = incidencias.find(i => i.id === id)
+      if (inc?.usuario_id) {
+        fetch('/api/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            usuario_id: inc.usuario_id,
+            titulo: '✅ Incidencia resuelta',
+            cuerpo: `Tu reporte de ${inc.tipo} ha sido resuelto por el equipo técnico.`,
+            url: '/ciudadano/incidencias',
+          }),
+        }).catch(() => {})
+      }
+    }
   }
 
   async function crearMantenimiento() {
