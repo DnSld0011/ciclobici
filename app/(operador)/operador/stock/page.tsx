@@ -1,12 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import {
   CheckCircle2, AlertTriangle, LayoutGrid, Download, RefreshCw,
-  ChevronRight, ChevronLeft, ArrowUpRight, ArrowDownRight,
-  Minus, Sparkles, MapPin,
+  ChevronRight, ChevronLeft, ArrowUpRight, Minus, Sparkles,
 } from 'lucide-react'
+
+const MapaStock = dynamic(
+  () => import('@/components/maps/MapaStock').then(m => m.MapaStock),
+  { ssr: false, loading: () => <div className="w-full h-full bg-gray-100 animate-pulse rounded-2xl" /> }
+)
 
 // ── Sector assignment (simulated; production would come from DB) ──────────────
 const SECTORES = [
@@ -150,14 +155,6 @@ export default function StockPage() {
   const surplus  = [...estaciones].sort((a, b) => b.disp / (b.capacidad || 1) - a.disp / (a.capacidad || 1))[0]
   const mover    = critica ? Math.min(critica.objetivo - critica.disp, surplus?.disp ?? 0) : 0
   const co2Kg    = (mover * 0.5).toFixed(1)
-
-  // ── Map: normalize lat/lng to SVG coords ────────────────────────────────────
-  const lats  = estaciones.map(e => e.latitud).filter(Boolean)
-  const lngs  = estaciones.map(e => e.longitud).filter(Boolean)
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats)
-  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
-  const toX = (lng: number) => lngs.length < 2 ? 200 : ((lng - minLng) / (maxLng - minLng)) * 360 + 20
-  const toY = (lat: number) => lats.length < 2 ? 110 : ((maxLat - lat) / (maxLat - minLat)) * 160 + 20
 
   function toggleSector(id: string) {
     setPagina(0)
@@ -461,52 +458,32 @@ export default function StockPage() {
           {/* ── Map + IA Prediction ── */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
 
-            {/* Geographic map */}
-            <div className="bg-[#1a2e26] rounded-2xl overflow-hidden relative min-h-[280px]">
-              <div className="absolute top-4 left-4 z-10">
-                <span className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white"
-                  style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)' }}>
-                  <MapPin size={12} />Vista Geográfica de Stock
+            {/* Google Maps */}
+            <div className="rounded-2xl overflow-hidden relative" style={{ minHeight: 320 }}>
+              {/* Label pill */}
+              <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#0f2419]"
+                  style={{ background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+                  📍 Vista Geográfica de Stock
                 </span>
               </div>
 
-              {/* SVG dot map */}
-              <svg viewBox="0 0 400 220" className="w-full h-full min-h-[260px]"
-                xmlns="http://www.w3.org/2000/svg">
-                {/* Grid lines */}
-                {[60, 120, 180].map(y => (
-                  <line key={y} x1="0" y1={y} x2="400" y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                ))}
-                {[100, 200, 300].map(x => (
-                  <line key={x} x1={x} y1="0" x2={x} y2="220" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                ))}
-
-                {/* Station dots */}
-                {estaciones.map((e, i) => {
-                  const x = toX(e.longitud)
-                  const y = toY(e.latitud)
-                  if (!x || !y || isNaN(x) || isNaN(y)) return null
-                  const color = e.status === 'BAJO STOCK'  ? '#ef4444'
-                              : e.status === 'SOBRE STOCK' ? '#f59e0b'
-                              : '#b2f746'
-                  return (
-                    <g key={e.id}>
-                      <circle cx={x} cy={y} r="10" fill={color} fillOpacity="0.15" />
-                      <circle cx={x} cy={y} r="5"  fill={color} />
-                      <circle cx={x} cy={y} r="3"  fill="white" fillOpacity="0.8" />
-                    </g>
-                  )
-                })}
-              </svg>
-
               {/* Legend */}
-              <div className="absolute bottom-4 right-4 flex items-center gap-3">
-                <span className="flex items-center gap-1.5 text-[10px] text-white font-semibold">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#b2f746] inline-block" />Óptimo
+              <div className="absolute bottom-3 right-3 z-10 pointer-events-none flex items-center gap-3 px-3 py-2 rounded-lg"
+                style={{ background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+                <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#b2f746] inline-block border border-gray-300" />Óptimo
                 </span>
-                <span className="flex items-center gap-1.5 text-[10px] text-white font-semibold">
+                <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-700">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />Bajo Stock
                 </span>
+                <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />Sobre Stock
+                </span>
+              </div>
+
+              <div style={{ height: 320 }}>
+                <MapaStock estaciones={estaciones} />
               </div>
             </div>
 
