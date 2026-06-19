@@ -29,7 +29,9 @@ export async function GET(req: Request) {
       return NextResponse.redirect(`${origin}/login?error=suspendido`)
     }
 
-    if (perfil.rol === 'administrador' || perfil.rol === 'operador')
+    if (perfil.rol === 'administrador')
+      return NextResponse.redirect(`${origin}/operador/kpis`)
+    if (perfil.rol === 'operador')
       return NextResponse.redirect(`${origin}/operador`)
     if (perfil.rol === 'tecnico')
       return NextResponse.redirect(`${origin}/tecnico/mantenimiento`)
