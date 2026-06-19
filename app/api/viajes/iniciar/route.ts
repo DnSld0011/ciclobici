@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   // Verificar que la bici está disponible
   const { data: bici, error: errBici } = await supabase
     .from('bicicletas')
-    .select('id, estado, codigo, qr_code')
+    .select('id, estado, codigo')
     .eq('id', bicicleta_id)
     .single()
 
@@ -48,13 +48,24 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
-  if (errViaje) return NextResponse.json({ error: errViaje.message }, { status: 500 })
+  if (errViaje || !viaje) {
+    return NextResponse.json({ error: errViaje?.message ?? 'Error al crear el viaje' }, { status: 500 })
+  }
 
   // Marcar bicicleta como en_viaje y sacarla de la estación
-  await supabase
+  const { error: errBiciUpdate } = await supabase
     .from('bicicletas')
     .update({ estado: 'en_viaje', estacion_id: null })
     .eq('id', bicicleta_id)
+
+  if (errBiciUpdate) {
+    // Rollback: eliminar el viaje recién creado para no quedar en estado inconsistente
+    await supabase.from('viajes').delete().eq('id', viaje.id)
+    return NextResponse.json(
+      { error: 'No se pudo actualizar el estado de la bicicleta. Intenta de nuevo.' },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ viaje }, { status: 201 })
 }

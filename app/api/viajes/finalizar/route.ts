@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Viaje no encontrado o no está activo' }, { status: 404 })
   }
 
-  // Verificar que la estación destino tiene capacidad
+  // Verificar que la estación destino existe y está activa
   const { data: estacion } = await supabase
     .from('estaciones')
     .select('id, capacidad, nombre')
@@ -36,28 +36,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Estación destino no válida o inactiva' }, { status: 400 })
   }
 
-  const { count: ocupadas } = await supabase
+  // Verificar capacidad contando TODAS las bicis ancladas en la estación
+  // (disponible + mantenimiento + baja), ya que las bicis en_viaje tienen estacion_id = null
+  const { count: bicisAncladas } = await supabase
     .from('bicicletas')
     .select('*', { count: 'exact', head: true })
     .eq('estacion_id', estacion_destino_id)
-    .eq('estado', 'disponible')
 
-  if ((ocupadas ?? 0) >= estacion.capacidad) {
-    return NextResponse.json({ error: `La estación "${estacion.nombre}" está llena` }, { status: 409 })
+  if ((bicisAncladas ?? 0) >= estacion.capacidad) {
+    return NextResponse.json(
+      { error: `La estación "${estacion.nombre}" está llena (${bicisAncladas}/${estacion.capacidad} docks ocupados)` },
+      { status: 409 }
+    )
   }
 
-  const fin = new Date().toISOString()
+  // Calcular duración en minutos
+  const fin = new Date()
+  const duracion_min = Math.max(1, Math.round((fin.getTime() - new Date(viaje.inicio_at).getTime()) / 60000))
 
-  // Construir el payload de actualización
-  // Si el cliente envía distancia_km GPS, la incluimos para que el trigger la respete
+  // Construir payload de actualización
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updatePayload: Record<string, any> = {
-    fin_at: fin,
+    fin_at: fin.toISOString(),
     estacion_destino_id,
     estado: 'finalizado',
+    duracion_min,
   }
   if (typeof distancia_km === 'number' && distancia_km > 0) {
-    updatePayload.distancia_km = distancia_km
+    updatePayload.distancia_km = Math.round(distancia_km * 100) / 100
   }
 
   const { data: viajeActualizado, error: errUpdate } = await supabase
@@ -67,13 +73,26 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
-  if (errUpdate) return NextResponse.json({ error: errUpdate.message }, { status: 500 })
+  if (errUpdate || !viajeActualizado) {
+    return NextResponse.json({ error: errUpdate?.message ?? 'Error al finalizar el viaje' }, { status: 500 })
+  }
 
   // Devolver la bicicleta a la estación destino
-  await supabase
+  const { error: errBiciUpdate } = await supabase
     .from('bicicletas')
     .update({ estado: 'disponible', estacion_id: estacion_destino_id })
     .eq('id', viaje.bicicleta_id)
+
+  if (errBiciUpdate) {
+    // El viaje ya está finalizado, pero la bici quedó con estado incorrecto.
+    // Intentar revertir el estado del viaje para alertar al operador.
+    await supabase.from('viajes').update({ estado: 'activo', fin_at: null, estacion_destino_id: null, duracion_min: null })
+      .eq('id', viaje_id)
+    return NextResponse.json(
+      { error: 'No se pudo devolver la bicicleta a la estación. Contacta al operador.' },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ viaje: viajeActualizado })
 }
