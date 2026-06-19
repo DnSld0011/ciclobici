@@ -102,8 +102,9 @@ export async function proxy(request: NextRequest) {
       // Si rolData es null o vistas está vacío, el control de grupo ya fue suficiente.
       if (rolData?.vistas && (rolData.vistas as string[]).length > 0) {
         const vistas = rolData.vistas as string[]
-        if (!isVistaPermitida(pathname, vistas)) {
-          const home = HOME_POR_ROL[rol] ?? '/login'
+        const home = HOME_POR_ROL[rol] ?? '/login'
+        // La ruta home del rol nunca se bloquea (evita loop de redirección)
+        if (pathname !== home && !isVistaPermitida(pathname, vistas)) {
           return NextResponse.redirect(new URL(home, request.url))
         }
       }
