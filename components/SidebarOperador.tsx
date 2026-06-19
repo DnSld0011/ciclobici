@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Map, Bike, Building2, Wrench,
-  TrendingUp, Bell, Menu, X, LogOut, Activity, Users, Shield, Crown, ArrowRightLeft, BarChart2,
+  TrendingUp, Bell, Menu, X, LogOut, Activity, Users, Shield, Crown, ArrowRightLeft, BarChart2, PackageSearch,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -22,9 +22,10 @@ const NAV_OPERADOR = [
 ]
 
 const NAV_ADMIN = [
-  { href: '/operador/kpis',     label: 'KPIs',     icon: BarChart2 },
-  { href: '/operador/usuarios', label: 'Usuarios', icon: Users },
-  { href: '/operador/roles',    label: 'Roles',    icon: Shield },
+  { href: '/operador/kpis',     label: 'KPIs',          icon: BarChart2 },
+  { href: '/operador/stock',    label: 'Stock Óptimo',  icon: PackageSearch },
+  { href: '/operador/usuarios', label: 'Usuarios',      icon: Users },
+  { href: '/operador/roles',    label: 'Roles',         icon: Shield },
 ]
 
 export function SidebarOperador() {
