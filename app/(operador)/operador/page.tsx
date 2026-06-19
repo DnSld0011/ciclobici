@@ -469,7 +469,7 @@ export default function DashboardOperadorPage() {
                 <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 12 }}
-                  formatter={(v: number) => [v, 'Demanda est.']}
+                  formatter={(v) => [v, 'Demanda est.']}
                   labelFormatter={h => `${h}:00`}
                 />
                 <ReferenceLine y={picoDemanda}
