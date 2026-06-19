@@ -211,6 +211,63 @@ create trigger trg_finalizar_viaje
   before update of fin_at on public.viajes
   for each row execute function public.fn_finalizar_viaje();
 
+-- Trigger: alerta automática para viaje activo > 120 min
+create or replace function public.fn_alerta_viaje_anormal()
+returns trigger language plpgsql as $$
+declare
+  v_minutos  numeric;
+  v_bici_cod text;
+begin
+  if new.estado != 'activo' or new.inicio_at is null then return new; end if;
+  v_minutos := extract(epoch from (now() - new.inicio_at)) / 60;
+  if v_minutos > 120 then
+    select codigo into v_bici_cod from public.bicicletas where id = new.bicicleta_id;
+    insert into public.alertas (tipo, nivel, titulo, mensaje, bicicleta_id)
+    values ('bici_sin_retornar', 'critica',
+      'Viaje anormal: ' || coalesce(v_bici_cod, 'bici desconocida'),
+      'Lleva ' || round(v_minutos) || ' min activo sin finalizar. Posible incidencia o extravío.',
+      new.bicicleta_id)
+    on conflict do nothing;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_alerta_viaje_anormal on public.viajes;
+create trigger trg_alerta_viaje_anormal
+  after update on public.viajes
+  for each row
+  when (new.estado = 'activo')
+  execute function public.fn_alerta_viaje_anormal();
+
+-- Trigger: alerta para bici en mantenimiento > 7 días
+create or replace function public.fn_alerta_mantenimiento_urgente()
+returns trigger language plpgsql as $$
+declare v_dias numeric;
+begin
+  if new.estado != 'mantenimiento' then return new; end if;
+  select extract(epoch from (now() - m.fecha)) / 86400
+    into v_dias from public.mantenimientos m
+    where m.bicicleta_id = new.id order by m.fecha desc limit 1;
+  if v_dias is not null and v_dias > 7 then
+    insert into public.alertas (tipo, nivel, titulo, mensaje, bicicleta_id)
+    values ('mantenimiento_urgente', 'warning',
+      'Mantenimiento prolongado: ' || new.codigo,
+      'La bicicleta lleva ' || round(v_dias) || ' días en mantenimiento. Revisar estado.',
+      new.id)
+    on conflict do nothing;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_alerta_mantenimiento_urgente on public.bicicletas;
+create trigger trg_alerta_mantenimiento_urgente
+  after update of estado on public.bicicletas
+  for each row
+  when (new.estado = 'mantenimiento')
+  execute function public.fn_alerta_mantenimiento_urgente();
+
 -- =========================================
 -- Row Level Security (RLS)
 -- =========================================
