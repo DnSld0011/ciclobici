@@ -2,36 +2,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 
-/* ── Rutas raíz de grupo: sólo coinciden exactas, no sus sub-rutas ── */
 const GROUP_ROOTS = ['/ciudadano', '/operador', '/tecnico']
 
 function isVistaPermitida(pathname: string, vistas: string[]): boolean {
   return vistas.some(v =>
     pathname === v || (!GROUP_ROOTS.includes(v) && pathname.startsWith(v + '/'))
   )
-}
-
-/* ── Vistas por defecto cuando el rol no tiene entrada en `roles` ── */
-const VISTAS_FALLBACK: Record<string, string[]> = {
-  ciudadano: [
-    '/ciudadano', '/ciudadano/mapa', '/ciudadano/viajes', '/ciudadano/escanear',
-    '/ciudadano/viaje', '/ciudadano/viaje-activo',
-    '/ciudadano/incidencias', '/ciudadano/incidencias/historial', '/ciudadano/perfil',
-  ],
-  operador: [
-    '/operador', '/operador/viajes-en-vivo', '/operador/mapa', '/operador/alertas',
-    '/operador/estaciones', '/operador/bicicletas', '/operador/mantenimiento',
-    '/operador/asignacion', '/operador/prediccion',
-  ],
-  administrador: [
-    '/operador', '/operador/viajes-en-vivo', '/operador/mapa', '/operador/alertas',
-    '/operador/estaciones', '/operador/bicicletas', '/operador/mantenimiento',
-    '/operador/asignacion', '/operador/prediccion',
-    '/operador/kpis', '/operador/stock', '/operador/usuarios', '/operador/roles',
-  ],
-  tecnico: [
-    '/tecnico/mantenimiento', '/tecnico/bicicletas', '/tecnico/incidencias', '/tecnico/historial',
-  ],
 }
 
 const HOME_POR_ROL: Record<string, string> = {
@@ -110,11 +86,9 @@ export async function proxy(request: NextRequest) {
 
     // ── Verificación de vistas configuradas para el rol ──
     const isAppRoute = GROUP_ROOTS.some(g => pathname.startsWith(g))
-    if (!isAppRoute) return supabaseResponse
+    if (!isAppRoute || !serviceKey) return supabaseResponse
 
-    // Obtener vistas del rol desde la BD usando service role para evitar RLS
-    let vistas: string[] | null = null
-    if (serviceKey) {
+    try {
       const admin = createClient(supabaseUrl, serviceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       })
@@ -124,17 +98,17 @@ export async function proxy(request: NextRequest) {
         .eq('id', rol)
         .maybeSingle()
 
+      // Solo restringir si el rol tiene vistas explícitamente configuradas en BD.
+      // Si rolData es null o vistas está vacío, el control de grupo ya fue suficiente.
       if (rolData?.vistas && (rolData.vistas as string[]).length > 0) {
-        vistas = rolData.vistas as string[]
+        const vistas = rolData.vistas as string[]
+        if (!isVistaPermitida(pathname, vistas)) {
+          const home = HOME_POR_ROL[rol] ?? '/login'
+          return NextResponse.redirect(new URL(home, request.url))
+        }
       }
-    }
-
-    // Si no hay vistas configuradas en BD, usar fallback hardcodeado
-    const vistasEfectivas = vistas ?? VISTAS_FALLBACK[rol] ?? []
-
-    if (!isVistaPermitida(pathname, vistasEfectivas)) {
-      const home = HOME_POR_ROL[rol] ?? '/login'
-      return NextResponse.redirect(new URL(home, request.url))
+    } catch {
+      // Error al consultar roles → dejar pasar (grupo ya fue verificado)
     }
 
     return supabaseResponse
