@@ -2,7 +2,23 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Estacion, PrediccionHora } from '@/types'
+import { Estacion } from '@/types'
+
+interface PrediccionHora {
+  hora: number
+  hora_label: string
+  demanda_estimada: number
+  capacidad: number
+  estacion_nombre: string
+  confianza: 'alta' | 'media' | 'baja'
+}
+
+interface PrediccionResponse {
+  prediccion?: PrediccionHora[]
+  sin_datos?: boolean
+  total_muestras?: number
+  semanas_cubiertas?: number
+}
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Cell,
@@ -16,6 +32,7 @@ export default function PrediccionPage() {
   const [datos, setDatos] = useState<PrediccionHora[]>([])
   const [loading, setLoading] = useState(false)
   const [sinDatos, setSinDatos] = useState(false)
+  const [metadatos, setMetadatos] = useState<{ total_muestras: number; semanas_cubiertas: number } | null>(null)
   useEffect(() => {
     const supabase = createClient()
     supabase.from('estaciones').select('*').eq('estado', 'activa').order('nombre')
@@ -27,9 +44,12 @@ export default function PrediccionPage() {
     setLoading(true); setSinDatos(false)
     try {
       const res = await fetch(`/api/prediccion?estacion_id=${estacionId}&intervalo=${intervalo}`)
-      const json = await res.json()
-      if (json.sin_datos) { setSinDatos(true); setDatos([]) }
-      else { setDatos(json.prediccion ?? []) }
+      const json: PrediccionResponse = await res.json()
+      if (json.sin_datos) { setSinDatos(true); setDatos([]); setMetadatos(null) }
+      else {
+        setDatos(json.prediccion ?? [])
+        setMetadatos(json.total_muestras != null ? { total_muestras: json.total_muestras, semanas_cubiertas: json.semanas_cubiertas ?? 0 } : null)
+      }
     } catch {
       setSinDatos(true)
     } finally {
@@ -167,6 +187,7 @@ export default function PrediccionPage() {
                         ? '#f59e0b'
                         : '#003527'
                     }
+                    opacity={d.confianza === 'baja' ? 0.5 : d.confianza === 'media' ? 0.75 : 1}
                   />
                 ))}
               </Bar>
@@ -193,8 +214,21 @@ export default function PrediccionPage() {
             </div>
           </div>
 
-          <div className="px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/20 text-xs text-outline">
-            La demanda estimada se calcula usando el promedio histórico de viajes por hora y día de semana. Mayor demanda indica mayor necesidad de bicicletas disponibles.
+          {/* Confianza por slot */}
+          {datos.some(d => d.confianza === 'baja') && (
+            <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-100 text-xs text-amber-800">
+              <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+              Algunos slots tienen pocos datos históricos (confianza baja). La predicción mejorará con más viajes registrados.
+            </div>
+          )}
+
+          <div className="px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/20 text-xs text-outline flex items-center justify-between flex-wrap gap-2">
+            <span>Media ponderada: semanas recientes tienen mayor peso en el cálculo.</span>
+            {metadatos && (
+              <span className="font-semibold text-on-surface">
+                {metadatos.total_muestras} viajes · {metadatos.semanas_cubiertas} semanas de historial
+              </span>
+            )}
           </div>
         </div>
       )}

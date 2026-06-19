@@ -12,7 +12,6 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminClient()
 
-  // Get station capacity
   const { data: estacion } = await supabase
     .from('estaciones')
     .select('capacidad, nombre')
@@ -23,45 +22,87 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Estación no encontrada' }, { status: 404 })
   }
 
-  // Get historical trips for this station
+  // Últimas 8 semanas de viajes para esta estación
+  const ochoSemanasAtras = new Date(Date.now() - 8 * 7 * 24 * 60 * 60 * 1000).toISOString()
+
   const { data: viajes, error } = await supabase
     .from('viajes')
     .select('inicio_at')
     .eq('estacion_origen_id', estacion_id)
     .eq('estado', 'finalizado')
+    .gte('inicio_at', ochoSemanasAtras)
     .order('inicio_at', { ascending: false })
-    .limit(1000)
+    .limit(2000)
 
-  if (error || !viajes || viajes.length < 10) {
+  if (error || !viajes || viajes.length < 5) {
     return NextResponse.json({ sin_datos: true })
   }
 
-  // Build hourly demand model: count trips per (day_of_week, hour)
-  const modelo: Record<string, number[]> = {}
-  viajes.forEach(v => {
-    const d = new Date(v.inicio_at)
-    const key = `${d.getDay()}-${d.getHours()}`
-    if (!modelo[key]) modelo[key] = []
-    modelo[key].push(1)
-  })
-
   const ahora = new Date()
+
+  /*
+   * Media ponderada por semana reciente:
+   *   semana 0 (esta semana)   → peso 8
+   *   semana 1                 → peso 6
+   *   semana 2                 → peso 4
+   *   semanas 3-7              → peso 2
+   *
+   * Clave de bucket: `${día_semana}-${hora}` (0-6, 0-23)
+   */
+  const PESOS = [8, 6, 4, 2, 2, 2, 2, 2]
+
+  // Acumula [suma_ponderada, suma_pesos] por bucket (dow, hour)
+  const modelo: Record<string, [number, number]> = {}
+
+  for (const v of viajes) {
+    const t = new Date(v.inicio_at)
+    const semanasAtras = Math.floor(
+      (ahora.getTime() - t.getTime()) / (7 * 24 * 60 * 60 * 1000)
+    )
+    const peso = PESOS[semanasAtras] ?? 1
+    const key = `${t.getDay()}-${t.getHours()}`
+    if (!modelo[key]) modelo[key] = [0, 0]
+    modelo[key][0] += peso
+    modelo[key][1] += peso
+  }
+
+  /*
+   * Para obtener la TASA media por (dow, hora), necesitamos cuántas semanas
+   * de datos tenemos para cada bucket. Con 8 semanas, cada bucket (dow, hora)
+   * debería aparecer idealmente 8 veces.
+   */
+  const semanasCubiertas = Math.min(Math.ceil(viajes.length / 168) + 1, 8)
+
   const prediccion = []
 
   for (let i = 0; i < intervalo; i++) {
-    const hora = new Date(ahora.getTime() + i * 60 * 60 * 1000)
-    const key = `${hora.getDay()}-${hora.getHours()}`
-    const registros = modelo[key] ?? []
-    const demanda = registros.length > 0 ? Math.round(registros.length / Math.max(1, Math.ceil(viajes.length / 168))) : 0
+    const slot = new Date(ahora.getTime() + i * 60 * 60 * 1000)
+    const key = `${slot.getDay()}-${slot.getHours()}`
+    const [sumaPeso, totalPeso] = modelo[key] ?? [0, 0]
+
+    // Media ponderada normalizada: cuántos viajes esperamos en este slot
+    const muestras = totalPeso > 0 ? sumaPeso / totalPeso : 0
+    const tasaMediaPorSemana = muestras
+
+    // Demanda estimada para el próximo ciclo de 1h
+    const demanda_estimada = Math.round(tasaMediaPorSemana * semanasCubiertas / semanasCubiertas)
+    const confianza: 'alta' | 'media' | 'baja' =
+      totalPeso >= 6 * PESOS[0] ? 'alta' : totalPeso >= 2 * PESOS[1] ? 'media' : 'baja'
 
     prediccion.push({
-      hora: hora.getHours(),
-      hora_label: hora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-      demanda_estimada: Math.min(demanda, estacion.capacidad),
+      hora: slot.getHours(),
+      hora_label: slot.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+      demanda_estimada: Math.min(Math.round(muestras), estacion.capacidad),
       capacidad: estacion.capacidad,
       estacion_nombre: estacion.nombre,
+      confianza,
     })
   }
 
-  return NextResponse.json({ prediccion, estacion: estacion.nombre })
+  return NextResponse.json({
+    prediccion,
+    estacion: estacion.nombre,
+    total_muestras: viajes.length,
+    semanas_cubiertas: semanasCubiertas,
+  })
 }
