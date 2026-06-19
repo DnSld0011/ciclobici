@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
-import { Map, Bike, MapPin, ChevronRight, Leaf, Clock, AlertTriangle, TrendingUp } from 'lucide-react'
+import { Map, Bike, MapPin, ChevronRight, Leaf, Clock, AlertTriangle, TrendingUp, Home, Briefcase } from 'lucide-react'
 
 interface Stats { viajes: number; co2: number; km: number }
 
@@ -13,6 +13,8 @@ export default function DashboardCiudadano() {
   const [nombre, setNombre] = useState('')
   const [stats, setStats] = useState<Stats>({ viajes: 0, co2: 0, km: 0 })
   const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
+  const [casaId, setCasaId] = useState<string | null>(null)
+  const [trabajoId, setTrabajoId] = useState<string | null>(null)
   const [viajeActivo, setViajeActivo] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saludo, setSaludo] = useState('Hola')
@@ -25,13 +27,17 @@ export default function DashboardCiudadano() {
       if (!user) { router.replace('/login'); return }
 
       const [{ data: perfil }, { data: ests }, { data: viajes }, viajeRes] = await Promise.all([
-        supabase.from('usuarios').select('nombre').eq('id', user.id).single(),
+        supabase.from('usuarios').select('nombre, estacion_casa_id, estacion_trabajo_id').eq('id', user.id).single(),
         supabase.from('estaciones').select('*, bicicletas(id,estado)').eq('estado', 'activa').order('nombre'),
         supabase.from('viajes').select('distancia_km, duracion_min').eq('usuario_id', user.id).eq('estado', 'finalizado'),
         fetch('/api/viajes/activo').then(r => r.json()),
       ])
 
-      if (perfil) setNombre(perfil.nombre.split(' ')[0])
+      if (perfil) {
+        setNombre(perfil.nombre.split(' ')[0])
+        setCasaId(perfil.estacion_casa_id ?? null)
+        setTrabajoId(perfil.estacion_trabajo_id ?? null)
+      }
       if (viajeRes?.viaje) setViajeActivo(true)
 
       if (viajes) {
@@ -50,7 +56,14 @@ export default function DashboardCiudadano() {
           bicicletas_disponibles: Array.isArray(e.bicicletas)
             ? e.bicicletas.filter((b: { estado: string }) => b.estado === 'disponible').length : 0,
         }))
-        setEstaciones(mapped.sort((a, b) => b.bicicletas_disponibles - a.bicicletas_disponibles))
+        // favoritas primero, luego por disponibilidad
+        mapped.sort((a, b) => {
+          const aFav = a.id === perfil?.estacion_casa_id || a.id === perfil?.estacion_trabajo_id ? 1 : 0
+          const bFav = b.id === perfil?.estacion_casa_id || b.id === perfil?.estacion_trabajo_id ? 1 : 0
+          if (bFav !== aFav) return bFav - aFav
+          return b.bicicletas_disponibles - a.bicicletas_disponibles
+        })
+        setEstaciones(mapped)
       }
       setLoading(false)
     }
@@ -149,9 +162,27 @@ export default function DashboardCiudadano() {
                 const barColor = pct === 0 ? '#ba1a1a' : pct < 0.2 ? '#f59e0b' : '#b2f746'
                 const bg = pct === 0 ? '#ffdad6' : pct < 0.2 ? '#fef9c3' : '#dcfce7'
                 const text = pct === 0 ? '#991b1b' : pct < 0.2 ? '#854d0e' : '#166534'
+                const esCasa = est.id === casaId
+                const esTrabajo = est.id === trabajoId
                 return (
                   <Link key={est.id} href="/ciudadano/mapa"
-                    className="flex-none w-44 rounded-2xl p-4 border border-outline-variant/20 bg-white shadow-sm snap-start active:scale-[.97] transition-all hover:border-primary-container/20 hover:shadow-md">
+                    className="flex-none w-44 rounded-2xl p-4 border bg-white shadow-sm snap-start active:scale-[.97] transition-all hover:shadow-md"
+                    style={{ borderColor: esCasa || esTrabajo ? '#003527' : undefined }}>
+                    {/* Badge favorita */}
+                    {(esCasa || esTrabajo) && (
+                      <div className="flex items-center gap-1 mb-2">
+                        {esCasa && (
+                          <span className="flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#003527', color: '#b2f746' }}>
+                            <Home size={8} /> Casa
+                          </span>
+                        )}
+                        {esTrabajo && (
+                          <span className="flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#003527', color: '#b2f746' }}>
+                            <Briefcase size={8} /> Trabajo
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {/* Nombre */}
                     <p className="font-bold text-xs text-on-surface leading-tight line-clamp-2 mb-3">
                       {est.nombre}

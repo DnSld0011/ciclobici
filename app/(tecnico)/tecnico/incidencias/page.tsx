@@ -25,26 +25,28 @@ export default function TecnicoIncidenciasPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>('todos')
   const [seleccionada, setSeleccionada] = useState<Incidencia | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const { data } = await supabase
       .from('incidencias')
       .select('*, bicicleta:bicicletas(codigo, tipo), estacion:estaciones(nombre), usuario:usuarios(nombre)')
       .order('created_at', { ascending: false })
     if (data) setIncidencias(data)
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
+    const supabase = createClient()
     cargar()
     const ch = supabase.channel('tecnico-incidencias-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar, supabase])
+  }, [cargar])
 
   async function cambiarEstado(id: string, estado: IncidenciaEstado) {
+    const supabase = createClient()
     await supabase.from('incidencias').update({ estado }).eq('id', id)
     await cargar()
     if (seleccionada?.id === id) setSeleccionada(prev => prev ? { ...prev, estado } : null)

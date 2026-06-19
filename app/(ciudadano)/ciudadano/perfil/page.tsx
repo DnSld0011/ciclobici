@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Bike, Leaf, Map, SlidersHorizontal, LogOut, CheckCircle, AlertCircle } from 'lucide-react'
+import { Bike, Leaf, Map, SlidersHorizontal, LogOut, CheckCircle, AlertCircle, Home, Briefcase, ChevronDown } from 'lucide-react'
 
 interface Perfil {
   id: string
@@ -13,6 +13,8 @@ interface Perfil {
   celular: string
   rol: string
   estado: string
+  estacion_casa_id: string | null
+  estacion_trabajo_id: string | null
 }
 
 interface ViajeHistorial {
@@ -24,6 +26,8 @@ interface ViajeHistorial {
   estacion_origen: { nombre: string } | null
   estacion_destino: { nombre: string } | null
 }
+
+interface EstacionSimple { id: string; nombre: string }
 
 function duracionStr(inicio: string, fin: string | null, duracion_min: number | null): string {
   if (!fin) return 'En curso'
@@ -47,12 +51,19 @@ function fechaRelativa(iso: string): string {
 export default function PerfilCiudadanoPage() {
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [viajes, setViajes] = useState<ViajeHistorial[]>([])
+  const [estaciones, setEstaciones] = useState<EstacionSimple[]>([])
   const [distanciaTotal, setDistanciaTotal] = useState(0)
   const [editando, setEditando] = useState(false)
   const [form, setForm] = useState({ nombre: '', correo: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+
+  const [casaId, setCasaId] = useState<string>('')
+  const [trabajoId, setTrabajoId] = useState<string>('')
+  const [savingFav, setSavingFav] = useState(false)
+  const [mensajeFav, setMensajeFav] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+
   const router = useRouter()
 
   useEffect(() => {
@@ -61,7 +72,7 @@ export default function PerfilCiudadanoPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace('/login'); return }
 
-      const [{ data: perfilData }, { data: viajesData }] = await Promise.all([
+      const [{ data: perfilData }, { data: viajesData }, { data: estsData }] = await Promise.all([
         supabase.from('usuarios').select('*').eq('id', user.id).single(),
         supabase
           .from('viajes')
@@ -74,17 +85,21 @@ export default function PerfilCiudadanoPage() {
           .eq('estado', 'finalizado')
           .order('inicio_at', { ascending: false })
           .limit(20),
+        supabase.from('estaciones').select('id, nombre').eq('estado', 'activa').order('nombre'),
       ])
 
       if (perfilData) {
         setPerfil(perfilData)
         setForm({ nombre: perfilData.nombre, correo: perfilData.correo ?? '' })
+        setCasaId(perfilData.estacion_casa_id ?? '')
+        setTrabajoId(perfilData.estacion_trabajo_id ?? '')
       }
       if (viajesData) {
         setViajes(viajesData as unknown as ViajeHistorial[])
         const total = viajesData.reduce((s, v) => s + (v.distancia_km ?? 0), 0)
         setDistanciaTotal(Math.round(total * 10) / 10)
       }
+      if (estsData) setEstaciones(estsData)
       setLoading(false)
     }
     cargar()
@@ -108,6 +123,29 @@ export default function PerfilCiudadanoPage() {
       setTimeout(() => { setMensaje(null); setEditando(false) }, 2000)
     }
     setSaving(false)
+  }
+
+  async function guardarFavoritas() {
+    if (!perfil) return
+    setSavingFav(true)
+    setMensajeFav(null)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('usuarios')
+      .update({
+        estacion_casa_id:    casaId    || null,
+        estacion_trabajo_id: trabajoId || null,
+      })
+      .eq('id', perfil.id)
+
+    if (error) {
+      setMensajeFav({ tipo: 'error', texto: error.message })
+    } else {
+      setMensajeFav({ tipo: 'ok', texto: 'Favoritas guardadas' })
+      setPerfil(prev => prev ? { ...prev, estacion_casa_id: casaId || null, estacion_trabajo_id: trabajoId || null } : prev)
+      setTimeout(() => setMensajeFav(null), 2500)
+    }
+    setSavingFav(false)
   }
 
   async function cerrarSesion() {
@@ -224,6 +262,74 @@ export default function PerfilCiudadanoPage() {
           <p className="text-xs" style={{ color: '#6b7280' }}>CO2 Evitado</p>
           <p className="text-2xl font-extrabold mt-1" style={{ color: '#003527' }}>{co2} kg</p>
         </div>
+      </div>
+
+      {/* Estaciones favoritas */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+        <h2 className="font-extrabold text-sm" style={{ color: '#002117' }}>
+          Estaciones favoritas
+        </h2>
+        <p className="text-xs text-outline -mt-2">
+          Aparecerán destacadas en el mapa y el inicio.
+        </p>
+
+        {/* Casa */}
+        <div>
+          <label className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest mb-2" style={{ color: '#6b7280' }}>
+            <Home size={11} /> Casa
+          </label>
+          <div className="relative">
+            <select
+              value={casaId}
+              onChange={e => setCasaId(e.target.value)}
+              className="w-full h-11 pl-4 pr-9 rounded-xl border text-sm appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-[#003527]/20"
+              style={{ borderColor: '#e5e7eb' }}
+            >
+              <option value="">Sin seleccionar</option>
+              {estaciones.map(e => (
+                <option key={e.id} value={e.id}>{e.nombre}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Trabajo */}
+        <div>
+          <label className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest mb-2" style={{ color: '#6b7280' }}>
+            <Briefcase size={11} /> Trabajo
+          </label>
+          <div className="relative">
+            <select
+              value={trabajoId}
+              onChange={e => setTrabajoId(e.target.value)}
+              className="w-full h-11 pl-4 pr-9 rounded-xl border text-sm appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-[#003527]/20"
+              style={{ borderColor: '#e5e7eb' }}
+            >
+              <option value="">Sin seleccionar</option>
+              {estaciones.map(e => (
+                <option key={e.id} value={e.id}>{e.nombre}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none" />
+          </div>
+        </div>
+
+        {mensajeFav && (
+          <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${mensajeFav.tipo === 'ok' ? 'bg-[#dcfce7] text-[#166534]' : 'bg-red-50 text-red-700'}`}>
+            {mensajeFav.tipo === 'ok' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+            {mensajeFav.texto}
+          </div>
+        )}
+
+        <button
+          onClick={guardarFavoritas}
+          disabled={savingFav}
+          className="w-full h-11 rounded-xl font-bold text-sm disabled:opacity-50 transition-all active:scale-[.98]"
+          style={{ background: '#003527', color: 'white' }}
+        >
+          {savingFav ? 'Guardando...' : 'Guardar favoritas'}
+        </button>
       </div>
 
       {/* Historial */}

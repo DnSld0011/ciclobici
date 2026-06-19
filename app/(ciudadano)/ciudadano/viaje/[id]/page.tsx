@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
-import { Clock, Route, TreePine, Check, X, MapPin } from 'lucide-react'
+import { Clock, Route, TreePine, Check, X, MapPin, Star } from 'lucide-react'
 
 const MapaResumenViaje = dynamicImport(
   () => import('@/components/maps/MapaResumenViaje').then(m => m.MapaResumenViaje),
@@ -19,6 +19,7 @@ interface ViajeResumen {
   fin_at: string
   duracion_min: number | null
   distancia_km: number | null
+  calificacion: number | null
   bicicleta: { codigo: string; tipo: string } | null
   estacion_origen: EstacionResumen | null
   estacion_destino: EstacionResumen | null
@@ -28,6 +29,9 @@ export default function ResumenViajePage() {
   const { id } = useParams()
   const [viaje, setViaje] = useState<ViajeResumen | null>(null)
   const [loading, setLoading] = useState(true)
+  const [calificacion, setCalificacion] = useState<number | null>(null)
+  const [calificacionGuardada, setCalificacionGuardada] = useState(false)
+  const [hover, setHover] = useState<number | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -39,7 +43,7 @@ export default function ResumenViajePage() {
       const { data } = await supabase
         .from('viajes')
         .select(`
-          id, inicio_at, fin_at, duracion_min, distancia_km,
+          id, inicio_at, fin_at, duracion_min, distancia_km, calificacion,
           bicicleta:bicicleta_id(codigo, tipo),
           estacion_origen:estacion_origen_id(nombre, latitud, longitud),
           estacion_destino:estacion_destino_id(nombre, latitud, longitud)
@@ -48,11 +52,25 @@ export default function ResumenViajePage() {
         .eq('usuario_id', user.id)
         .single()
 
-      if (data) setViaje(data as unknown as ViajeResumen)
+      if (data) {
+        setViaje(data as unknown as ViajeResumen)
+        if (data.calificacion) {
+          setCalificacion(data.calificacion)
+          setCalificacionGuardada(true)
+        }
+      }
       setLoading(false)
     }
     cargar()
   }, [id, router])
+
+  async function calificar(n: number) {
+    if (calificacionGuardada) return
+    setCalificacion(n)
+    const supabase = createClient()
+    await supabase.from('viajes').update({ calificacion: n }).eq('id', id as string)
+    setCalificacionGuardada(true)
+  }
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-surface">
@@ -69,10 +87,12 @@ export default function ResumenViajePage() {
 
   const dur = viaje.duracion_min ?? Math.round((new Date(viaje.fin_at).getTime() - new Date(viaje.inicio_at).getTime()) / 60000)
   const dist = viaje.distancia_km ?? Math.round(dur / 60 * 12 * 10) / 10
-  const co2 = Math.round(dist * 0.21 * 10) / 10  // 210g CO₂/km en auto
+  const co2 = Math.round(dist * 0.21 * 10) / 10
 
   const origenCoord = viaje.estacion_origen ? { lat: viaje.estacion_origen.latitud, lng: viaje.estacion_origen.longitud } : null
   const destinoCoord = viaje.estacion_destino ? { lat: viaje.estacion_destino.latitud, lng: viaje.estacion_destino.longitud } : null
+
+  const estrellaActiva = hover ?? calificacion ?? 0
 
   function cerrar() { router.push('/ciudadano') }
 
@@ -161,6 +181,47 @@ export default function ResumenViajePage() {
                 <MapPin size={11} className="text-[#16a34a]" />
                 Ruta {viaje.estacion_destino.nombre}
               </span>
+            </div>
+          )}
+        </div>
+
+        {/* Calificación */}
+        <div className="rounded-2xl border border-outline-variant/30 p-4">
+          <p className="text-xs font-extrabold text-outline uppercase tracking-widest mb-3">
+            ¿Cómo estuvo tu viaje?
+          </p>
+          {calificacionGuardada ? (
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map(n => (
+                  <Star
+                    key={n}
+                    size={24}
+                    fill={n <= (calificacion ?? 0) ? '#f59e0b' : 'none'}
+                    className={n <= (calificacion ?? 0) ? 'text-[#f59e0b]' : 'text-outline-variant/30'}
+                  />
+                ))}
+              </div>
+              <span className="text-sm font-semibold" style={{ color: '#166534' }}>¡Gracias!</span>
+            </div>
+          ) : (
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  onClick={() => calificar(n)}
+                  onMouseEnter={() => setHover(n)}
+                  onMouseLeave={() => setHover(null)}
+                  className="p-0.5 transition-transform active:scale-125"
+                  aria-label={`${n} estrellas`}
+                >
+                  <Star
+                    size={28}
+                    fill={n <= estrellaActiva ? '#f59e0b' : 'none'}
+                    className={n <= estrellaActiva ? 'text-[#f59e0b]' : 'text-outline-variant/40'}
+                  />
+                </button>
+              ))}
             </div>
           )}
         </div>

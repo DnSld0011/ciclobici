@@ -22,7 +22,6 @@ export default function EscanearPage() {
   const scannerRef = useRef<import('html5-qrcode').Html5Qrcode | null>(null)
   const scannerStarted = useRef(false)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     if (modoManual || estado !== 'scanning') return
@@ -73,6 +72,7 @@ export default function EscanearPage() {
     }
 
     try {
+      const supabase = createClient()
       const { data: bici, error: errBici } = await supabase
         .from('bicicletas')
         .select('*, estacion:estaciones(*)')

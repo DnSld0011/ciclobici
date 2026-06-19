@@ -28,9 +28,9 @@ export default function TecnicoMantenimientoPage() {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const supabase = createClient()
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     const { data: perfil } = await supabase.from('usuarios').select('nombre').eq('id', user?.id ?? '').single()
     const { data } = await supabase
@@ -40,12 +40,13 @@ export default function TecnicoMantenimientoPage() {
       .order('fecha', { ascending: false })
     if (data) setRegistros(data)
     if (perfil?.nombre) setForm(p => ({ ...p, responsable: perfil.nombre }))
-  }, [supabase])
+  }, [])
 
   const cargarBicis = useCallback(async (busqueda: string) => {
+    const supabase = createClient()
     const { data } = await supabase.from('bicicletas').select('*').ilike('codigo', `%${busqueda}%`).limit(8)
     if (data) setBicicletas(data)
-  }, [supabase])
+  }, [])
 
   useEffect(() => { cargar() }, [cargar])
   useEffect(() => { if (busquedaBici.length >= 2) cargarBicis(busquedaBici) }, [busquedaBici, cargarBicis])
@@ -56,6 +57,7 @@ export default function TecnicoMantenimientoPage() {
     if (!form.tipo_intervencion) { setError('Selecciona el tipo'); return }
     setLoading(true)
     try {
+      const supabase = createClient()
       const { error: err } = await supabase.from('mantenimientos').insert({
         bicicleta_id: form.bicicleta_id, tipo_intervencion: form.tipo_intervencion,
         descripcion: form.descripcion || null, responsable: form.responsable.trim(),

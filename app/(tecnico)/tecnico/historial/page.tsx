@@ -9,9 +9,9 @@ export default function TecnicoHistorialPage() {
   const [registros, setRegistros] = useState<Mantenimiento[]>([])
   const [loading, setLoading] = useState(true)
   const [nombre, setNombre] = useState('')
-  const supabase = createClient()
 
   const cargar = useCallback(async () => {
+    const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     const { data: perfil } = await supabase.from('usuarios').select('nombre').eq('id', user?.id ?? '').single()
     if (!perfil?.nombre) { setLoading(false); return }
@@ -23,7 +23,7 @@ export default function TecnicoHistorialPage() {
       .order('fecha', { ascending: false })
     if (data) setRegistros(data)
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => { cargar() }, [cargar])
 

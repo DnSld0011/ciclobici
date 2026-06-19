@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { IncidenciaTipo } from '@/types'
+import { IncidenciaTipo, IncidenciaEstado } from '@/types'
 import {
   AlertTriangle, QrCode, Keyboard, CheckCircle,
-  Bike, MapPin, Camera, X, ArrowLeft, ImagePlus,
+  Bike, MapPin, Camera, X, ArrowLeft, ImagePlus, FileText, Clock,
 } from 'lucide-react'
 
 /* ── tipos de problema ── */
@@ -22,7 +22,22 @@ const TIPOS: { value: IncidenciaTipo; label: string; icon: string }[] = [
   { value: 'otro',        label: 'Otro',               icon: '❓' },
 ]
 
+const ESTADO_LABELS: Record<IncidenciaEstado, string> = {
+  pendiente:   'Pendiente',
+  en_revision: 'En revisión',
+  resuelta:    'Resuelta',
+  descartada:  'Descartada',
+}
+
+const ESTADO_COLORS: Record<IncidenciaEstado, { bg: string; text: string }> = {
+  pendiente:   { bg: '#fef9c3', text: '#854d0e' },
+  en_revision: { bg: '#dbeafe', text: '#1e40af' },
+  resuelta:    { bg: '#dcfce7', text: '#166534' },
+  descartada:  { bg: '#f3f4f6', text: '#6b7280' },
+}
+
 type Paso = 'scanner' | 'formulario'
+type Tab  = 'reportar' | 'mis-reportes'
 
 interface BiciEscaneada {
   id: string
@@ -31,7 +46,27 @@ interface BiciEscaneada {
   estacion_nombre: string | null
 }
 
+interface MiReporte {
+  id: string
+  tipo: IncidenciaTipo
+  estado: IncidenciaEstado
+  descripcion: string | null
+  created_at: string
+  bicicleta: { codigo: string } | null
+}
+
+function fechaRelativa(iso: string): string {
+  const d = new Date(iso)
+  const hoy = new Date()
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1)
+  const hora = d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+  if (d.toDateString() === hoy.toDateString()) return `Hoy, ${hora}`
+  if (d.toDateString() === ayer.toDateString()) return `Ayer, ${hora}`
+  return d.toLocaleDateString('es-PE', { day: 'numeric', month: 'short' }) + `, ${hora}`
+}
+
 export default function ReportarIncidenciaPage() {
+  const [tab, setTab]           = useState<Tab>('reportar')
   const [paso, setPaso]         = useState<Paso>('scanner')
   const [modoManual, setModoManual] = useState(false)
   const [codigoManual, setCodigoManual] = useState('')
@@ -48,13 +83,40 @@ export default function ReportarIncidenciaPage() {
   const [exito, setExito]       = useState(false)
   const [errorForm, setErrorForm] = useState<string | null>(null)
 
+  const [misReportes, setMisReportes]       = useState<MiReporte[]>([])
+  const [loadingReportes, setLoadingReportes] = useState(false)
+  const reportesCargados = useRef(false)
+
   const scannerRef    = useRef<import('html5-qrcode').Html5Qrcode | null>(null)
   const scannerStarted = useRef(false)
   const fileInputRef  = useRef<HTMLInputElement>(null)
   const router        = useRouter()
 
+  /* ── cargar mis reportes al cambiar de tab ── */
+  useEffect(() => {
+    if (tab !== 'mis-reportes' || reportesCargados.current) return
+    async function cargar() {
+      setLoadingReportes(true)
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.replace('/login'); return }
+
+      const { data } = await supabase
+        .from('incidencias')
+        .select('id, tipo, estado, descripcion, created_at, bicicleta:bicicleta_id(codigo)')
+        .eq('usuario_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (data) setMisReportes(data as unknown as MiReporte[])
+      reportesCargados.current = true
+      setLoadingReportes(false)
+    }
+    cargar()
+  }, [tab, router])
+
   /* ── iniciar / detener cámara QR ── */
   useEffect(() => {
+    if (tab !== 'reportar') return
     if (paso !== 'scanner' || modoManual) return
     let stopped = false
 
@@ -86,7 +148,7 @@ export default function ReportarIncidenciaPage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paso, modoManual])
+  }, [tab, paso, modoManual])
 
   async function detenerCamara() {
     if (scannerRef.current && scannerStarted.current) {
@@ -150,7 +212,6 @@ export default function ReportarIncidenciaPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.replace('/login'); return }
 
-    /* subir foto si hay */
     let foto_url: string | null = null
     if (foto) {
       const ext = foto.name.split('.').pop() ?? 'jpg'
@@ -175,10 +236,38 @@ export default function ReportarIncidenciaPage() {
     })
 
     if (err) { setErrorForm(err.message); setEnviando(false); return }
+    reportesCargados.current = false  // invalidar cache para refrescar al volver
     setExito(true)
   }
 
-  /* ── pantalla de éxito ── */
+  /* ── tab switcher pill (reutilizable) ── */
+  function TabSwitcher({ dark }: { dark?: boolean }) {
+    const base = dark
+      ? 'flex rounded-xl overflow-hidden border border-white/15 text-xs font-bold'
+      : 'flex rounded-xl overflow-hidden border border-outline-variant/30 text-xs font-bold'
+    return (
+      <div className={base}>
+        <button
+          onClick={() => setTab('reportar')}
+          className={`px-4 py-2 transition-colors ${tab === 'reportar'
+            ? dark ? 'bg-[#b2f746] text-[#002117]' : 'bg-[#003527] text-white'
+            : dark ? 'text-white/50' : 'text-outline'}`}
+        >
+          Reportar
+        </button>
+        <button
+          onClick={() => setTab('mis-reportes')}
+          className={`px-4 py-2 transition-colors ${tab === 'mis-reportes'
+            ? dark ? 'bg-[#b2f746] text-[#002117]' : 'bg-[#003527] text-white'
+            : dark ? 'text-white/50' : 'text-outline'}`}
+        >
+          Mis reportes
+        </button>
+      </div>
+    )
+  }
+
+  /* ── éxito ── */
   if (exito) return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 text-center gap-5">
       <div className="w-20 h-20 rounded-full bg-[#dcfce7] flex items-center justify-center">
@@ -191,12 +280,105 @@ export default function ReportarIncidenciaPage() {
         </p>
       </div>
       <button
-        onClick={() => router.push('/ciudadano')}
+        onClick={() => { setExito(false); setTab('mis-reportes') }}
         className="h-12 px-8 rounded-2xl font-bold text-sm"
         style={{ background: '#b2f746', color: '#002117' }}
       >
+        Ver mis reportes
+      </button>
+      <button
+        onClick={() => router.push('/ciudadano')}
+        className="text-sm text-outline font-semibold"
+      >
         Volver al inicio
       </button>
+    </div>
+  )
+
+  /* ── mis reportes ── */
+  if (tab === 'mis-reportes') return (
+    <div className="min-h-screen bg-surface">
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="w-9 h-9 rounded-xl bg-surface-container-low flex items-center justify-center shrink-0"
+          >
+            <ArrowLeft size={18} className="text-on-surface-variant" />
+          </button>
+          <div className="flex-1">
+            <TabSwitcher />
+          </div>
+        </div>
+
+        {loadingReportes ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-white rounded-2xl h-24 animate-pulse" />
+            ))}
+          </div>
+        ) : misReportes.length === 0 ? (
+          <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
+            <FileText size={32} className="mx-auto mb-3 text-outline/50" />
+            <p className="font-semibold text-sm text-on-surface-variant">Aún no tienes reportes</p>
+            <p className="text-xs mt-1 text-outline">
+              Cuando reportes una incidencia, aparecerá aquí con su estado.
+            </p>
+            <button
+              onClick={() => setTab('reportar')}
+              className="mt-5 h-10 px-6 rounded-xl font-bold text-sm"
+              style={{ background: '#b2f746', color: '#002117' }}
+            >
+              Hacer un reporte
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {misReportes.map(r => {
+              const tipoInfo = TIPOS.find(t => t.value === r.tipo)
+              const estadoColors = ESTADO_COLORS[r.estado]
+              return (
+                <div key={r.id} className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0"
+                      style={{ background: '#f3f4f6' }}
+                    >
+                      {tipoInfo?.icon ?? '❓'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-extrabold text-sm text-on-surface">
+                          {tipoInfo?.label ?? r.tipo}
+                        </p>
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                          style={{ background: estadoColors.bg, color: estadoColors.text }}
+                        >
+                          {ESTADO_LABELS[r.estado]}
+                        </span>
+                      </div>
+                      {r.bicicleta && (
+                        <p className="text-xs text-outline flex items-center gap-1 mt-0.5">
+                          <Bike size={11} /> {r.bicicleta.codigo}
+                        </p>
+                      )}
+                      {r.descripcion && (
+                        <p className="text-xs text-on-surface-variant mt-1.5 line-clamp-2">
+                          {r.descripcion}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-outline mt-2 flex items-center gap-1">
+                        <Clock size={10} /> {fechaRelativa(r.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 
@@ -208,14 +390,13 @@ export default function ReportarIncidenciaPage() {
       <div className="flex items-center gap-3 p-4">
         <button
           onClick={() => router.back()}
-          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
           style={{ background: 'rgba(255,255,255,0.1)' }}
         >
           <ArrowLeft size={18} className="text-white" />
         </button>
-        <div>
-          <h1 className="font-extrabold text-white text-base">Reportar incidencia</h1>
-          <p className="text-white/50 text-xs">Escanea el QR de la bicicleta</p>
+        <div className="flex-1">
+          <TabSwitcher dark />
         </div>
       </div>
 
@@ -330,9 +511,8 @@ export default function ReportarIncidenciaPage() {
         >
           <ArrowLeft size={18} className="text-on-surface-variant" />
         </button>
-        <div>
-          <h1 className="text-lg font-extrabold text-on-surface">Reportar incidencia</h1>
-          <p className="text-xs text-on-surface-variant">Completa los detalles del problema</p>
+        <div className="flex-1">
+          <TabSwitcher />
         </div>
       </div>
 
@@ -425,7 +605,6 @@ export default function ReportarIncidenciaPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {/* Tomar foto */}
               <button
                 type="button"
                 onClick={() => {
@@ -439,8 +618,6 @@ export default function ReportarIncidenciaPage() {
                 <Camera size={24} className="text-outline" />
                 <span className="text-xs font-semibold">Tomar foto</span>
               </button>
-
-              {/* Adjuntar desde galería */}
               <button
                 type="button"
                 onClick={() => {
