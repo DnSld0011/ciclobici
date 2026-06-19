@@ -47,7 +47,15 @@ export default function MantenimientoPage() {
     if (data) setBicicletas(data)
   }, [])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => {
+    cargar()
+    const supabase = createClient()
+    const ch = supabase.channel('mantenimiento-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mantenimientos' }, cargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [cargar])
   useEffect(() => { if (busquedaBici.length >= 2) cargarBicis(busquedaBici) }, [busquedaBici, cargarBicis])
 
   async function guardar(e: React.FormEvent) {

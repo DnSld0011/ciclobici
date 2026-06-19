@@ -41,7 +41,15 @@ export default function EstacionesPage() {
     if (data) setEstaciones(data)
   }, [])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => {
+    cargar()
+    const supabase = createClient()
+    const ch = supabase.channel('estaciones-admin-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, cargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [cargar])
 
   function abrirCrear() {
     setEditando(null); setForm(formVacio); setError(''); setModalAbierto(true)
