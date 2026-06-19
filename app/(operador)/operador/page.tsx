@@ -6,39 +6,57 @@ import Link from 'next/link'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad, Alerta } from '@/types'
-import { TrendingUp, TrendingDown, Bike, MapPin, Bell, Leaf, RefreshCw, ChevronRight, AlertTriangle, CheckCircle, Info } from 'lucide-react'
+import {
+  TrendingUp, TrendingDown, Bell, Leaf, RefreshCw, ChevronRight,
+  AlertTriangle, CheckCircle, Info, Search, HelpCircle, Sun,
+  CalendarDays, Sparkles, ArrowRightLeft,
+} from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
+} from 'recharts'
 
 const MapaEstaciones = dynamicImport(
   () => import('@/components/maps/MapaEstaciones').then(m => m.MapaEstaciones),
   { ssr: false, loading: () => <div className="w-full h-full bg-surface-container-low animate-pulse rounded-xl" /> }
 )
 
+/* ── patrón de demanda 24h (distribución típica bici-sharing) ── */
+const DEMAND_PATTERN = [
+  0.03, 0.02, 0.01, 0.01, 0.02, 0.04, 0.07, 0.11,
+  0.14, 0.12, 0.09, 0.08, 0.10, 0.09, 0.07, 0.08,
+  0.10, 0.14, 0.13, 0.10, 0.07, 0.05, 0.04, 0.03,
+]
+
 interface KPIs {
   bicisDisponibles: number
   bicisTotal: number
+  bicisEnViaje: number
   viajesHoy: number
   viajesAyer: number
+  viajesActivos: number
   estacionesActivas: number
   co2Ahorrado: number
 }
 
+/* ── componente alerta ── */
 function AlertaCard({ a }: { a: Alerta }) {
   const conf = {
-    critica:  { bg: 'bg-[#ffdad6]', border: 'border-l-error', text: 'text-[#93000a]', icon: AlertTriangle, dot: 'bg-error' },
-    warning:  { bg: 'bg-[#fef9c3]', border: 'border-l-amber-500', text: 'text-[#854d0e]', icon: AlertTriangle, dot: 'bg-amber-500' },
-    info:     { bg: 'bg-[#e5eeff]', border: 'border-l-primary-container', text: 'text-primary-container', icon: Info, dot: 'bg-primary-container' },
-  }[a.nivel]
+    critica: { bg: '#fff0ee', border: '#ef4444', text: '#93000a', icon: AlertTriangle },
+    warning: { bg: '#fffbeb', border: '#f59e0b', text: '#854d0e', icon: AlertTriangle },
+    info:    { bg: '#f0fff4', border: '#22c55e', text: '#166534', icon: CheckCircle },
+  }[a.nivel] ?? { bg: '#f0fff4', border: '#22c55e', text: '#166534', icon: Info }
   const Icon = conf.icon
-  const t = new Date(a.created_at)
-  const hace = Math.floor((Date.now() - t.getTime()) / 60000)
+  const hace = Math.floor((Date.now() - new Date(a.created_at).getTime()) / 60000)
   const tiempoStr = hace < 60 ? `${hace}m` : `${Math.floor(hace / 60)}h`
 
   return (
-    <div className={`${conf.bg} border-l-4 ${conf.border} rounded-xl p-4 flex gap-3`}>
-      <Icon size={16} className={`${conf.text} mt-0.5 shrink-0`} />
+    <div className="rounded-xl p-3.5 flex gap-3 border-l-4" style={{ background: conf.bg, borderLeftColor: conf.border }}>
+      <Icon size={16} className="shrink-0 mt-0.5" style={{ color: conf.border }} />
       <div className="flex-1 min-w-0">
-        <p className={`text-sm font-bold ${conf.text} leading-tight`}>{a.titulo}</p>
-        {a.mensaje && <p className={`text-xs ${conf.text} opacity-80 mt-0.5 leading-relaxed line-clamp-2`}>{a.mensaje}</p>}
+        <p className="text-sm font-bold leading-tight" style={{ color: conf.text }}>{a.titulo}</p>
+        {a.mensaje && (
+          <p className="text-xs leading-snug mt-0.5 line-clamp-2 opacity-80" style={{ color: conf.text }}>{a.mensaje}</p>
+        )}
       </div>
       <span className="text-[10px] text-outline shrink-0 mt-0.5">{tiempoStr}</span>
     </div>
@@ -46,12 +64,18 @@ function AlertaCard({ a }: { a: Alerta }) {
 }
 
 export default function DashboardOperadorPage() {
-  const [kpis, setKpis] = useState<KPIs>({ bicisDisponibles: 0, bicisTotal: 0, viajesHoy: 0, viajesAyer: 0, estacionesActivas: 0, co2Ahorrado: 0 })
-  const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
-  const [alertas, setAlertas] = useState<Alerta[]>([])
-  const [ultimaAct, setUltimaAct] = useState<Date | null>(null)
-  const barHeights = useState(() => Array(7).fill(0).map(() => 20 + Math.floor(Math.random() * 24)))[0]
-  const [loading, setLoading] = useState(true)
+  const [kpis, setKpis] = useState<KPIs>({
+    bicisDisponibles: 0, bicisTotal: 0, bicisEnViaje: 0,
+    viajesHoy: 0, viajesAyer: 0, viajesActivos: 0,
+    estacionesActivas: 0, co2Ahorrado: 0,
+  })
+  const [estaciones, setEstaciones]     = useState<EstacionConDisponibilidad[]>([])
+  const [alertas, setAlertas]           = useState<Alerta[]>([])
+  const [ultimaAct, setUltimaAct]       = useState<Date | null>(null)
+  const [loading, setLoading]           = useState(true)
+  const [tabPred, setTabPred]           = useState<'hoy' | 'semana' | 'mes'>('hoy')
+  const [nombreUsuario, setNombreUsuario] = useState('')
+  const [busqueda, setBusqueda]         = useState('')
   const router = useRouter()
 
   const cargar = useCallback(async () => {
@@ -67,22 +91,27 @@ export default function DashboardOperadorPage() {
       { data: ests },
       { count: viajesHoy },
       { count: viajesAyer },
+      { count: viajesActivos },
       { data: alertasData },
       { data: viajesKm },
+      { data: perfil },
     ] = await Promise.all([
-      supabase.from('bicicletas').select('id, estado, estacion_id'),
+      supabase.from('bicicletas').select('id, estado'),
       supabase.from('estaciones').select('*, bicicletas(id,estado)').order('nombre'),
       supabase.from('viajes').select('*', { count: 'exact', head: true })
         .gte('inicio_at', hoy.toISOString()).eq('estado', 'finalizado'),
       supabase.from('viajes').select('*', { count: 'exact', head: true })
         .gte('inicio_at', ayer.toISOString()).lt('inicio_at', hoy.toISOString()).eq('estado', 'finalizado'),
-      supabase.from('alertas').select('*').eq('resuelta', false).order('created_at', { ascending: false }).limit(8),
+      supabase.from('viajes').select('*', { count: 'exact', head: true }).eq('estado', 'activo'),
+      supabase.from('alertas').select('*').eq('resuelta', false).order('created_at', { ascending: false }).limit(6),
       supabase.from('viajes').select('distancia_km').eq('estado', 'finalizado').not('distancia_km', 'is', null),
+      supabase.from('usuarios').select('nombre, rol').eq('id', user.id).single(),
     ])
 
     if (bicis) {
       const disponibles = bicis.filter(b => b.estado === 'disponible').length
-      setKpis(prev => ({ ...prev, bicisDisponibles: disponibles, bicisTotal: bicis.length }))
+      const enViaje    = bicis.filter(b => b.estado === 'en_viaje').length
+      setKpis(prev => ({ ...prev, bicisDisponibles: disponibles, bicisTotal: bicis.length, bicisEnViaje: enViaje }))
     }
     if (viajesKm) {
       const co2 = viajesKm.reduce((s, v) => s + ((v.distancia_km ?? 0) * 0.21), 0)
@@ -90,11 +119,11 @@ export default function DashboardOperadorPage() {
     }
     setKpis(prev => ({
       ...prev,
-      viajesHoy: viajesHoy ?? 0,
-      viajesAyer: viajesAyer ?? 0,
+      viajesHoy:       viajesHoy ?? 0,
+      viajesAyer:      viajesAyer ?? 0,
+      viajesActivos:   viajesActivos ?? 0,
       estacionesActivas: ests?.filter(e => e.estado === 'activa').length ?? 0,
     }))
-
     if (ests) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setEstaciones((ests as any[]).map(e => ({
@@ -104,6 +133,7 @@ export default function DashboardOperadorPage() {
       })))
     }
     if (alertasData) setAlertas(alertasData as Alerta[])
+    if (perfil) setNombreUsuario(perfil.nombre ?? '')
     setUltimaAct(new Date())
     setLoading(false)
   }, [router])
@@ -118,177 +148,413 @@ export default function DashboardOperadorPage() {
     return () => { supabase.removeChannel(ch) }
   }, [cargar])
 
-  const pctDisp = kpis.bicisTotal > 0 ? Math.round((kpis.bicisDisponibles / kpis.bicisTotal) * 100) : 0
-  const viajesDelta = kpis.viajesAyer > 0 ? Math.round(((kpis.viajesHoy - kpis.viajesAyer) / kpis.viajesAyer) * 100) : 0
+  /* ── métricas derivadas ── */
+  const pctDisp    = kpis.bicisTotal > 0 ? Math.round((kpis.bicisDisponibles / kpis.bicisTotal) * 100) : 0
+  const eficiencia = kpis.bicisTotal > 0
+    ? Math.round(((kpis.bicisDisponibles + kpis.bicisEnViaje) / kpis.bicisTotal) * 100) : 0
+  const viajesDelta = kpis.viajesAyer > 0
+    ? Math.round(((kpis.viajesHoy - kpis.viajesAyer) / kpis.viajesAyer) * 100) : 0
+  const co2TN = (kpis.co2Ahorrado / 1000).toFixed(1)
   const alertasCriticas = alertas.filter(a => a.nivel === 'critica').length
+  const esPicoUso = viajesDelta > 10
+
+  /* ── estaciones con problema para redistribución ── */
+  const estSaturada = estaciones.find(e => e.bicicletas_disponibles > (e.capacidad ?? 10) * 0.9)
+  const estVacia    = estaciones.find(e => e.bicicletas_disponibles === 0 && e.estado === 'activa')
+  const needsRedist = !!(estSaturada && estVacia)
+
+  /* ── datos para el gráfico 24h ── */
+  const base = Math.max(kpis.viajesHoy, 60)
+  const demandaData = DEMAND_PATTERN.map((f, h) => ({
+    hora: h,
+    demanda: Math.round(base * f * 24),
+  }))
+  const picoDemanda = Math.max(...demandaData.map(d => d.demanda))
+  const horaActual  = new Date().getHours()
+
+  /* ── filtro búsqueda de estaciones ── */
+  const estacionesFiltradas = busqueda
+    ? estaciones.filter(e => e.nombre.toLowerCase().includes(busqueda.toLowerCase()))
+    : []
+
+  /* ── día laboral ── */
+  const hoy = new Date()
+  const esLaboral = hoy.getDay() >= 1 && hoy.getDay() <= 5
+  const mesActual = hoy.getMonth() // 0-11
 
   return (
-    <div className="p-6 space-y-6 max-w-[1440px]">
+    <div className="min-h-screen" style={{ background: '#f4f6f5' }}>
 
-      {/* TopBar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-extrabold text-primary-container tracking-tight">Centro de Control Inteligente</h1>
-          <p className="text-xs text-outline mt-0.5">San Borja en Bici · Tiempo real</p>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-outline bg-white border border-outline-variant/30 px-3 py-1.5 rounded-full shadow-sm">
-          <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '4s' }} />
-          {ultimaAct?.toLocaleTimeString('es-PE') ?? '—'}
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-
-        {/* Disponibilidad */}
-        <div className="card p-5 flex flex-col gap-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Disponibilidad</p>
-          <div className="flex items-end gap-2">
-            <span className="text-3xl font-extrabold text-on-surface">{pctDisp}%</span>
-            <span className={`text-xs font-bold flex items-center gap-0.5 mb-1 ${pctDisp >= 70 ? 'text-[#166534]' : 'text-error'}`}>
-              {pctDisp >= 70 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-              {pctDisp >= 70 ? 'Óptimo' : 'Bajo'}
-            </span>
-          </div>
-          <div className="w-full bg-surface-container h-1.5 rounded-full">
-            <div className="bg-[#b2f746] h-1.5 rounded-full transition-all" style={{ width: `${pctDisp}%` }} />
-          </div>
-          <p className="text-[10px] text-outline">{kpis.bicisDisponibles} de {kpis.bicisTotal} bicis disponibles</p>
-        </div>
-
-        {/* Viajes hoy */}
-        <div className="card p-5 flex flex-col gap-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Viajes hoy</p>
-          <div className="flex items-end gap-2">
-            <span className="text-3xl font-extrabold text-on-surface">{loading ? '—' : kpis.viajesHoy.toLocaleString()}</span>
-            {!loading && kpis.viajesAyer > 0 && (
-              <span className={`text-xs font-bold flex items-center gap-0.5 mb-1 ${viajesDelta >= 0 ? 'text-[#166534]' : 'text-error'}`}>
-                {viajesDelta >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                {viajesDelta >= 0 ? '+' : ''}{viajesDelta}%
-              </span>
-            )}
-          </div>
-          <div className="flex gap-0.5 mt-1">
-            {barHeights.map((h, i) => (
-              <div key={i} className="flex-1 bg-surface-container-low rounded-sm" style={{ height: `${h}px` }} />
-            ))}
-          </div>
-          <p className="text-[10px] text-outline">vs {kpis.viajesAyer} ayer</p>
-        </div>
-
-        {/* Estaciones */}
-        <div className="card p-5 flex flex-col gap-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Estaciones activas</p>
-          <div className="flex items-end gap-2">
-            <span className="text-3xl font-extrabold text-on-surface">{kpis.estacionesActivas}</span>
-            {alertasCriticas > 0 && (
-              <span className="text-xs font-bold text-error flex items-center gap-0.5 mb-1">
-                <AlertTriangle size={12} /> {alertasCriticas} alertas
-              </span>
-            )}
-          </div>
-          <div className="flex gap-2 mt-1">
-            {[...Array(kpis.estacionesActivas)].map((_, i) => (
-              <div key={i} className="w-2 h-2 rounded-full bg-[#b2f746]" />
-            ))}
-          </div>
-          <p className="text-[10px] text-outline">San Borja · {kpis.bicisTotal} bicis en flota</p>
-        </div>
-
-        {/* CO₂ Ahorrado */}
-        <div className="bg-primary-container text-white p-5 rounded-xl flex flex-col gap-2 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-on-primary-container opacity-60">CO₂ Ahorrado</p>
-          <span className="text-3xl font-extrabold">{kpis.co2Ahorrado} kg</span>
-          <div className="flex items-center gap-1.5 text-[#b2f746] mt-1">
-            <Leaf size={14} />
-            <span className="text-xs font-bold">Impacto Ecológico SB</span>
-          </div>
-          <p className="text-[10px] text-on-primary-container opacity-50">Estimado total histórico</p>
-        </div>
-      </div>
-
-      {/* Main grid: Mapa + Alertas */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-
-        {/* Mapa */}
-        <div className="lg:col-span-8 card overflow-hidden relative" style={{ height: 500 }}>
-          <div className="absolute top-3 left-3 z-10 flex gap-2">
-            <div className="glass-panel px-3 py-1.5 rounded-full border border-white/50 flex items-center gap-1.5 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-[#b2f746] animate-pulse" />
-              <span className="text-xs font-bold text-on-surface">Mapa en vivo</span>
+      {/* ── Top Bar ── */}
+      <div className="bg-white border-b border-gray-100 px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+        <h1 className="text-sm font-black text-gray-800 tracking-[0.12em] uppercase">
+          Centro de Control Inteligente
+        </h1>
+        <div className="flex items-center gap-3">
+          {/* Búsqueda */}
+          <div className="relative">
+            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+              <Search size={14} className="text-gray-400 shrink-0" />
+              <input
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar estaciones..."
+                className="bg-transparent text-sm outline-none w-44 text-gray-600 placeholder-gray-400"
+              />
             </div>
-          </div>
-          {loading
-            ? <div className="w-full h-full bg-surface-container-low animate-pulse" />
-            : <MapaEstaciones estaciones={estaciones} modoOperador />
-          }
-          <div className="absolute bottom-3 left-3 glass-panel px-3 py-2 rounded-xl border border-white/50 shadow-md flex flex-col gap-1.5">
-            {[
-              { color: 'bg-[#b2f746]', label: 'Disponible (>20%)' },
-              { color: 'bg-amber-400',  label: 'Stock bajo (<20%)' },
-              { color: 'bg-error',      label: 'Vacía / Crítica' },
-            ].map(({ color, label }) => (
-              <div key={label} className="flex items-center gap-2">
-                <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
-                <span className="text-[10px] font-semibold text-on-surface">{label}</span>
+            {busqueda && estacionesFiltradas.length > 0 && (
+              <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-lg z-30 overflow-hidden">
+                {estacionesFiltradas.slice(0, 5).map(e => (
+                  <Link key={e.id} href="/operador/estaciones"
+                    onClick={() => setBusqueda('')}
+                    className="flex items-center justify-between px-3 py-2.5 text-sm hover:bg-gray-50 transition-colors">
+                    <span className="font-medium text-gray-800">{e.nombre}</span>
+                    <span className="text-xs text-gray-400">{e.bicicletas_disponibles} bicis</span>
+                  </Link>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-
-        {/* Alertas */}
-        <div className="lg:col-span-4 card p-5 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-extrabold text-on-surface flex items-center gap-2">
-              <Bell size={16} className="text-amber-500" />
-              Alertas Operativas
-            </h3>
-            <span className="text-[10px] font-bold bg-surface-container-high px-2 py-0.5 rounded text-outline uppercase tracking-wide">
-              {alertas.filter(a => !a.leida).length} sin leer
+          <button className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
+            <HelpCircle size={15} className="text-gray-500" />
+          </button>
+          {/* Avatar */}
+          <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center shadow-sm cursor-pointer">
+            <span className="text-white text-sm font-extrabold">
+              {nombreUsuario ? nombreUsuario[0].toUpperCase() : 'O'}
             </span>
           </div>
-
-          <div className="flex-1 space-y-2 overflow-y-auto max-h-[380px] pr-1">
-            {loading
-              ? Array(4).fill(0).map((_, i) => <div key={i} className="h-14 bg-surface-container-low rounded-xl animate-pulse" />)
-              : alertas.length === 0
-                ? (
-                  <div className="flex flex-col items-center justify-center h-full gap-2 py-10">
-                    <CheckCircle size={28} className="text-[#b2f746]" />
-                    <p className="text-sm font-semibold text-on-surface-variant">Sin alertas activas</p>
-                  </div>
-                )
-                : alertas.map(a => <AlertaCard key={a.id} a={a} />)
-            }
-          </div>
-
-          <Link
-            href="/operador/alertas"
-            className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 border-2 border-outline-variant/30 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors"
-          >
-            Ver historial completo <ChevronRight size={14} />
-          </Link>
         </div>
       </div>
 
-      {/* Quick links */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { href: '/operador/estaciones', icon: MapPin,     label: 'Estaciones',   sub: `${kpis.estacionesActivas} activas`,   color: 'bg-[#e5eeff] text-primary-container' },
-          { href: '/operador/bicicletas', icon: Bike,       label: 'Bicicletas',   sub: `${kpis.bicisTotal} en flota`,         color: 'bg-[#dcfce7] text-[#166534]' },
-          { href: '/operador/prediccion', icon: TrendingUp, label: 'Predicción',   sub: 'Demanda 24h',                         color: 'bg-[#fef9c3] text-[#854d0e]' },
-          { href: '/operador/alertas',    icon: Bell,       label: 'Alertas',      sub: `${alertasCriticas} críticas`,         color: `${alertasCriticas > 0 ? 'bg-[#ffdad6] text-error' : 'bg-[#e5eeff] text-primary-container'}` },
-        ].map(({ href, icon: Icon, label, sub, color }) => (
-          <Link key={href} href={href} className="card p-4 flex items-center gap-3 hover:border-primary-container/30 hover:shadow-md transition-all">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-              <Icon size={18} />
+      <div className="p-6 space-y-5 max-w-[1440px]">
+
+        {/* ── Actualización ── */}
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-400 font-medium">
+            Última actualización: {ultimaAct?.toLocaleTimeString('es-PE') ?? '—'}
+          </p>
+          <button onClick={cargar}
+            className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 border border-gray-200 bg-white px-3 py-1.5 rounded-full hover:bg-gray-50 transition-colors shadow-sm">
+            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+            Actualizar
+          </button>
+        </div>
+
+        {/* ── KPI Cards ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+          {/* Disponibilidad Operativa */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col gap-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Disponibilidad Operativa</p>
+            <div className="flex items-end gap-2">
+              <span className="text-4xl font-black text-gray-900">{loading ? '—' : `${pctDisp}%`}</span>
+              <span className={`text-xs font-bold flex items-center gap-0.5 mb-1.5 px-2 py-0.5 rounded-full ${pctDisp >= 70 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                {pctDisp >= 70 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                {pctDisp >= 70 ? `+${Math.round((pctDisp - 70))}%` : `${pctDisp - 70}%`}
+              </span>
             </div>
-            <div className="min-w-0">
-              <p className="font-bold text-sm text-on-surface">{label}</p>
-              <p className="text-xs text-outline truncate">{sub}</p>
+            <div className="w-full h-1.5 rounded-full bg-gray-100">
+              <div className="h-1.5 rounded-full transition-all duration-700"
+                style={{ width: `${pctDisp}%`, background: pctDisp >= 70 ? '#b2f746' : '#ef4444' }} />
             </div>
-          </Link>
-        ))}
+            <p className="text-[10px] text-gray-400">
+              {kpis.bicisDisponibles} de {kpis.bicisTotal} bicis disponibles
+            </p>
+          </div>
+
+          {/* Eficiencia de Recursos */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col gap-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Eficiencia de Recursos</p>
+            <div className="flex items-end gap-2">
+              <span className="text-4xl font-black text-gray-900">{loading ? '—' : `${eficiencia}%`}</span>
+              {eficiencia >= 80 && (
+                <span className="text-xs font-bold flex items-center gap-1 mb-1.5 px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                  <CheckCircle size={10} /> Óptimo
+                </span>
+              )}
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-gray-100">
+              <div className="h-1.5 rounded-full transition-all duration-700"
+                style={{ width: `${eficiencia}%`, background: '#b2f746' }} />
+            </div>
+            <p className="text-[10px] text-gray-400">Distribución de flota en tiempo real</p>
+          </div>
+
+          {/* Viajes Activos */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col gap-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Viajes Activos</p>
+            <div className="flex items-end gap-2">
+              <span className="text-4xl font-black text-gray-900">
+                {loading ? '—' : kpis.viajesHoy.toLocaleString('es-PE')}
+              </span>
+              {!loading && esPicoUso && (
+                <span className="text-xs font-bold flex items-center gap-1 mb-1.5 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  ⚡ Pico de uso
+                </span>
+              )}
+            </div>
+            {/* Mini bar chart */}
+            <div className="flex items-end gap-0.5 h-7">
+              {DEMAND_PATTERN.slice(6, 22).map((f, i) => (
+                <div key={i}
+                  className="flex-1 rounded-sm transition-all"
+                  style={{
+                    height: `${Math.round(f * 100 / 0.14)}%`,
+                    background: i + 6 === horaActual ? '#003527' : '#b2f746',
+                    opacity: i + 6 <= horaActual ? 1 : 0.4,
+                  }}
+                />
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400">
+              {kpis.viajesActivos > 0 ? `${kpis.viajesActivos} en curso ahora` : `vs ${kpis.viajesAyer} ayer`}
+            </p>
+          </div>
+
+          {/* Carbono Ahorrado */}
+          <div className="rounded-2xl p-5 flex flex-col gap-3 shadow-sm" style={{ background: '#0f2419' }}>
+            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'rgba(178,247,70,0.6)' }}>
+              Carbono Ahorrado
+            </p>
+            <span className="text-4xl font-black text-white">{loading ? '—' : `${co2TN} TN`}</span>
+            <div className="flex items-center gap-1.5 mt-auto">
+              <Leaf size={14} style={{ color: '#b2f746' }} />
+              <span className="text-xs font-bold" style={{ color: '#b2f746' }}>Impacto Ecológico SB</span>
+            </div>
+            <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Estimado total histórico</p>
+          </div>
+        </div>
+
+        {/* ── Mapa + Alertas ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+          {/* Mapa en vivo */}
+          <div className="lg:col-span-7 bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative" style={{ height: 440 }}>
+            {/* Pills */}
+            <div className="absolute top-3 left-3 z-10 flex gap-2">
+              <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-white/50">
+                <span className="w-2 h-2 rounded-full bg-[#b2f746] animate-pulse" />
+                <span className="text-xs font-bold text-gray-800">Mapa en vivo</span>
+              </div>
+              {ultimaAct && (
+                <div className="flex items-center bg-white/80 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-white/40">
+                  <span className="text-xs text-gray-500 font-medium">
+                    Actualizado hace {Math.floor((Date.now() - ultimaAct.getTime()) / 1000)}s
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {loading
+              ? <div className="w-full h-full bg-gray-50 animate-pulse" />
+              : <MapaEstaciones estaciones={estaciones} modoOperador />
+            }
+
+            {/* Leyenda */}
+            <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur px-3 py-2.5 rounded-xl shadow-md border border-white/60 flex flex-col gap-1.5">
+              {[
+                { color: '#b2f746', label: 'Disponible (>5 bicis)' },
+                { color: '#f59e0b', label: 'Riesgo / Saturado' },
+                { color: '#ef4444', label: 'Vacío / Crítico' },
+              ].map(({ color, label }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+                  <span className="text-[10px] font-semibold text-gray-700">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Alertas Inteligentes */}
+          <div className="lg:col-span-5 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Bell size={16} className="text-amber-500" />
+                <h3 className="font-black text-gray-800 text-sm">Alertas Inteligentes</h3>
+              </div>
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black tracking-wider"
+                style={{ background: '#e5eeff', color: '#1a56db' }}>
+                <Sparkles size={10} />
+                IA ACTIVA
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-2.5 overflow-y-auto">
+              {loading
+                ? Array(3).fill(0).map((_, i) => <div key={i} className="h-16 bg-gray-50 rounded-xl animate-pulse" />)
+                : alertas.length === 0
+                  ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2 py-10">
+                      <CheckCircle size={28} className="text-[#b2f746]" />
+                      <p className="text-sm font-semibold text-gray-500">Sin alertas activas</p>
+                      <p className="text-xs text-gray-400">Todo está funcionando correctamente</p>
+                    </div>
+                  )
+                  : alertas.map(a => <AlertaCard key={a.id} a={a} />)
+              }
+            </div>
+
+            <Link href="/operador/alertas"
+              className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">
+              Ver historial completo <ChevronRight size={14} />
+            </Link>
+          </div>
+        </div>
+
+        {/* ── Nueva Orden de Redistribución (solo si hay necesidad) ── */}
+        {needsRedist && (
+          <div className="rounded-2xl p-5 shadow-md flex items-center justify-between gap-4" style={{ background: '#0f2419' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(178,247,70,0.15)' }}>
+                <ArrowRightLeft size={18} style={{ color: '#b2f746' }} />
+              </div>
+              <div>
+                <p className="font-black text-white text-sm">Nueva Orden de Redistribución</p>
+                <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  {estSaturada?.nombre} → {estVacia?.nombre} · Intervención recomendada
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6 shrink-0">
+              <div className="text-center">
+                <p className="text-lg font-black" style={{ color: '#b2f746' }}>
+                  +{estSaturada ? Math.round(((estSaturada.bicicletas_disponibles ?? 0) / (estSaturada.capacidad ?? 10)) * 100) : 0}%
+                </p>
+                <p className="text-[10px] text-white/40">Saturación</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-black text-white">{kpis.viajesActivos}</p>
+                <p className="text-[10px] text-white/40">En curso</p>
+              </div>
+              <Link href="/operador/mapa"
+                className="px-4 py-2 rounded-xl text-xs font-black text-[#0f2419] flex items-center gap-1.5"
+                style={{ background: '#b2f746' }}>
+                Ver en mapa <ChevronRight size={12} />
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* ── Analítica Predictiva ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+          {/* Gráfico demanda 24h */}
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h3 className="font-black text-gray-800 text-base">Analítica Predictiva</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Modelado estadístico basado en patrones históricos y clima</p>
+              </div>
+              <div className="flex rounded-xl overflow-hidden border border-gray-200 text-xs font-bold">
+                {(['hoy', 'semana', 'mes'] as const).map(t => (
+                  <button key={t} onClick={() => setTabPred(t)}
+                    className={`px-3 py-1.5 capitalize transition-colors ${tabPred === t ? 'bg-[#003527] text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                    {t === 'hoy' ? 'Hoy' : t === 'semana' ? 'Semana' : 'Mes'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
+              Pronóstico de Demanda · Próximas 24H
+            </p>
+
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={demandaData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                <XAxis dataKey="hora" tickFormatter={h => `${h}:00`}
+                  tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false}
+                  interval={3} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 12 }}
+                  formatter={(v: number) => [v, 'Demanda est.']}
+                  labelFormatter={h => `${h}:00`}
+                />
+                <ReferenceLine y={picoDemanda}
+                  stroke="#003527" strokeDasharray="4 3" strokeWidth={1.5}
+                  label={{ value: `PICO: ${picoDemanda.toLocaleString()}`, position: 'insideTopLeft', fontSize: 10, fill: '#003527', fontWeight: 800 }}
+                />
+                <Bar dataKey="demanda" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                  {demandaData.map((d, i) => (
+                    <Cell key={i}
+                      fill={d.demanda === picoDemanda ? '#003527' : i % 2 === 0 ? '#b2f746' : '#c5f768'}
+                      opacity={d.hora > horaActual ? 0.5 : 1}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Factores externos */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-4">
+            <div>
+              <h3 className="font-black text-gray-800 text-base">Factores Externos</h3>
+              <p className="text-xs text-gray-400 mt-0.5 uppercase tracking-wider font-bold">
+                Condiciones actuales
+              </p>
+            </div>
+
+            {/* Clima */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#fef9c3' }}>
+                  <Sun size={18} style={{ color: '#854d0e' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-800">
+                    {mesActual >= 11 || mesActual <= 2 ? '28°C Soleado' : mesActual >= 6 && mesActual <= 8 ? '17°C Nublado' : '22°C Parcial'}
+                  </p>
+                  <p className="text-[10px] text-gray-400">Impacto en demanda: +{mesActual >= 11 || mesActual <= 2 ? 18 : 10}%</p>
+                </div>
+              </div>
+              <TrendingUp size={14} className="text-green-500" />
+            </div>
+
+            {/* Día */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#e5eeff' }}>
+                  <CalendarDays size={18} style={{ color: '#1a56db' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-800">{esLaboral ? 'Día Laboral' : 'Fin de Semana'}</p>
+                  <p className="text-[10px] text-gray-400">
+                    {esLaboral ? 'Corredor Empresarial SB' : 'Uso recreativo esperado'}
+                  </p>
+                </div>
+              </div>
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
+                <span className="text-[10px] font-black text-blue-600">
+                  {esLaboral ? '👔' : '🏖️'}
+                </span>
+              </div>
+            </div>
+
+            {/* Insight IA */}
+            <div className="flex-1 p-3.5 rounded-xl border border-gray-100" style={{ background: '#f9fafb' }}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Sparkles size={12} style={{ color: '#1a56db' }} />
+                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#1a56db' }}>Predicción IA</span>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed italic">
+                &ldquo;{esLaboral
+                  ? `La IA predice mayor demanda en el corredor empresarial de San Borja entre las ${horaActual < 9 ? '08:00 y 09:30' : horaActual < 14 ? '17:00 y 19:00' : '08:00 y 09:30'}. Se recomienda redistribución preventiva.`
+                  : 'Mayor actividad esperada en parques y zonas recreativas durante el fin de semana. Demanda sostenida hasta las 20:00.'
+                }&rdquo;
+              </p>
+            </div>
+
+            {/* Enlace a predicción */}
+            <Link href="/operador/prediccion"
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+              Ver predicción completa <ChevronRight size={13} />
+            </Link>
+          </div>
+        </div>
+
       </div>
     </div>
   )

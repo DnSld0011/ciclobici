@@ -32,6 +32,7 @@ export function SidebarOperador() {
   const [alertasNoLeidas, setAlertasNoLeidas] = useState(0)
   const [viajesActivos, setViajesActivos] = useState(0)
   const [rolUsuario, setRolUsuario]       = useState<string>('')
+  const [nombreUsuario, setNombreUsuario] = useState<string>('')
 
   useEffect(() => {
     const supabase = createClient()
@@ -49,8 +50,13 @@ export function SidebarOperador() {
 
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        supabase.from('usuarios').select('rol').eq('id', user.id).single()
-          .then(({ data }) => { if (data) setRolUsuario(data.rol) })
+        supabase.from('usuarios').select('rol, nombre').eq('id', user.id).single()
+          .then(({ data }) => {
+            if (data) {
+              setRolUsuario(data.rol)
+              setNombreUsuario(data.nombre ?? '')
+            }
+          })
       }
     })
 
@@ -136,8 +142,19 @@ export function SidebarOperador() {
         )}
       </nav>
 
-      {/* Footer */}
-      <div className="px-3 py-4 border-t border-outline-variant/20">
+      {/* Footer — usuario + logout */}
+      <div className="px-3 py-4 border-t border-outline-variant/20 space-y-1">
+        {nombreUsuario && (
+          <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-surface-container-low mb-1">
+            <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center shrink-0">
+              <span className="text-white text-xs font-extrabold">{nombreUsuario[0]?.toUpperCase()}</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-on-surface truncate">{nombreUsuario}</p>
+              <p className="text-[10px] text-outline capitalize truncate">{rolUsuario}</p>
+            </div>
+          </div>
+        )}
         <button onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-error-container hover:text-error transition-colors">
           <LogOut size={17} />Cerrar Sesión
