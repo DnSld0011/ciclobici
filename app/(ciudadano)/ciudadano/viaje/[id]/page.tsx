@@ -27,12 +27,11 @@ interface ViajeResumen {
 
 export default function ResumenViajePage() {
   const { id } = useParams()
-  const [viaje, setViaje]         = useState<ViajeResumen | null>(null)
-  const [loading, setLoading]     = useState(true)
-  const [rating, setRating]       = useState(0)
-  const [hoverRating, setHoverRating] = useState(0)
-  const [guardando, setGuardando] = useState(false)
-  const [calificado, setCalificado] = useState(false)
+  const [viaje, setViaje] = useState<ViajeResumen | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [calificacion, setCalificacion] = useState<number | null>(null)
+  const [calificacionGuardada, setCalificacionGuardada] = useState(false)
+  const [hover, setHover] = useState<number | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -55,9 +54,9 @@ export default function ResumenViajePage() {
 
       if (data) {
         setViaje(data as unknown as ViajeResumen)
-        if ((data as unknown as ViajeResumen).calificacion) {
-          setRating((data as unknown as ViajeResumen).calificacion!)
-          setCalificado(true)
+        if (data.calificacion) {
+          setCalificacion(data.calificacion)
+          setCalificacionGuardada(true)
         }
       }
       setLoading(false)
@@ -65,14 +64,12 @@ export default function ResumenViajePage() {
     cargar()
   }, [id, router])
 
-  async function guardarCalificacion(stars: number) {
-    if (calificado || guardando) return
-    setRating(stars)
-    setGuardando(true)
+  async function calificar(n: number) {
+    if (calificacionGuardada) return
+    setCalificacion(n)
     const supabase = createClient()
-    await supabase.from('viajes').update({ calificacion: stars }).eq('id', id as string)
-    setCalificado(true)
-    setGuardando(false)
+    await supabase.from('viajes').update({ calificacion: n }).eq('id', id as string)
+    setCalificacionGuardada(true)
   }
 
   if (loading) return (
@@ -88,14 +85,16 @@ export default function ResumenViajePage() {
     </div>
   )
 
-  const dur  = viaje.duracion_min ?? Math.round((new Date(viaje.fin_at).getTime() - new Date(viaje.inicio_at).getTime()) / 60000)
+  const dur = viaje.duracion_min ?? Math.round((new Date(viaje.fin_at).getTime() - new Date(viaje.inicio_at).getTime()) / 60000)
   const dist = viaje.distancia_km ?? Math.round(dur / 60 * 12 * 10) / 10
-  const co2  = Math.round(dist * 0.21 * 10) / 10
+  const co2 = Math.round(dist * 0.21 * 10) / 10
 
-  const origenCoord  = viaje.estacion_origen  ? { lat: viaje.estacion_origen.latitud,  lng: viaje.estacion_origen.longitud  } : null
+  const origenCoord = viaje.estacion_origen ? { lat: viaje.estacion_origen.latitud, lng: viaje.estacion_origen.longitud } : null
   const destinoCoord = viaje.estacion_destino ? { lat: viaje.estacion_destino.latitud, lng: viaje.estacion_destino.longitud } : null
 
-  const starLabels = ['', 'Muy malo', 'Malo', 'Regular', 'Bueno', '¡Excelente!']
+  const estrellaActiva = hover ?? calificacion ?? 0
+
+  function cerrar() { router.push('/ciudadano') }
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
@@ -104,28 +103,31 @@ export default function ResumenViajePage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-extrabold" style={{ color: '#003527' }}>Resumen</h1>
-          <button onClick={() => router.push('/ciudadano')} aria-label="Cerrar"
+          <button
+            onClick={cerrar}
+            aria-label="Cerrar"
             className="w-10 h-10 rounded-full flex items-center justify-center"
-            style={{ background: '#e5eeff' }}>
+            style={{ background: '#e5eeff' }}
+          >
             <X size={18} className="text-on-surface" />
           </button>
         </div>
 
         {/* Check + título */}
         <div className="flex flex-col items-center text-center pt-2 pb-1">
-          <div className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
-            style={{ background: '#b2f746', boxShadow: '0 0 0 14px rgba(178,247,70,0.25)' }}>
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
+            style={{ background: '#b2f746', boxShadow: '0 0 0 14px rgba(178,247,70,0.25)' }}
+          >
             <Check size={36} style={{ color: '#002117' }} strokeWidth={3} />
           </div>
           <h2 className="text-3xl font-extrabold leading-tight" style={{ color: '#003527' }}>
             ¡Viaje Finalizado!
           </h2>
-          <p className="text-sm text-outline mt-2">
-            {viaje.bicicleta?.codigo} · {viaje.bicicleta?.tipo}
-          </p>
+          <p className="text-sm text-outline mt-2">Has completado tu recorrido con éxito.</p>
         </div>
 
-        {/* Stats: Tiempo + Distancia */}
+        {/* Tiempo Total / Distancia */}
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-outline-variant/30 p-4">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-outline">
@@ -152,50 +154,19 @@ export default function ResumenViajePage() {
               <TreePine size={14} /> Impacto Ambiental
             </div>
             <p className="text-2xl font-extrabold mt-1 text-white">
-              {co2} <span className="text-sm font-normal" style={{ color: '#95d3ba' }}>kg CO₂ evitado</span>
+              {co2} <span className="text-sm font-normal" style={{ color: '#95d3ba' }}>kg CO2 evitado</span>
             </p>
           </div>
-          <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
-            style={{ background: 'rgba(178,247,70,0.15)' }}>
+          <div
+            className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: 'rgba(178,247,70,0.15)' }}
+          >
             <TreePine size={20} style={{ color: '#b2f746' }} />
           </div>
         </div>
 
-        {/* ── Calificación ── */}
-        <div className="rounded-2xl border border-outline-variant/30 p-5">
-          <p className="text-sm font-extrabold text-on-surface mb-1">
-            {calificado ? '¡Gracias por tu calificación!' : '¿Cómo estuvo tu experiencia?'}
-          </p>
-          <p className="text-xs text-outline mb-4">
-            {calificado
-              ? starLabels[rating]
-              : 'Tu opinión nos ayuda a mejorar el servicio'}
-          </p>
-          <div className="flex items-center gap-2 justify-center">
-            {[1, 2, 3, 4, 5].map(n => (
-              <button key={n}
-                disabled={calificado || guardando}
-                onClick={() => guardarCalificacion(n)}
-                onMouseEnter={() => !calificado && setHoverRating(n)}
-                onMouseLeave={() => setHoverRating(0)}
-                className="transition-transform active:scale-90 disabled:cursor-default"
-                style={{ transform: (hoverRating || rating) >= n ? 'scale(1.1)' : 'scale(1)' }}>
-                <Star
-                  size={36}
-                  fill={(hoverRating || rating) >= n ? '#f59e0b' : 'none'}
-                  stroke={(hoverRating || rating) >= n ? '#f59e0b' : '#d1d5db'}
-                  strokeWidth={1.5}
-                />
-              </button>
-            ))}
-          </div>
-          {guardando && (
-            <p className="text-center text-xs text-outline mt-3">Guardando...</p>
-          )}
-        </div>
-
-        {/* Mapa */}
-        <div className="relative rounded-2xl overflow-hidden border border-outline-variant/20" style={{ height: 240 }}>
+        {/* Mapa con la ruta */}
+        <div className="relative rounded-2xl overflow-hidden border border-outline-variant/20" style={{ height: 280 }}>
           {origenCoord && destinoCoord ? (
             <MapaResumenViaje origen={origenCoord} destino={destinoCoord} />
           ) : (
@@ -208,17 +179,60 @@ export default function ResumenViajePage() {
               <span className="w-2 h-2 rounded-full bg-[#16a34a]" />
               <span className="text-xs font-semibold text-on-surface flex items-center gap-1">
                 <MapPin size={11} className="text-[#16a34a]" />
-                {viaje.estacion_destino.nombre}
+                Ruta {viaje.estacion_destino.nombre}
               </span>
             </div>
           )}
         </div>
 
+        {/* Calificación */}
+        <div className="rounded-2xl border border-outline-variant/30 p-4">
+          <p className="text-xs font-extrabold text-outline uppercase tracking-widest mb-3">
+            ¿Cómo estuvo tu viaje?
+          </p>
+          {calificacionGuardada ? (
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map(n => (
+                  <Star
+                    key={n}
+                    size={24}
+                    fill={n <= (calificacion ?? 0) ? '#f59e0b' : 'none'}
+                    className={n <= (calificacion ?? 0) ? 'text-[#f59e0b]' : 'text-outline-variant/30'}
+                  />
+                ))}
+              </div>
+              <span className="text-sm font-semibold" style={{ color: '#166534' }}>¡Gracias!</span>
+            </div>
+          ) : (
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  onClick={() => calificar(n)}
+                  onMouseEnter={() => setHover(n)}
+                  onMouseLeave={() => setHover(null)}
+                  className="p-0.5 transition-transform active:scale-125"
+                  aria-label={`${n} estrellas`}
+                >
+                  <Star
+                    size={28}
+                    fill={n <= estrellaActiva ? '#f59e0b' : 'none'}
+                    className={n <= estrellaActiva ? 'text-[#f59e0b]' : 'text-outline-variant/40'}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Cerrar */}
-        <button onClick={() => router.push('/ciudadano')}
+        <button
+          onClick={cerrar}
           className="w-full h-14 rounded-2xl font-bold text-base active:scale-[0.98] transition-all"
-          style={{ background: '#b2f746', color: '#002117' }}>
-          Volver al inicio
+          style={{ background: '#b2f746', color: '#002117' }}
+        >
+          Cerrar
         </button>
 
       </div>
