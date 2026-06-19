@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { createClient } from '@supabase/supabase-js'
 
 const GROUP_ROOTS = ['/ciudadano', '/operador', '/tecnico']
 
@@ -89,8 +88,9 @@ export async function proxy(request: NextRequest) {
     if (!isAppRoute || !serviceKey) return supabaseResponse
 
     try {
-      const admin = createClient(supabaseUrl, serviceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
+      // Usar createServerClient con la service role key — funciona en Edge Runtime
+      const admin = createServerClient(supabaseUrl, serviceKey!, {
+        cookies: { getAll: () => [], setAll: () => {} },
       })
       const { data: rolData } = await admin
         .from('roles')
