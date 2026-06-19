@@ -92,26 +92,42 @@ export default function ReportarIncidenciaPage() {
   const fileInputRef  = useRef<HTMLInputElement>(null)
   const router        = useRouter()
 
-  /* ── cargar mis reportes al cambiar de tab ── */
+  /* ── cargar mis reportes al cambiar de tab + realtime ── */
   useEffect(() => {
-    if (tab !== 'mis-reportes' || reportesCargados.current) return
-    async function cargar() {
-      setLoadingReportes(true)
+    if (tab !== 'mis-reportes') return
+
+    async function cargar(uid?: string) {
+      setLoadingReportes(!reportesCargados.current)
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace('/login'); return }
+      let userId = uid
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.replace('/login'); return }
+        userId = user.id
+      }
 
       const { data } = await supabase
         .from('incidencias')
         .select('id, tipo, estado, descripcion, created_at, bicicleta:bicicleta_id(codigo)')
-        .eq('usuario_id', user.id)
+        .eq('usuario_id', userId)
         .order('created_at', { ascending: false })
 
       if (data) setMisReportes(data as unknown as MiReporte[])
       reportesCargados.current = true
       setLoadingReportes(false)
     }
-    cargar()
+
+    let uid: string | undefined
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      uid = user?.id
+      cargar(uid)
+      const ch = supabase.channel('ciudadano-mis-incidencias')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias',
+          filter: uid ? `usuario_id=eq.${uid}` : undefined }, () => cargar(uid))
+        .subscribe()
+      return ch
+    })
   }, [tab, router])
 
   /* ── iniciar / detener cámara QR ── */

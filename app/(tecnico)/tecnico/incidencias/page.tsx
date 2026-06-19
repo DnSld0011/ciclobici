@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Incidencia, IncidenciaEstado } from '@/types'
-import { AlertTriangle, Search, CheckCircle, X, Clock, Wrench } from 'lucide-react'
+import { AlertTriangle, Search, CheckCircle, X, Clock, Wrench, ImageOff, ExternalLink, Plus } from 'lucide-react'
 
 const ESTADO_CHIP: Record<IncidenciaEstado, string> = {
   pendiente:    'bg-[#fef9c3] text-[#854d0e] border-[#fde68a]',
@@ -25,6 +25,8 @@ export default function TecnicoIncidenciasPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>('todos')
   const [seleccionada, setSeleccionada] = useState<Incidencia | null>(null)
   const [loading, setLoading] = useState(true)
+  const [creandoMant, setCreandoMant] = useState(false)
+  const [mantExito, setMantExito] = useState(false)
 
   const cargar = useCallback(async () => {
     const supabase = createClient()
@@ -50,6 +52,46 @@ export default function TecnicoIncidenciasPage() {
     await supabase.from('incidencias').update({ estado }).eq('id', id)
     await cargar()
     if (seleccionada?.id === id) setSeleccionada(prev => prev ? { ...prev, estado } : null)
+  }
+
+  async function crearMantenimiento() {
+    if (!seleccionada) return
+    const bici = seleccionada.bicicleta as unknown as { codigo: string } | null
+    if (!bici) return
+    setCreandoMant(true)
+    setMantExito(false)
+    const supabase = createClient()
+
+    const { data: biciData } = await supabase
+      .from('bicicletas')
+      .select('id')
+      .eq('codigo', bici.codigo)
+      .single()
+
+    if (!biciData) { setCreandoMant(false); return }
+
+    const tipoMap: Record<string, string> = {
+      frenos: 'Reparación de Frenos', llanta: 'Cambio de Neumático',
+      cadena: 'Lubricación de Cadena', manillar: 'Reparación de Manubrio',
+      asiento: 'Reemplazo de Sillín', iluminacion: 'Revisión Eléctrica',
+      electrico: 'Revisión Eléctrica', estructura: 'Revisión General', otro: 'Revisión General',
+    }
+
+    const { data: mant, error } = await supabase.from('mantenimientos').insert({
+      bicicleta_id: biciData.id,
+      tipo_intervencion: tipoMap[seleccionada.tipo] ?? 'Revisión General',
+      descripcion: seleccionada.descripcion ?? `Incidencia reportada: ${seleccionada.tipo}`,
+      responsable: 'Técnico',
+      fecha: new Date().toISOString(),
+    }).select('id').single()
+
+    if (!error && mant) {
+      await supabase.from('incidencias').update({ estado: 'en_revision', mantenimiento_id: mant.id }).eq('id', seleccionada.id)
+      await cargar()
+      setSeleccionada(prev => prev ? { ...prev, estado: 'en_revision' } : null)
+      setMantExito(true)
+    }
+    setCreandoMant(false)
   }
 
   const filtradas = incidencias.filter(i => {
@@ -214,6 +256,46 @@ export default function TecnicoIncidenciasPage() {
                   <p className="text-sm font-semibold text-on-surface">{value}</p>
                 </div>
               ))}
+
+              {/* Foto de evidencia */}
+              {seleccionada.foto_url ? (
+                <div>
+                  <p className="text-[10px] text-outline uppercase font-extrabold tracking-widest mb-2">Foto de evidencia</p>
+                  <div className="relative rounded-xl overflow-hidden border border-outline-variant/20 bg-surface-container-low">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={seleccionada.foto_url} alt="Evidencia" className="w-full max-h-52 object-cover" />
+                    <a href={seleccionada.foto_url} target="_blank" rel="noreferrer"
+                      className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-lg">
+                      <ExternalLink size={10} /> Ver original
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-outline py-2">
+                  <ImageOff size={14} />
+                  Sin foto de evidencia
+                </div>
+              )}
+
+              {/* Botón crear mantenimiento */}
+              {seleccionada.estado !== 'resuelta' && seleccionada.estado !== 'descartada' && (
+                <div className="pt-2 border-t border-outline-variant/20">
+                  <p className="text-[10px] text-outline uppercase font-extrabold tracking-widest mb-2">Acción rápida</p>
+                  {mantExito ? (
+                    <div className="flex items-center gap-2 text-xs text-[#166534] bg-[#dcfce7] px-3 py-2 rounded-xl font-semibold">
+                      <CheckCircle size={13} /> Mantenimiento creado y estado actualizado a En revisión
+                    </div>
+                  ) : (
+                    <button
+                      onClick={crearMantenimiento}
+                      disabled={creandoMant}
+                      className="w-full h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-primary-container text-white hover:opacity-90 disabled:opacity-50 transition-all">
+                      <Plus size={13} />
+                      {creandoMant ? 'Creando...' : 'Crear orden de mantenimiento'}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Cambiar estado */}
               <div className="pt-2 border-t border-outline-variant/20">
