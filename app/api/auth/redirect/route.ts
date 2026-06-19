@@ -30,7 +30,7 @@ export async function GET(req: Request) {
     }
 
     if (perfil.rol === 'administrador')
-      return NextResponse.redirect(`${origin}/operador/kpis`)
+      return NextResponse.redirect(`${origin}/operador/admin`)
     if (perfil.rol === 'operador')
       return NextResponse.redirect(`${origin}/operador`)
     if (perfil.rol === 'tecnico')

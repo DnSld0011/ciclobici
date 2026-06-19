@@ -35,6 +35,7 @@ const VISTAS_FALLBACK: Record<string, string[]> = {
   ],
   administrador: [
     '/operador',
+    '/operador/admin',
     '/operador/viajes-en-vivo',
     '/operador/mapa',
     '/operador/alertas',

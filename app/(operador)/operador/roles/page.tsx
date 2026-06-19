@@ -28,6 +28,7 @@ const VISTAS_CATALOG = [
     { id: '/operador/prediccion',       label: 'Predicción de demanda' },
   ]},
   { grupo: 'Administrador', items: [
+    { id: '/operador/admin',    label: 'Panel de administración' },
     { id: '/operador/kpis',     label: 'KPIs estratégicos' },
     { id: '/operador/stock',    label: 'Stock óptimo por estación' },
     { id: '/operador/usuarios', label: 'Gestión de usuarios' },

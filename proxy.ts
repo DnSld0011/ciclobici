@@ -10,7 +10,7 @@ function isVistaPermitida(pathname: string, vistas: string[]): boolean {
 }
 
 const HOME_POR_ROL: Record<string, string> = {
-  administrador: '/operador',
+  administrador: '/operador/admin',
   operador:      '/operador',
   tecnico:       '/tecnico/mantenimiento',
   ciudadano:     '/ciudadano',

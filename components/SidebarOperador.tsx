@@ -22,6 +22,7 @@ const NAV_OPERADOR = [
 ]
 
 const NAV_ADMIN = [
+  { href: '/operador/admin',    label: 'Panel Admin',  icon: Crown },
   { href: '/operador/kpis',     label: 'KPIs',         icon: BarChart2 },
   { href: '/operador/stock',    label: 'Stock Óptimo', icon: PackageSearch },
   { href: '/operador/usuarios', label: 'Usuarios',     icon: Users },
