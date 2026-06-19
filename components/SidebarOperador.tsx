@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Map, Bike, Building2, Wrench,
-  TrendingUp, Bell, Menu, X, LogOut, Activity, Users, Shield, Crown, ArrowRightLeft,
+  TrendingUp, Bell, Menu, X, LogOut, Activity, Users, Shield, Crown, ArrowRightLeft, BarChart2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -22,6 +22,7 @@ const NAV_OPERADOR = [
 ]
 
 const NAV_ADMIN = [
+  { href: '/operador/kpis',     label: 'KPIs',     icon: BarChart2 },
   { href: '/operador/usuarios', label: 'Usuarios', icon: Users },
   { href: '/operador/roles',    label: 'Roles',    icon: Shield },
 ]
