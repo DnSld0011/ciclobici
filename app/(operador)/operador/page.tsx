@@ -20,13 +20,6 @@ const MapaEstaciones = dynamicImport(
   { ssr: false, loading: () => <div className="w-full h-full bg-surface-container-low animate-pulse rounded-xl" /> }
 )
 
-/* ── patrón de demanda 24h (distribución típica bici-sharing) ── */
-const DEMAND_PATTERN = [
-  0.03, 0.02, 0.01, 0.01, 0.02, 0.04, 0.07, 0.11,
-  0.14, 0.12, 0.09, 0.08, 0.10, 0.09, 0.07, 0.08,
-  0.10, 0.14, 0.13, 0.10, 0.07, 0.05, 0.04, 0.03,
-]
-
 interface KPIs {
   bicisDisponibles: number
   bicisTotal: number
@@ -71,6 +64,7 @@ export default function DashboardOperadorPage() {
   })
   const [estaciones, setEstaciones]     = useState<EstacionConDisponibilidad[]>([])
   const [alertas, setAlertas]           = useState<Alerta[]>([])
+  const [demandaPorHora, setDemandaPorHora] = useState<{ hora: number; viajes: number }[]>([])
   const [ultimaAct, setUltimaAct]       = useState<Date | null>(null)
   const [loading, setLoading]           = useState(true)
   const [tabPred, setTabPred]           = useState<'hoy' | 'semana' | 'mes'>('hoy')
@@ -95,6 +89,7 @@ export default function DashboardOperadorPage() {
       { data: alertasData },
       { data: viajesKm },
       { data: perfil },
+      { data: viajesHoraData },
     ] = await Promise.all([
       supabase.from('bicicletas').select('id, estado'),
       supabase.from('estaciones').select('*, bicicletas(id,estado)').order('nombre'),
@@ -106,7 +101,18 @@ export default function DashboardOperadorPage() {
       supabase.from('alertas').select('*').eq('resuelta', false).order('created_at', { ascending: false }).limit(6),
       supabase.from('viajes').select('distancia_km').eq('estado', 'finalizado').not('distancia_km', 'is', null),
       supabase.from('usuarios').select('nombre, rol').eq('id', user.id).single(),
+      supabase.from('viajes').select('inicio_at').gte('inicio_at', hoy.toISOString()),
     ])
+
+    if (viajesHoraData) {
+      const conteo: Record<number, number> = {}
+      for (let h = 0; h < 24; h++) conteo[h] = 0
+      for (const v of viajesHoraData) {
+        const h = new Date(v.inicio_at).getHours()
+        conteo[h] = (conteo[h] ?? 0) + 1
+      }
+      setDemandaPorHora(Array.from({ length: 24 }, (_, h) => ({ hora: h, viajes: conteo[h] })))
+    }
 
     if (bicis) {
       const disponibles = bicis.filter(b => b.estado === 'disponible').length
@@ -144,6 +150,7 @@ export default function DashboardOperadorPage() {
     const ch = supabase.channel('operador-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, cargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [cargar])
@@ -163,13 +170,11 @@ export default function DashboardOperadorPage() {
   const estVacia    = estaciones.find(e => e.bicicletas_disponibles === 0 && e.estado === 'activa')
   const needsRedist = !!(estSaturada && estVacia)
 
-  /* ── datos para el gráfico 24h ── */
-  const base = Math.max(kpis.viajesHoy, 60)
-  const demandaData = DEMAND_PATTERN.map((f, h) => ({
-    hora: h,
-    demanda: Math.round(base * f * 24),
-  }))
-  const picoDemanda = Math.max(...demandaData.map(d => d.demanda))
+  /* ── datos para el gráfico 24h (datos reales de BD) ── */
+  const demandaData = demandaPorHora.length > 0
+    ? demandaPorHora.map(d => ({ hora: d.hora, demanda: d.viajes }))
+    : Array.from({ length: 24 }, (_, h) => ({ hora: h, demanda: 0 }))
+  const picoDemanda = Math.max(...demandaData.map(d => d.demanda), 1)
   const horaActual  = new Date().getHours()
 
   /* ── filtro búsqueda de estaciones ── */
@@ -294,18 +299,22 @@ export default function DashboardOperadorPage() {
                 </span>
               )}
             </div>
-            {/* Mini bar chart */}
+            {/* Mini bar chart — datos reales por hora */}
             <div className="flex items-end gap-0.5 h-7">
-              {DEMAND_PATTERN.slice(6, 22).map((f, i) => (
-                <div key={i}
-                  className="flex-1 rounded-sm transition-all"
-                  style={{
-                    height: `${Math.round(f * 100 / 0.14)}%`,
-                    background: i + 6 === horaActual ? '#003527' : '#b2f746',
-                    opacity: i + 6 <= horaActual ? 1 : 0.4,
-                  }}
-                />
-              ))}
+              {demandaData.slice(6, 22).map((d, i) => {
+                const maxH = Math.max(...demandaData.slice(6, 22).map(x => x.demanda), 1)
+                return (
+                  <div key={i}
+                    className="flex-1 rounded-sm transition-all"
+                    style={{
+                      height: `${Math.round((d.demanda / maxH) * 100)}%`,
+                      minHeight: 2,
+                      background: i + 6 === horaActual ? '#003527' : '#b2f746',
+                      opacity: i + 6 <= horaActual ? 1 : 0.4,
+                    }}
+                  />
+                )
+              })}
             </div>
             <p className="text-[10px] text-gray-400">
               {kpis.viajesActivos > 0 ? `${kpis.viajesActivos} en curso ahora` : `vs ${kpis.viajesAyer} ayer`}
@@ -445,7 +454,7 @@ export default function DashboardOperadorPage() {
             <div className="flex items-start justify-between mb-5">
               <div>
                 <h3 className="font-black text-gray-800 text-base">Analítica Predictiva</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Modelado estadístico basado en patrones históricos y clima</p>
+                <p className="text-xs text-gray-400 mt-0.5">Viajes reales del día · Actualización automática</p>
               </div>
               <div className="flex rounded-xl overflow-hidden border border-gray-200 text-xs font-bold">
                 {(['hoy', 'semana', 'mes'] as const).map(t => (
@@ -458,7 +467,7 @@ export default function DashboardOperadorPage() {
             </div>
 
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
-              Pronóstico de Demanda · Próximas 24H
+              Viajes iniciados hoy · Por hora
             </p>
 
             <ResponsiveContainer width="100%" height={220}>
@@ -469,13 +478,15 @@ export default function DashboardOperadorPage() {
                 <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 12 }}
-                  formatter={(v) => [v, 'Demanda est.']}
-                  labelFormatter={h => `${h}:00`}
+                  formatter={(v) => [v, 'Viajes iniciados']}
+                  labelFormatter={h => `${h}:00 hs`}
                 />
-                <ReferenceLine y={picoDemanda}
-                  stroke="#003527" strokeDasharray="4 3" strokeWidth={1.5}
-                  label={{ value: `PICO: ${picoDemanda.toLocaleString()}`, position: 'insideTopLeft', fontSize: 10, fill: '#003527', fontWeight: 800 }}
-                />
+                {picoDemanda > 1 && (
+                  <ReferenceLine y={picoDemanda}
+                    stroke="#003527" strokeDasharray="4 3" strokeWidth={1.5}
+                    label={{ value: `PICO: ${picoDemanda.toLocaleString()}`, position: 'insideTopLeft', fontSize: 10, fill: '#003527', fontWeight: 800 }}
+                  />
+                )}
                 <Bar dataKey="demanda" radius={[4, 4, 0, 0]} maxBarSize={32}>
                   {demandaData.map((d, i) => (
                     <Cell key={i}
