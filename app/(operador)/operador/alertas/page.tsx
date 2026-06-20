@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Alerta, AlertaNivel, AlertaTipo } from '@/types'
-import { Bell, AlertTriangle, Info, CheckCircle, RefreshCw, Filter } from 'lucide-react'
+import { Bell, AlertTriangle, Info, CheckCircle, RefreshCw, Filter, Download } from 'lucide-react'
+import { exportarCsv } from '@/lib/utils/exportCsv'
 
 const NIVEL_CONFIG: Record<AlertaNivel, { bg: string; border: string; text: string; badge: string }> = {
   critica: { bg: 'bg-[#ffdad6]', border: 'border-l-error', text: 'text-[#93000a]', badge: 'bg-error text-white' },
@@ -90,12 +91,23 @@ export default function AlertasOperadorPage() {
           </h1>
           <p className="text-sm text-outline mt-0.5">Monitoreo en tiempo real · San Borja en Bici</p>
         </div>
-        <button
-          onClick={cargar}
-          className="flex items-center gap-1.5 text-xs font-semibold text-outline border border-outline-variant/30 bg-white px-3 py-2 rounded-full hover:bg-surface-container-low transition-colors"
-        >
-          <RefreshCw size={12} /> Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => exportarCsv(alertas.map(a => ({
+            Tipo: TIPO_LABEL[a.tipo], Nivel: a.nivel, Título: a.titulo,
+            Mensaje: a.mensaje ?? '', Leída: a.leida ? 'Sí' : 'No',
+            Resuelta: a.resuelta ? 'Sí' : 'No',
+            Fecha: new Date(a.created_at).toLocaleDateString('es-PE'),
+          })), 'alertas-sanborja')}
+            className="flex items-center gap-1.5 text-xs font-semibold text-outline border border-outline-variant/30 bg-white px-3 py-2 rounded-full hover:bg-surface-container-low transition-colors">
+            <Download size={12} /> Exportar CSV
+          </button>
+          <button
+            onClick={cargar}
+            className="flex items-center gap-1.5 text-xs font-semibold text-outline border border-outline-variant/30 bg-white px-3 py-2 rounded-full hover:bg-surface-container-low transition-colors"
+          >
+            <RefreshCw size={12} /> Actualizar
+          </button>
+        </div>
       </div>
 
       {/* Resumen rápido */}

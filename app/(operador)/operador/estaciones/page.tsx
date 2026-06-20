@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Estacion, EstacionEstado } from '@/types'
-import { Plus, Search, Pencil, Trash2, Building2, MapPin, X } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Building2, MapPin, X, Download } from 'lucide-react'
 import { validarCoordenadas } from '@/lib/utils/codigos'
+import { exportarCsv } from '@/lib/utils/exportCsv'
 
 type FormEstacion = {
   nombre: string; direccion: string; latitud: string
@@ -125,9 +126,17 @@ export default function EstacionesPage() {
           <h1 className="text-xl font-extrabold text-primary-container">Estaciones</h1>
           <p className="text-xs text-outline mt-0.5">Administración de estaciones · San Borja en Bici</p>
         </div>
-        <button className={btnPrimary} onClick={abrirCrear}>
-          <Plus size={16} /> Nueva Estación
-        </button>
+        <div className="flex gap-2">
+          <button className={btnOutline} onClick={() => exportarCsv(estaciones.map(e => ({
+            Nombre: e.nombre, Dirección: e.direccion, Latitud: e.latitud,
+            Longitud: e.longitud, Capacidad: e.capacidad, Estado: e.estado,
+          })), 'estaciones-sanborja')}>
+            <Download size={14} /> Exportar CSV
+          </button>
+          <button className={btnPrimary} onClick={abrirCrear}>
+            <Plus size={16} /> Nueva Estación
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

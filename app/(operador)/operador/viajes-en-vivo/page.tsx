@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
-import { Activity, Bike, Clock, MapPin, User, RefreshCw, Leaf } from 'lucide-react'
+import { Activity, Bike, Clock, MapPin, User, RefreshCw, Leaf, Download } from 'lucide-react'
+import { exportarCsv } from '@/lib/utils/exportCsv'
 
 const MapaEstaciones = dynamicImport(
   () => import('@/components/maps/MapaEstaciones').then(m => m.MapaEstaciones),
@@ -115,10 +116,22 @@ export default function ViajesEnVivoPage() {
             Actualizado: {ultimaAct.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </p>
         </div>
-        <button onClick={cargar}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/30 bg-white text-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors self-start sm:self-auto">
-          <RefreshCw size={14} /> Actualizar
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button onClick={() => exportarCsv(viajes.map(v => ({
+            Usuario: v.usuario?.nombre ?? '', Email: v.usuario?.email ?? '',
+            Bicicleta: v.bicicleta?.codigo ?? '', Tipo: v.bicicleta?.tipo ?? '',
+            'Estación origen': v.estacion_origen?.nombre ?? '',
+            'Inicio': new Date(v.inicio_at).toLocaleString('es-PE'),
+            'Minutos activo': Math.floor((Date.now() - new Date(v.inicio_at).getTime()) / 60000),
+          })), 'viajes-vivo-sanborja')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/30 bg-white text-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors">
+            <Download size={14} /> Exportar CSV
+          </button>
+          <button onClick={cargar}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/30 bg-white text-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors">
+            <RefreshCw size={14} /> Actualizar
+          </button>
+        </div>
       </div>
 
       {/* KPI Strip */}

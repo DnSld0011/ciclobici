@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Bicicleta, BicicletaEstado, Estacion } from '@/types'
 import { Plus, Search, QrCode, Download, Bike, X } from 'lucide-react'
 import { generarCodigoBicicleta } from '@/lib/utils/codigos'
+import { exportarCsv } from '@/lib/utils/exportCsv'
 
 type FormBici = { tipo: string; marca: string; modelo: string; estacion_id: string; estado: BicicletaEstado }
 const formVacio: FormBici = { tipo: '', marca: '', modelo: '', estacion_id: '', estado: 'disponible' }
@@ -120,9 +121,17 @@ export default function BicicletasPage() {
           <h1 className="text-xl font-extrabold text-primary-container">Bicicletas</h1>
           <p className="text-xs text-outline mt-0.5">Gestión de flota · QR automático</p>
         </div>
-        <button className={btnPrimary} onClick={() => { setForm(formVacio); setError(''); setModalNueva(true) }}>
-          <Plus size={16} /> Nueva Bicicleta
-        </button>
+        <div className="flex gap-2">
+          <button className={btnOutline} onClick={() => exportarCsv(bicicletas.map(b => {
+            const est = b.estacion as unknown as { nombre: string } | null
+            return { Código: b.codigo, Tipo: b.tipo, Marca: b.marca ?? '', Modelo: b.modelo ?? '', Estado: b.estado, Estación: est?.nombre ?? '' }
+          }), 'bicicletas-sanborja')}>
+            <Download size={14} /> Exportar CSV
+          </button>
+          <button className={btnPrimary} onClick={() => { setForm(formVacio); setError(''); setModalNueva(true) }}>
+            <Plus size={16} /> Nueva Bicicleta
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

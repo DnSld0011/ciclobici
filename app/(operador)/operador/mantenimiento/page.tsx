@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Mantenimiento, Bicicleta } from '@/types'
-import { Plus, Search, Wrench, Filter, X, CheckCircle } from 'lucide-react'
+import { Plus, Search, Wrench, Filter, X, CheckCircle, Download } from 'lucide-react'
+import { exportarCsv } from '@/lib/utils/exportCsv'
 
 const TIPOS_INTERVENCION = [
   'Mantenimiento Preventivo', 'Reparación de Frenos', 'Cambio de Neumático',
@@ -109,9 +110,22 @@ export default function MantenimientoPage() {
           <h1 className="text-xl font-extrabold text-primary-container">Mantenimiento</h1>
           <p className="text-xs text-outline mt-0.5">Registro de intervenciones técnicas</p>
         </div>
-        <button className={btnPrimary} onClick={() => { setError(''); setModalAbierto(true) }}>
-          <Plus size={16} /> Registrar
-        </button>
+        <div className="flex gap-2">
+          <button className={btnOutline} onClick={() => exportarCsv(filtrados.map(m => {
+            const bici = m.bicicleta as unknown as { codigo: string; tipo: string } | null
+            return {
+              Bicicleta: bici?.codigo ?? '', Tipo: bici?.tipo ?? '',
+              Intervención: m.tipo_intervencion, Descripción: m.descripcion ?? '',
+              Responsable: m.responsable,
+              Fecha: new Date(m.fecha).toLocaleDateString('es-PE'),
+            }
+          }), 'mantenimiento-sanborja')}>
+            <Download size={14} /> Exportar CSV
+          </button>
+          <button className={btnPrimary} onClick={() => { setError(''); setModalAbierto(true) }}>
+            <Plus size={16} /> Registrar
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
