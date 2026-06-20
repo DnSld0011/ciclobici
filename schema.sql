@@ -298,7 +298,7 @@ create policy "Estaciones: gestión operadores" on public.estaciones
   for all using (
     exists (
       select 1 from public.usuarios
-      where id = auth.uid() and rol in ('operador', 'tecnico')
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
     )
   );
 
@@ -310,7 +310,7 @@ create policy "Bicicletas: gestión operadores" on public.bicicletas
   for all using (
     exists (
       select 1 from public.usuarios
-      where id = auth.uid() and rol in ('operador', 'tecnico')
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
     )
   );
 
@@ -319,7 +319,7 @@ create policy "Mantenimientos: lectura operadores" on public.mantenimientos
   for select using (
     exists (
       select 1 from public.usuarios
-      where id = auth.uid() and rol in ('operador', 'tecnico')
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
     )
   );
 
@@ -327,7 +327,7 @@ create policy "Mantenimientos: inserción operadores" on public.mantenimientos
   for insert with check (
     exists (
       select 1 from public.usuarios
-      where id = auth.uid() and rol in ('operador', 'tecnico')
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
     )
   );
 
@@ -336,7 +336,7 @@ create policy "Viajes: lectura operadores" on public.viajes
   for select using (
     exists (
       select 1 from public.usuarios
-      where id = auth.uid() and rol in ('operador', 'tecnico')
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
     )
   );
 
@@ -345,7 +345,7 @@ create policy "Viajes: gestión propia ciudadano" on public.viajes
     usuario_id = auth.uid() or
     exists (
       select 1 from public.usuarios
-      where id = auth.uid() and rol in ('operador', 'tecnico')
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
     )
   );
 
@@ -355,7 +355,7 @@ create policy "Incidencias: ciudadano ve las suyas y staff ve todas" on public.i
     usuario_id = auth.uid()
     or exists (
       select 1 from public.usuarios
-      where id = auth.uid() and rol in ('operador', 'tecnico')
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
     )
   );
 
@@ -366,7 +366,7 @@ create policy "Incidencias: staff actualiza" on public.incidencias
   for update using (
     exists (
       select 1 from public.usuarios
-      where id = auth.uid() and rol in ('operador', 'tecnico')
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
     )
   );
 
@@ -375,7 +375,7 @@ create policy "Alertas: staff gestiona" on public.alertas
   for all using (
     exists (
       select 1 from public.usuarios
-      where id = auth.uid() and rol in ('operador', 'tecnico')
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
     )
   );
 
