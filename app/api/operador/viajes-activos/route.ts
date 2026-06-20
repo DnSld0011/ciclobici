@@ -8,18 +8,18 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { data: rol } = await supabase
-    .from('roles')
+  // El rol del usuario está en la tabla 'usuarios', no en 'roles'
+  const admin = createAdminClient()
+
+  const { data: perfil } = await admin
+    .from('usuarios')
     .select('rol')
     .eq('id', user.id)
     .single()
 
-  if (!rol || !['operador', 'tecnico', 'administrador'].includes(rol.rol)) {
+  if (!perfil || !['operador', 'tecnico', 'administrador'].includes(perfil.rol)) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
-
-  // Usar adminClient para ver todos los viajes sin restricción de RLS
-  const admin = createAdminClient()
   const { data: viajes, error } = await admin
     .from('viajes')
     .select(`
