@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(req: NextRequest) {
+  // Auth: leer sesión del ciudadano desde cookies
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
@@ -11,8 +13,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'viaje_id y estacion_destino_id son requeridos' }, { status: 400 })
   }
 
+  // Usar admin para todas las operaciones de DB
+  const admin = createAdminClient()
+
   // Verificar que el viaje pertenece al usuario y está activo
-  const { data: viaje, error: errViaje } = await supabase
+  const { data: viaje, error: errViaje } = await admin
     .from('viajes')
     .select('id, bicicleta_id, inicio_at, estado, usuario_id')
     .eq('id', viaje_id)
@@ -24,8 +29,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Viaje no encontrado o no está activo' }, { status: 404 })
   }
 
-  // Verificar que la estación destino tiene capacidad
-  const { data: estacion } = await supabase
+  // Verificar que la estación destino existe y está activa
+  const { data: estacion } = await admin
     .from('estaciones')
     .select('id, capacidad, nombre')
     .eq('id', estacion_destino_id)
@@ -36,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Estación destino no válida o inactiva' }, { status: 400 })
   }
 
-  const { count: ocupadas } = await supabase
+  const { count: ocupadas } = await admin
     .from('bicicletas')
     .select('*', { count: 'exact', head: true })
     .eq('estacion_id', estacion_destino_id)
@@ -48,8 +53,6 @@ export async function POST(req: NextRequest) {
 
   const fin = new Date().toISOString()
 
-  // Construir el payload de actualización
-  // Si el cliente envía distancia_km GPS, la incluimos para que el trigger la respete
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updatePayload: Record<string, any> = {
     fin_at: fin,
@@ -60,7 +63,7 @@ export async function POST(req: NextRequest) {
     updatePayload.distancia_km = distancia_km
   }
 
-  const { data: viajeActualizado, error: errUpdate } = await supabase
+  const { data: viajeActualizado, error: errUpdate } = await admin
     .from('viajes')
     .update(updatePayload)
     .eq('id', viaje_id)
@@ -70,7 +73,7 @@ export async function POST(req: NextRequest) {
   if (errUpdate) return NextResponse.json({ error: errUpdate.message }, { status: 500 })
 
   // Devolver la bicicleta a la estación destino
-  await supabase
+  await admin
     .from('bicicletas')
     .update({ estado: 'disponible', estacion_id: estacion_destino_id })
     .eq('id', viaje.bicicleta_id)
