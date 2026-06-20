@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Alerta, AlertaNivel, AlertaTipo } from '@/types'
-import { Bell, AlertTriangle, Info, CheckCircle, RefreshCw, Filter, Download } from 'lucide-react'
+import { Bell, AlertTriangle, Info, CheckCircle, RefreshCw, Filter, Download, FileText } from 'lucide-react'
 import { exportarCsv } from '@/lib/utils/exportCsv'
+import { exportarPdf } from '@/lib/utils/exportPdf'
 
 const NIVEL_CONFIG: Record<AlertaNivel, { bg: string; border: string; text: string; badge: string }> = {
   critica: { bg: 'bg-[#ffdad6]', border: 'border-l-error', text: 'text-[#93000a]', badge: 'bg-error text-white' },
@@ -99,7 +100,22 @@ export default function AlertasOperadorPage() {
             Fecha: new Date(a.created_at).toLocaleDateString('es-PE'),
           })), 'alertas-sanborja')}
             className="flex items-center gap-1.5 text-xs font-semibold text-outline border border-outline-variant/30 bg-white px-3 py-2 rounded-full hover:bg-surface-container-low transition-colors">
-            <Download size={12} /> Exportar CSV
+            <Download size={12} /> CSV
+          </button>
+          <button onClick={() => exportarPdf({
+            titulo: 'Reporte de Alertas Operativas',
+            subtitulo: `Panel de alertas · San Borja en Bici`,
+            columnas: ['Tipo', 'Nivel', 'Título', 'Mensaje', 'Leída', 'Resuelta', 'Fecha'],
+            filas: alertas.map(a => [
+              TIPO_LABEL[a.tipo], a.nivel, a.titulo, a.mensaje ?? '',
+              a.leida ? 'Sí' : 'No', a.resuelta ? 'Sí' : 'No',
+              new Date(a.created_at).toLocaleDateString('es-PE'),
+            ]),
+            nombreArchivo: 'alertas-sanborja',
+            orientacion: 'landscape',
+          })}
+            className="flex items-center gap-1.5 text-xs font-semibold text-outline border border-outline-variant/30 bg-white px-3 py-2 rounded-full hover:bg-surface-container-low transition-colors">
+            <FileText size={12} /> PDF
           </button>
           <button
             onClick={cargar}

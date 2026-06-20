@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { Estacion, EstacionEstado } from '@/types'
-import { Plus, Search, Pencil, Trash2, Building2, MapPin, X, Download } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Building2, MapPin, X, Download, FileText } from 'lucide-react'
 import { validarCoordenadas } from '@/lib/utils/codigos'
 import { exportarCsv } from '@/lib/utils/exportCsv'
+import { exportarPdf } from '@/lib/utils/exportPdf'
 
 const MapaPicker = dynamicImport(
   () => import('@/components/maps/MapaPicker').then(m => m.MapaPicker),
@@ -138,7 +139,17 @@ export default function EstacionesPage() {
             Nombre: e.nombre, Dirección: e.direccion, Latitud: e.latitud,
             Longitud: e.longitud, Capacidad: e.capacidad, Estado: e.estado,
           })), 'estaciones-sanborja')}>
-            <Download size={14} /> Exportar CSV
+            <Download size={14} /> CSV
+          </button>
+          <button className={btnOutline} onClick={() => exportarPdf({
+            titulo: 'Reporte de Estaciones',
+            subtitulo: `Estado de las estaciones · San Borja en Bici`,
+            columnas: ['Nombre', 'Dirección', 'Capacidad', 'Estado', 'Latitud', 'Longitud'],
+            filas: estaciones.map(e => [e.nombre, e.direccion, e.capacidad, e.estado, e.latitud, e.longitud]),
+            nombreArchivo: 'estaciones-sanborja',
+            orientacion: 'landscape',
+          })}>
+            <FileText size={14} /> PDF
           </button>
           <button className={btnPrimary} onClick={abrirCrear}>
             <Plus size={16} /> Nueva Estación

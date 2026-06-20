@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Mantenimiento, Bicicleta } from '@/types'
-import { Plus, Search, Wrench, Filter, X, CheckCircle, Download } from 'lucide-react'
+import { Plus, Search, Wrench, Filter, X, CheckCircle, Download, FileText } from 'lucide-react'
 import { exportarCsv } from '@/lib/utils/exportCsv'
+import { exportarPdf } from '@/lib/utils/exportPdf'
 
 const TIPOS_INTERVENCION = [
   'Mantenimiento Preventivo', 'Reparación de Frenos', 'Cambio de Neumático',
@@ -120,7 +121,24 @@ export default function MantenimientoPage() {
               Fecha: new Date(m.fecha).toLocaleDateString('es-PE'),
             }
           }), 'mantenimiento-sanborja')}>
-            <Download size={14} /> Exportar CSV
+            <Download size={14} /> CSV
+          </button>
+          <button className={btnOutline} onClick={() => exportarPdf({
+            titulo: 'Reporte de Mantenimiento',
+            subtitulo: `Intervenciones técnicas registradas · San Borja en Bici`,
+            columnas: ['Bicicleta', 'Tipo', 'Intervención', 'Responsable', 'Descripción', 'Fecha'],
+            filas: filtrados.map(m => {
+              const bici = m.bicicleta as unknown as { codigo: string; tipo: string } | null
+              return [
+                bici?.codigo ?? '', bici?.tipo ?? '',
+                m.tipo_intervencion, m.responsable, m.descripcion ?? '',
+                new Date(m.fecha).toLocaleDateString('es-PE'),
+              ]
+            }),
+            nombreArchivo: 'mantenimiento-sanborja',
+            orientacion: 'landscape',
+          })}>
+            <FileText size={14} /> PDF
           </button>
           <button className={btnPrimary} onClick={() => { setError(''); setModalAbierto(true) }}>
             <Plus size={16} /> Registrar

@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Bicicleta, BicicletaEstado, Estacion } from '@/types'
-import { Plus, Search, QrCode, Download, Bike, X } from 'lucide-react'
+import { Plus, Search, QrCode, Download, Bike, X, FileText } from 'lucide-react'
 import { generarCodigoBicicleta } from '@/lib/utils/codigos'
 import { exportarCsv } from '@/lib/utils/exportCsv'
+import { exportarPdf } from '@/lib/utils/exportPdf'
 
 type FormBici = { tipo: string; marca: string; modelo: string; estacion_id: string; estado: BicicletaEstado }
 const formVacio: FormBici = { tipo: '', marca: '', modelo: '', estacion_id: '', estado: 'disponible' }
@@ -126,7 +127,19 @@ export default function BicicletasPage() {
             const est = b.estacion as unknown as { nombre: string } | null
             return { Código: b.codigo, Tipo: b.tipo, Marca: b.marca ?? '', Modelo: b.modelo ?? '', Estado: b.estado, Estación: est?.nombre ?? '' }
           }), 'bicicletas-sanborja')}>
-            <Download size={14} /> Exportar CSV
+            <Download size={14} /> CSV
+          </button>
+          <button className={btnOutline} onClick={() => exportarPdf({
+            titulo: 'Reporte de Bicicletas',
+            subtitulo: `Flota completa · San Borja en Bici`,
+            columnas: ['Código', 'Tipo', 'Marca', 'Modelo', 'Estado', 'Estación'],
+            filas: bicicletas.map(b => {
+              const est = b.estacion as unknown as { nombre: string } | null
+              return [b.codigo, b.tipo, b.marca ?? '', b.modelo ?? '', b.estado, est?.nombre ?? '—']
+            }),
+            nombreArchivo: 'bicicletas-sanborja',
+          })}>
+            <FileText size={14} /> PDF
           </button>
           <button className={btnPrimary} onClick={() => { setForm(formVacio); setError(''); setModalNueva(true) }}>
             <Plus size={16} /> Nueva Bicicleta

@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
-import { Activity, Bike, Clock, MapPin, User, RefreshCw, Leaf, Download } from 'lucide-react'
+import { Activity, Bike, Clock, MapPin, User, RefreshCw, Leaf, Download, FileText } from 'lucide-react'
 import { exportarCsv } from '@/lib/utils/exportCsv'
+import { exportarPdf } from '@/lib/utils/exportPdf'
 
 const MapaEstaciones = dynamicImport(
   () => import('@/components/maps/MapaEstaciones').then(m => m.MapaEstaciones),
@@ -125,7 +126,23 @@ export default function ViajesEnVivoPage() {
             'Minutos activo': Math.floor((Date.now() - new Date(v.inicio_at).getTime()) / 60000),
           })), 'viajes-vivo-sanborja')}
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/30 bg-white text-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors">
-            <Download size={14} /> Exportar CSV
+            <Download size={14} /> CSV
+          </button>
+          <button onClick={() => exportarPdf({
+            titulo: 'Reporte de Viajes en Curso',
+            subtitulo: `Viajes activos al ${new Date().toLocaleString('es-PE')} · San Borja en Bici`,
+            columnas: ['Usuario', 'Bicicleta', 'Tipo', 'Estación Origen', 'Inicio', 'Minutos'],
+            filas: viajes.map(v => [
+              v.usuario?.nombre ?? '', v.bicicleta?.codigo ?? '', v.bicicleta?.tipo ?? '',
+              v.estacion_origen?.nombre ?? '',
+              new Date(v.inicio_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+              Math.floor((Date.now() - new Date(v.inicio_at).getTime()) / 60000),
+            ]),
+            nombreArchivo: 'viajes-vivo-sanborja',
+            orientacion: 'landscape',
+          })}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/30 bg-white text-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors">
+            <FileText size={14} /> PDF
           </button>
           <button onClick={cargar}
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/30 bg-white text-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors">
