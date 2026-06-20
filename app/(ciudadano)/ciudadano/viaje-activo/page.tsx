@@ -50,6 +50,8 @@ export default function ViajeActivoPage() {
   const [destino, setDestino]       = useState<EstacionConDisponibilidad | null>(null)
   const [loading, setLoading]       = useState(true)
   const [finalizando, setFinalizando] = useState(false)
+  const [cancelando, setCancelando]  = useState(false)
+  const [confirmarCancelar, setConfirmarCancelar] = useState(false)
   const [error, setError]           = useState<string | null>(null)
 
   // GPS
@@ -111,6 +113,25 @@ export default function ViajeActivoPage() {
     return () => { if (watchIdRef.current != null) navigator.geolocation?.clearWatch(watchIdRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  async function cancelar() {
+    if (!viaje) return
+    setCancelando(true)
+    if (watchIdRef.current != null) navigator.geolocation?.clearWatch(watchIdRef.current)
+    const res = await fetch('/api/viajes/cancelar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ viaje_id: viaje.id }),
+    })
+    if (res.ok) {
+      router.replace('/ciudadano')
+    } else {
+      const d = await res.json()
+      setError(d.error ?? 'Error al cancelar')
+      setCancelando(false)
+      setConfirmarCancelar(false)
+    }
+  }
 
   async function finalizar() {
     if (!destino) { setError('Toca una estación en el mapa para elegir destino'); return }
@@ -245,6 +266,36 @@ export default function ViajeActivoPage() {
             <MapPin size={11} className="text-primary-container" />
             Toca una estación en el mapa para elegir destino
           </p>
+        )}
+
+        {/* Cancelar viaje */}
+        {!confirmarCancelar ? (
+          <button
+            onClick={() => setConfirmarCancelar(true)}
+            className="w-full text-center text-xs text-outline/60 py-1 hover:text-error transition-colors"
+          >
+            Cancelar viaje
+          </button>
+        ) : (
+          <div className="rounded-2xl border border-error/30 bg-[#fff5f5] p-4 space-y-3">
+            <p className="text-sm font-bold text-error text-center">¿Cancelar este viaje?</p>
+            <p className="text-xs text-outline text-center">La bicicleta volverá a la estación de origen.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmarCancelar(false)}
+                className="flex-1 h-10 rounded-xl border border-outline-variant/30 text-sm font-semibold text-on-surface"
+              >
+                No, continuar
+              </button>
+              <button
+                onClick={cancelar}
+                disabled={cancelando}
+                className="flex-1 h-10 rounded-xl bg-error text-white text-sm font-bold disabled:opacity-50"
+              >
+                {cancelando ? 'Cancelando...' : 'Sí, cancelar'}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
