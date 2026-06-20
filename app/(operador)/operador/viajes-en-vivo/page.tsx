@@ -51,24 +51,16 @@ export default function ViajesEnVivoPage() {
 
   const cargar = useCallback(async () => {
     const supabase = createClient()
-    const [{ data: viajesData }, { data: estData }] = await Promise.all([
-      supabase
-        .from('viajes')
-        .select(`
-          id, inicio_at,
-          usuario:usuario_id(nombre, email),
-          bicicleta:bicicleta_id(codigo, tipo),
-          estacion_origen:estacion_origen_id(id, nombre, latitud, longitud, direccion)
-        `)
-        .eq('estado', 'activo')
-        .order('inicio_at', { ascending: false }),
+    const [viajesRes, { data: estData }] = await Promise.all([
+      // Usar API con adminClient — el browser client no puede ver viajes de otros usuarios (RLS)
+      fetch('/api/operador/viajes-activos').then(r => r.json()),
       supabase
         .from('estaciones')
         .select('*, bicicletas(id,estado)')
         .eq('estado', 'activa'),
     ])
 
-    if (viajesData) setViajes(viajesData as unknown as ViajeVivo[])
+    if (viajesRes?.viajes) setViajes(viajesRes.viajes as ViajeVivo[])
     if (estData) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setEstaciones((estData as any[]).map(e => ({
