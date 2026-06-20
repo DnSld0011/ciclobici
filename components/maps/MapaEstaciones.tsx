@@ -120,7 +120,7 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
       >
         {estaciones.map(est => {
           const disponibles = est.bicicletas_disponibles ?? 0
-          const { gradient, solid, text } = estiloPorDisponibilidad(disponibles, est.capacidad)
+          const { solid, text } = estiloPorDisponibilidad(disponibles, est.capacidad)
           const activo = activeId === est.id
           return (
             <OverlayView
@@ -131,30 +131,54 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
               <div
                 onClick={() => { setActiveId(est.id); onEstacionClick?.(est) }}
                 style={{
-                  transform: `translate(-50%, -100%) scale(${activo ? 1.12 : 1})`,
-                  transition: 'transform 0.15s ease-out',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  transform: 'translate(-50%, -100%)',
                   cursor: 'pointer',
+                  paddingBottom: 6,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
                 }}
               >
+                {/* Tarjeta */}
                 <div style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  background: gradient,
-                  border: '3px solid #fff',
-                  boxShadow: activo ? '0 4px 14px rgba(0,0,0,0.45)' : '0 3px 10px rgba(0,0,0,0.32)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: text, fontWeight: 800, fontSize: 13, lineHeight: 1,
-                  fontFamily: 'inherit',
+                  background: 'white',
+                  borderRadius: 10,
+                  boxShadow: activo
+                    ? '0 4px 16px rgba(0,0,0,0.28)'
+                    : '0 2px 8px rgba(0,0,0,0.18)',
+                  border: `2px solid ${solid}`,
+                  minWidth: 72,
+                  maxWidth: 110,
+                  overflow: 'hidden',
+                  transform: activo ? 'scale(1.08)' : 'scale(1)',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                 }}>
-                  {disponibles}
+                  {/* Badge disponibilidad */}
+                  <div style={{
+                    background: solid,
+                    padding: '3px 7px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  }}>
+                    <span style={{ fontSize: 11 }}>🚲</span>
+                    <span style={{ color: text, fontWeight: 800, fontSize: 12, fontFamily: 'inherit' }}>
+                      {disponibles}/{est.capacidad}
+                    </span>
+                  </div>
+                  {/* Nombre */}
+                  <div style={{
+                    padding: '3px 6px 4px',
+                    fontSize: 10, fontWeight: 600, color: '#1a1a1a',
+                    textAlign: 'center', fontFamily: 'inherit',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    maxWidth: 106,
+                  }}>
+                    {est.nombre}
+                  </div>
                 </div>
-                {/* colita del pin */}
+                {/* Flecha */}
                 <div style={{
-                  width: 0, height: 0, marginTop: -2,
+                  width: 0, height: 0,
                   borderLeft: '6px solid transparent',
                   borderRight: '6px solid transparent',
-                  borderTop: `8px solid ${solid}`,
-                  filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.25))',
+                  borderTop: `6px solid ${solid}`,
                 }} />
               </div>
             </OverlayView>
