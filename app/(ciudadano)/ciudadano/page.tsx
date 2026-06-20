@@ -5,7 +5,19 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
-import { Map, Bike, MapPin, ChevronRight, Leaf, Clock, AlertTriangle, TrendingUp, Home, Briefcase } from 'lucide-react'
+import { Map, Bike, MapPin, ChevronRight, Leaf, Clock, AlertTriangle, TrendingUp, Home, Briefcase, Trophy } from 'lucide-react'
+
+const LOGROS: { id: string; emoji: string; titulo: string; desc: string; umbral: (s: Stats) => boolean }[] = [
+  { id: 'primer_viaje',    emoji: '🚲', titulo: 'Primera pedalada',  desc: '1 viaje completado',      umbral: s => s.viajes >= 1 },
+  { id: 'diez_viajes',     emoji: '🔟', titulo: 'Pedalero habitual', desc: '10 viajes completados',   umbral: s => s.viajes >= 10 },
+  { id: 'cincuenta_viajes',emoji: '⭐', titulo: 'Ciclista SB',       desc: '50 viajes completados',   umbral: s => s.viajes >= 50 },
+  { id: 'cien_viajes',     emoji: '🏆', titulo: 'Leyenda del pedal', desc: '100 viajes completados',  umbral: s => s.viajes >= 100 },
+  { id: 'diez_km',         emoji: '🛣️', titulo: 'Primeros km',       desc: '10 km recorridos',        umbral: s => s.km >= 10 },
+  { id: 'cincuenta_km',    emoji: '🌆', titulo: 'Explorador urbano', desc: '50 km recorridos',        umbral: s => s.km >= 50 },
+  { id: 'cien_km',         emoji: '🏙️', titulo: 'Maratonista verde', desc: '100 km recorridos',       umbral: s => s.km >= 100 },
+  { id: 'co2_ahorrado',    emoji: '🌿', titulo: 'Guardián del clima',desc: '1 kg CO₂ ahorrado',       umbral: s => s.co2 >= 1 },
+  { id: 'diez_co2',        emoji: '🌱', titulo: 'Amigo del planeta', desc: '10 kg CO₂ ahorrado',      umbral: s => s.co2 >= 10 },
+]
 
 interface Stats { viajes: number; co2: number; km: number }
 
@@ -78,6 +90,8 @@ export default function DashboardCiudadano() {
   }, [])
 
   const totalLibres = estaciones.reduce((s, e) => s + e.bicicletas_disponibles, 0)
+  const logrosDesbloqueados = LOGROS.filter(l => l.umbral(stats))
+  const logrosLocked = LOGROS.filter(l => !l.umbral(stats))
 
   return (
     <div className="max-w-lg mx-auto pb-6 space-y-5">
@@ -235,6 +249,45 @@ export default function DashboardCiudadano() {
             ))}
           </div>
         </div>
+
+        {/* ── LOGROS ── */}
+        {!loading && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-extrabold text-on-surface text-sm flex items-center gap-2">
+                <Trophy size={15} className="text-amber-500" /> Mis logros
+              </h2>
+              <span className="text-xs font-bold text-primary-container">
+                {logrosDesbloqueados.length}/{LOGROS.length}
+              </span>
+            </div>
+
+            {logrosDesbloqueados.length === 0 ? (
+              <div className="card px-4 py-4 text-center">
+                <p className="text-sm text-outline">Completa tu primer viaje para desbloquear logros</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {/* Logros desbloqueados */}
+                {logrosDesbloqueados.map(l => (
+                  <div key={l.id} className="bg-white rounded-2xl p-3 shadow-sm border border-[#b2f746]/40 text-center">
+                    <span className="text-2xl block mb-1">{l.emoji}</span>
+                    <p className="text-[10px] font-extrabold text-[#003527] leading-tight">{l.titulo}</p>
+                    <p className="text-[9px] text-outline mt-0.5 leading-tight">{l.desc}</p>
+                  </div>
+                ))}
+                {/* Próximo logro a desbloquear */}
+                {logrosLocked.length > 0 && (
+                  <div className="bg-surface-container-low rounded-2xl p-3 text-center border border-dashed border-outline-variant/30 opacity-60">
+                    <span className="text-2xl block mb-1 grayscale">{logrosLocked[0].emoji}</span>
+                    <p className="text-[10px] font-extrabold text-outline leading-tight">{logrosLocked[0].titulo}</p>
+                    <p className="text-[9px] text-outline mt-0.5 leading-tight">{logrosLocked[0].desc}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── ACCIONES rápidas ── */}
         <div>
