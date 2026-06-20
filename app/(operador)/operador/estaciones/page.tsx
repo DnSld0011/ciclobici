@@ -1,11 +1,17 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { Estacion, EstacionEstado } from '@/types'
 import { Plus, Search, Pencil, Trash2, Building2, MapPin, X, Download } from 'lucide-react'
 import { validarCoordenadas } from '@/lib/utils/codigos'
 import { exportarCsv } from '@/lib/utils/exportCsv'
+
+const MapaPicker = dynamicImport(
+  () => import('@/components/maps/MapaPicker').then(m => m.MapaPicker),
+  { ssr: false, loading: () => <div className="w-full h-full bg-surface-container-low rounded-xl animate-pulse" /> }
+)
 
 type FormEstacion = {
   nombre: string; direccion: string; latitud: string
@@ -70,6 +76,7 @@ export default function EstacionesPage() {
     e.preventDefault(); setError('')
     const lat = parseFloat(form.latitud), lng = parseFloat(form.longitud), cap = parseInt(form.capacidad)
     if (!form.nombre.trim()) { setError('El nombre es requerido'); return }
+    if (!form.latitud || !form.longitud) { setError('Selecciona la ubicación en el mapa'); return }
     if (!validarCoordenadas(lat, lng)) { setError('Coordenadas inválidas'); return }
     if (!cap || cap <= 0) { setError('La capacidad debe ser mayor a 0'); return }
     setLoading(true)
@@ -232,7 +239,7 @@ export default function EstacionesPage() {
       {/* Modal */}
       {modalAbierto && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between p-6 border-b border-outline-variant/20">
               <h2 className="font-extrabold text-on-surface">{editando ? 'Editar Estación' : 'Nueva Estación'}</h2>
               <button onClick={() => setModalAbierto(false)} className="w-8 h-8 rounded-xl bg-surface-container-low flex items-center justify-center hover:bg-surface-container transition-colors">
@@ -240,7 +247,7 @@ export default function EstacionesPage() {
               </button>
             </div>
             {error && <div className="mx-6 mt-4 px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold">{error}</div>}
-            <form onSubmit={guardar} className="p-6 space-y-4">
+            <form onSubmit={guardar} className="p-6 space-y-4 overflow-y-auto flex-1">
               <div>
                 <label className={labelCls}>Nombre</label>
                 <input className={inputCls} value={form.nombre}
@@ -251,16 +258,39 @@ export default function EstacionesPage() {
                 <input className={inputCls} value={form.direccion}
                   onChange={e => setForm(p => ({ ...p, direccion: e.target.value }))} required />
               </div>
+              {/* Mapa picker */}
+              <div>
+                <label className={labelCls}>Ubicación en el mapa *</label>
+                <div className="w-full h-52 rounded-xl overflow-hidden border border-outline-variant/40">
+                  <MapaPicker
+                    lat={form.latitud ? parseFloat(form.latitud) : null}
+                    lng={form.longitud ? parseFloat(form.longitud) : null}
+                    onChange={(lat, lng) => setForm(p => ({ ...p, latitud: String(lat), longitud: String(lng) }))}
+                  />
+                </div>
+              </div>
+
+              {/* Lat / Lng — solo lectura, se rellenan desde el mapa */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Latitud</label>
-                  <input type="number" step="any" className={inputCls} placeholder="-12.1000"
-                    value={form.latitud} onChange={e => setForm(p => ({ ...p, latitud: e.target.value }))} required />
+                  <input
+                    readOnly
+                    tabIndex={-1}
+                    className={inputCls + ' bg-surface-container-low cursor-not-allowed select-none text-outline'}
+                    placeholder="Se obtiene del mapa"
+                    value={form.latitud}
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>Longitud</label>
-                  <input type="number" step="any" className={inputCls} placeholder="-77.0000"
-                    value={form.longitud} onChange={e => setForm(p => ({ ...p, longitud: e.target.value }))} required />
+                  <input
+                    readOnly
+                    tabIndex={-1}
+                    className={inputCls + ' bg-surface-container-low cursor-not-allowed select-none text-outline'}
+                    placeholder="Se obtiene del mapa"
+                    value={form.longitud}
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
