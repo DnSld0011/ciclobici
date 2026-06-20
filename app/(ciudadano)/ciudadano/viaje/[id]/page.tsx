@@ -67,9 +67,16 @@ export default function ResumenViajePage() {
   async function calificar(n: number) {
     if (calificacionGuardada) return
     setCalificacion(n)
-    const supabase = createClient()
-    await supabase.from('viajes').update({ calificacion: n }).eq('id', id as string)
-    setCalificacionGuardada(true)
+    try {
+      const res = await fetch('/api/viajes/calificar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ viaje_id: id, calificacion: n }),
+      })
+      if (res.ok) setCalificacionGuardada(true)
+    } catch {
+      // No bloquear al usuario si falla silenciosamente
+    }
   }
 
   if (loading) return (
