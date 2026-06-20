@@ -133,6 +133,8 @@ export default function ViajesPage() {
         <div className="space-y-3">
           {viajes.map(v => {
             const finalizado = v.estado === 'finalizado'
+            const activo    = v.estado === 'activo'
+            const cancelado = v.estado === 'cancelado'
             const dist = v.distancia_km
             return (
               <div key={v.id}
@@ -147,15 +149,20 @@ export default function ViajesPage() {
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
                       style={{
-                        background: finalizado ? '#f0fdf4' : '#eff6ff',
-                        color: finalizado ? '#166534' : '#1d4ed8',
+                        background: finalizado ? '#f0fdf4' : activo ? '#eff6ff' : '#f3f4f6',
+                        color: finalizado ? '#166534' : activo ? '#1d4ed8' : '#6b7280',
                       }}>
                       <Bike size={11} />
                       {v.bicicleta?.codigo ?? '—'}
                     </div>
-                    {!finalizado && (
+                    {activo && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
                         En curso
+                      </span>
+                    )}
+                    {cancelado && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                        Cancelado
                       </span>
                     )}
                   </div>
@@ -180,7 +187,7 @@ export default function ViajesPage() {
                         Destino{v.fin_at ? ` · ${horaCorta(v.fin_at)}` : ''}
                       </p>
                       <p className="text-sm font-medium text-gray-800 truncate">
-                        {v.estacion_destino?.nombre ?? (v.fin_at ? 'Sin registro' : 'En curso')}
+                        {v.estacion_destino?.nombre ?? (activo ? 'En curso' : 'Sin registro')}
                       </p>
                     </div>
                   </div>
