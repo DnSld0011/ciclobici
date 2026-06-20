@@ -40,7 +40,7 @@ export default function ResumenViajePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace('/login'); return }
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('viajes')
         .select(`
           id, inicio_at, fin_at, duracion_min, distancia_km, calificacion,
@@ -52,7 +52,21 @@ export default function ResumenViajePage() {
         .eq('usuario_id', user.id)
         .single()
 
-      if (data) {
+      if (error?.message?.includes('calificacion')) {
+        // Migración 0001 pendiente — cargar sin calificacion
+        const { data: data2 } = await supabase
+          .from('viajes')
+          .select(`
+            id, inicio_at, fin_at, duracion_min, distancia_km,
+            bicicleta:bicicleta_id(codigo, tipo),
+            estacion_origen:estacion_origen_id(nombre, latitud, longitud),
+            estacion_destino:estacion_destino_id(nombre, latitud, longitud)
+          `)
+          .eq('id', id as string)
+          .eq('usuario_id', user.id)
+          .single()
+        if (data2) setViaje(data2 as unknown as ViajeResumen)
+      } else if (data) {
         setViaje(data as unknown as ViajeResumen)
         if (data.calificacion) {
           setCalificacion(data.calificacion)

@@ -82,11 +82,25 @@ export default function ViajeActivoPage() {
 
   useEffect(() => {
     async function init() {
-      const res = await fetch('/api/viajes/activo')
-      const { viaje: v } = await res.json()
-      if (!v) { router.replace('/ciudadano'); return }
-      setViaje(v)
-      await cargarEstaciones()
+      try {
+        const res = await fetch('/api/viajes/activo')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        const v = json?.viaje
+        if (!v) { router.replace('/ciudadano'); return }
+        setViaje(v)
+      } catch {
+        // Error de red o respuesta inesperada — redirigir al dashboard
+        router.replace('/ciudadano')
+        return
+      }
+
+      try {
+        await cargarEstaciones()
+      } catch {
+        // No bloquear si estaciones falla — el mapa puede quedar vacío
+      }
+
       setLoading(false)
 
       if (!navigator.geolocation) { setGpsActivo('denied'); return }

@@ -45,7 +45,7 @@ export default function ViajesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace('/login'); return }
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('viajes')
         .select(`
           id, inicio_at, fin_at, duracion_min, distancia_km, calificacion, estado,
@@ -57,7 +57,23 @@ export default function ViajesPage() {
         .order('inicio_at', { ascending: false })
         .limit(50)
 
-      if (data) setViajes(data as unknown as Viaje[])
+      if (error?.message?.includes('calificacion')) {
+        // Migración 0001 pendiente — consultar sin esa columna para no bloquear la vista
+        const { data: data2 } = await supabase
+          .from('viajes')
+          .select(`
+            id, inicio_at, fin_at, duracion_min, distancia_km, estado,
+            estacion_origen:estacion_origen_id(nombre),
+            estacion_destino:estacion_destino_id(nombre),
+            bicicleta:bicicleta_id(codigo)
+          `)
+          .eq('usuario_id', user.id)
+          .order('inicio_at', { ascending: false })
+          .limit(50)
+        if (data2) setViajes(data2 as unknown as Viaje[])
+      } else if (data) {
+        setViajes(data as unknown as Viaje[])
+      }
       setLoading(false)
     }
     cargar()

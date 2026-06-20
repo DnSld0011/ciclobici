@@ -87,6 +87,14 @@ export async function proxy(request: NextRequest) {
     const isAppRoute = GROUP_ROOTS.some(g => pathname.startsWith(g))
     if (!isAppRoute || !serviceKey) return supabaseResponse
 
+    // Rutas funcionales que NUNCA se bloquean con vistas — son parte del flujo core del app
+    const RUTAS_CORE: Record<string, string[]> = {
+      ciudadano: ['/ciudadano/viaje-activo', '/ciudadano/escanear', '/ciudadano/viaje/'],
+    }
+    const rutasCore = RUTAS_CORE[rol] ?? []
+    const esRutaCore = rutasCore.some(r => pathname === r || pathname.startsWith(r))
+    if (esRutaCore) return supabaseResponse
+
     try {
       // Usar createServerClient con la service role key — funciona en Edge Runtime
       const admin = createServerClient(supabaseUrl, serviceKey!, {

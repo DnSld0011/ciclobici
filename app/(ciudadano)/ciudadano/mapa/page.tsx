@@ -54,11 +54,20 @@ export default function MapaCiudadanoPage() {
   useEffect(() => {
     cargar()
     const supabase = createClient()
+    // Debounce para no re-cargar todas las estaciones en cada UPDATE de bici
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const debouncedCargar = () => {
+      if (timeout) clearTimeout(timeout)
+      timeout = setTimeout(cargar, 800)
+    }
     const ch = supabase.channel('mapa-ciudadano-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, cargar)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bicicletas' }, debouncedCargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, debouncedCargar)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => {
+      if (timeout) clearTimeout(timeout)
+      supabase.removeChannel(ch)
+    }
   }, [cargar])
 
   // Pedir ubicación del usuario al entrar al mapa

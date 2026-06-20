@@ -96,20 +96,16 @@ export default function ReportarIncidenciaPage() {
   useEffect(() => {
     if (tab !== 'mis-reportes') return
 
-    async function cargar(uid?: string) {
-      setLoadingReportes(!reportesCargados.current)
-      const supabase = createClient()
-      let userId = uid
-      if (!userId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) { router.replace('/login'); return }
-        userId = user.id
-      }
+    const supabase = createClient()
+    let uid: string | undefined
+    let channelRef: ReturnType<typeof supabase.channel> | null = null
 
+    async function cargar(userId?: string) {
+      setLoadingReportes(!reportesCargados.current)
       const { data } = await supabase
         .from('incidencias')
         .select('id, tipo, estado, descripcion, created_at, bicicleta:bicicleta_id(codigo)')
-        .eq('usuario_id', userId)
+        .eq('usuario_id', userId ?? '')
         .order('created_at', { ascending: false })
 
       if (data) setMisReportes(data as unknown as MiReporte[])
@@ -117,17 +113,19 @@ export default function ReportarIncidenciaPage() {
       setLoadingReportes(false)
     }
 
-    let uid: string | undefined
-    const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
-      uid = user?.id
+      if (!user) { router.replace('/login'); return }
+      uid = user.id
       cargar(uid)
-      const ch = supabase.channel('ciudadano-mis-incidencias')
+      channelRef = supabase.channel(`ciudadano-incidencias-${uid}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias',
-          filter: uid ? `usuario_id=eq.${uid}` : undefined }, () => cargar(uid))
+          filter: `usuario_id=eq.${uid}` }, () => cargar(uid))
         .subscribe()
-      return ch
     })
+
+    return () => {
+      if (channelRef) supabase.removeChannel(channelRef)
+    }
   }, [tab, router])
 
   /* ── iniciar / detener cámara QR ── */

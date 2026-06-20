@@ -20,12 +20,25 @@ export function NavbarCiudadano() {
   const pathname = usePathname()
   const [viajeActivo, setViajeActivo] = useState(false)
 
+  // Para no llamar /api/viajes/activo en cada navegación, colapsamos rutas "secundarias"
+  // en un solo token. El efecto solo vuelve a correr cuando se cambia entre el dashboard,
+  // viaje-activo, o el grupo de otras rutas — no en cada página individual.
+  const checkKey =
+    pathname === '/ciudadano' ? 'dashboard'
+    : pathname === '/ciudadano/viaje-activo' ? 'viaje-activo'
+    : 'other'
+
   useEffect(() => {
+    if (checkKey === 'viaje-activo') {
+      setViajeActivo(true)
+      return
+    }
     fetch('/api/viajes/activo')
       .then(r => r.json())
       .then(({ viaje }) => setViajeActivo(!!viaje))
       .catch(() => {})
-  }, [pathname])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkKey])
 
   async function handleLogout() {
     const supabase = createClient()

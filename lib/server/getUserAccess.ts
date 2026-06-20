@@ -80,9 +80,14 @@ export async function getUserAccess(): Promise<UserAccess | null> {
       .eq('id', rol)
       .maybeSingle()
 
+    // Rutas funcionales core que siempre deben ser accesibles aunque el rol tenga vistas custom
+    const VISTAS_CORE: Record<string, string[]> = {
+      ciudadano: ['/ciudadano/viaje-activo', '/ciudadano/escanear', '/ciudadano/viaje'],
+    }
+    const vistasBD = rolData?.vistas as string[] | undefined
     const vistas =
-      rolData?.vistas && (rolData.vistas as string[]).length > 0
-        ? (rolData.vistas as string[])
+      vistasBD && vistasBD.length > 0
+        ? [...new Set([...vistasBD, ...(VISTAS_CORE[rol] ?? [])])]
         : (VISTAS_FALLBACK[rol] ?? [])
 
     return {
