@@ -102,27 +102,27 @@ INSERT INTO public.estaciones (id, nombre, direccion, latitud, longitud, capacid
 -- 5. BICICLETAS (20 unidades)
 -- ============================================================
 
-INSERT INTO public.bicicletas (id, codigo, tipo, marca, modelo, estado, estacion_id) VALUES
-  (b01, 'BC-' || today || '-0001', 'Urbana',    'Trek',       'FX3',          'disponible',   est_1),
-  (b02, 'BC-' || today || '-0002', 'Urbana',    'Giant',      'Escape 3',     'disponible',   est_1),
-  (b03, 'BC-' || today || '-0003', 'Urbana',    'Trek',       'FX2',          'disponible',   est_1),
-  (b04, 'BC-' || today || '-0004', 'MTB',       'Trek',       'Marlin 5',     'disponible',   est_2),
-  (b05, 'BC-' || today || '-0005', 'Urbana',    'Bianchi',    'C-Sport 2',    'disponible',   est_2),
-  (b06, 'BC-' || today || '-0006', 'Urbana',    'Giant',      'Escape 2',     'disponible',   est_2),
-  (b07, 'BC-' || today || '-0007', 'Eléctrica', 'Specialized','Turbo Vado',   'disponible',   est_3),
-  (b08, 'BC-' || today || '-0008', 'Urbana',    'Trek',       'FX3',          'disponible',   est_3),
-  (b09, 'BC-' || today || '-0009', 'Urbana',    'Cannondale', 'Quick 4',      'disponible',   est_3),
-  (b10, 'BC-' || today || '-0010', 'MTB',       'Scott',      'Aspect 950',   'disponible',   est_4),
-  (b11, 'BC-' || today || '-0011', 'Urbana',    'Trek',       'FX1',          'disponible',   est_4),
-  (b12, 'BC-' || today || '-0012', 'Urbana',    'Giant',      'Fastroad AR2', 'disponible',   est_4),
-  (b13, 'BC-' || today || '-0013', 'Eléctrica', 'Trek',       'Verve+ 2',     'disponible',   est_6),
-  (b14, 'BC-' || today || '-0014', 'Urbana',    'Cannondale', 'Quick 3',      'disponible',   est_6),
-  (b15, 'BC-' || today || '-0015', 'MTB',       'Giant',      'Talon 3',      'disponible',   est_6),
-  (b16, 'BC-' || today || '-0016', 'Urbana',    'Bianchi',    'C-Sport 1',    'en_viaje',     est_1),
-  (b17, 'BC-' || today || '-0017', 'Urbana',    'Trek',       'FX2',          'en_viaje',     est_2),
-  (b18, 'BC-' || today || '-0018', 'MTB',       'Scott',      'Aspect 760',   'mantenimiento',NULL),
-  (b19, 'BC-' || today || '-0019', 'Urbana',    'Giant',      'Escape 1',     'mantenimiento',NULL),
-  (b20, 'BC-' || today || '-0020', 'Eléctrica', 'Specialized','Turbo Como',   'baja',         NULL);
+INSERT INTO public.bicicletas (id, codigo, tipo, marca, modelo, qr_code, estado, estacion_id) VALUES
+  (b01, 'BC-' || today || '-0001', 'Urbana',    'Trek',       'FX3',          'QR-' || UPPER(SUBSTRING(b01::text, 1, 8)), 'disponible',   est_1),
+  (b02, 'BC-' || today || '-0002', 'Urbana',    'Giant',      'Escape 3',     'QR-' || UPPER(SUBSTRING(b02::text, 1, 8)), 'disponible',   est_1),
+  (b03, 'BC-' || today || '-0003', 'Urbana',    'Trek',       'FX2',          'QR-' || UPPER(SUBSTRING(b03::text, 1, 8)), 'disponible',   est_1),
+  (b04, 'BC-' || today || '-0004', 'MTB',       'Trek',       'Marlin 5',     'QR-' || UPPER(SUBSTRING(b04::text, 1, 8)), 'disponible',   est_2),
+  (b05, 'BC-' || today || '-0005', 'Urbana',    'Bianchi',    'C-Sport 2',    'QR-' || UPPER(SUBSTRING(b05::text, 1, 8)), 'disponible',   est_2),
+  (b06, 'BC-' || today || '-0006', 'Urbana',    'Giant',      'Escape 2',     'QR-' || UPPER(SUBSTRING(b06::text, 1, 8)), 'disponible',   est_2),
+  (b07, 'BC-' || today || '-0007', 'Eléctrica', 'Specialized','Turbo Vado',   'QR-' || UPPER(SUBSTRING(b07::text, 1, 8)), 'disponible',   est_3),
+  (b08, 'BC-' || today || '-0008', 'Urbana',    'Trek',       'FX3',          'QR-' || UPPER(SUBSTRING(b08::text, 1, 8)), 'disponible',   est_3),
+  (b09, 'BC-' || today || '-0009', 'Urbana',    'Cannondale', 'Quick 4',      'QR-' || UPPER(SUBSTRING(b09::text, 1, 8)), 'disponible',   est_3),
+  (b10, 'BC-' || today || '-0010', 'MTB',       'Scott',      'Aspect 950',   'QR-' || UPPER(SUBSTRING(b10::text, 1, 8)), 'disponible',   est_4),
+  (b11, 'BC-' || today || '-0011', 'Urbana',    'Trek',       'FX1',          'QR-' || UPPER(SUBSTRING(b11::text, 1, 8)), 'disponible',   est_4),
+  (b12, 'BC-' || today || '-0012', 'Urbana',    'Giant',      'Fastroad AR2', 'QR-' || UPPER(SUBSTRING(b12::text, 1, 8)), 'disponible',   est_4),
+  (b13, 'BC-' || today || '-0013', 'Eléctrica', 'Trek',       'Verve+ 2',     'QR-' || UPPER(SUBSTRING(b13::text, 1, 8)), 'disponible',   est_6),
+  (b14, 'BC-' || today || '-0014', 'Urbana',    'Cannondale', 'Quick 3',      'QR-' || UPPER(SUBSTRING(b14::text, 1, 8)), 'disponible',   est_6),
+  (b15, 'BC-' || today || '-0015', 'MTB',       'Giant',      'Talon 3',      'QR-' || UPPER(SUBSTRING(b15::text, 1, 8)), 'disponible',   est_6),
+  (b16, 'BC-' || today || '-0016', 'Urbana',    'Bianchi',    'C-Sport 1',    'QR-' || UPPER(SUBSTRING(b16::text, 1, 8)), 'en_viaje',     est_1),
+  (b17, 'BC-' || today || '-0017', 'Urbana',    'Trek',       'FX2',          'QR-' || UPPER(SUBSTRING(b17::text, 1, 8)), 'en_viaje',     est_2),
+  (b18, 'BC-' || today || '-0018', 'MTB',       'Scott',      'Aspect 760',   'QR-' || UPPER(SUBSTRING(b18::text, 1, 8)), 'mantenimiento',NULL),
+  (b19, 'BC-' || today || '-0019', 'Urbana',    'Giant',      'Escape 1',     'QR-' || UPPER(SUBSTRING(b19::text, 1, 8)), 'mantenimiento',NULL),
+  (b20, 'BC-' || today || '-0020', 'Eléctrica', 'Specialized','Turbo Como',   'QR-' || UPPER(SUBSTRING(b20::text, 1, 8)), 'baja',         NULL);
 
 -- ============================================================
 -- 6. MANTENIMIENTOS
