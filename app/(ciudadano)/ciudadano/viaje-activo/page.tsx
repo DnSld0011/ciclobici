@@ -59,6 +59,8 @@ export default function ViajeActivoPage() {
   const watchIdRef    = useRef<number | null>(null)
   const distanciaRef  = useRef(0)
   const userLocRef    = useRef<Coord | null>(null)  // ref sincrónica para uso en handlers
+  const viajeIdRef    = useRef<string | null>(null)  // id del viaje para enviar posición
+  const lastSentRef   = useRef(0)                    // timestamp del último envío
 
   // Flujo finalizar
   const [detectando, setDetectando]               = useState(false)
@@ -97,6 +99,7 @@ export default function ViajeActivoPage() {
         const v = json?.viaje
         if (!v) { router.replace('/ciudadano'); return }
         setViaje(v)
+        viajeIdRef.current = v.id
       } catch {
         router.replace('/ciudadano')
         return
@@ -111,6 +114,16 @@ export default function ViajeActivoPage() {
           setUserLocation(coord)
           userLocRef.current = coord
           setGpsActivo('ok')
+          // Enviar posición al servidor cada 15s para tracking en vivo del operador
+          const now = Date.now()
+          if (viajeIdRef.current && now - lastSentRef.current > 15000) {
+            lastSentRef.current = now
+            fetch('/api/viajes/posicion', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ viaje_id: viajeIdRef.current, lat: coord.lat, lng: coord.lng }),
+            }).catch(() => {})
+          }
           if (lastCoordRef.current) {
             const d = haversineKm(lastCoordRef.current, coord)
             if (d < 0.5) {

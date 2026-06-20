@@ -5,12 +5,21 @@ import { GoogleMap, InfoWindow, OverlayView, useJsApiLoader } from '@react-googl
 import { EstacionConDisponibilidad } from '@/types'
 import { LocateFixed } from 'lucide-react'
 
+export interface CiclistaVivo {
+  id: string
+  nombre: string
+  bicicleta: string
+  lat: number
+  lng: number
+}
+
 interface MapaEstacionesProps {
   estaciones: EstacionConDisponibilidad[]
   onEstacionClick?: (estacion: EstacionConDisponibilidad) => void
   modoOperador?: boolean
   focusEstacion?: EstacionConDisponibilidad | null
   userLocation?: { lat: number; lng: number } | null
+  ciclistas?: CiclistaVivo[]
 }
 
 const containerStyle = { width: '100%', height: '100%' }
@@ -24,7 +33,7 @@ function estiloPorDisponibilidad(disponibles: number, capacidad: number) {
   return { gradient: 'linear-gradient(135deg, #cdff7a, #b2f746)', solid: '#b2f746', text: '#002117' }
 }
 
-export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = false, focusEstacion, userLocation }: MapaEstacionesProps) {
+export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = false, focusEstacion, userLocation, ciclistas = [] }: MapaEstacionesProps) {
   const { isLoaded } = useJsApiLoader({
     id: 'sbbici-google-maps',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
@@ -177,6 +186,43 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
           </InfoWindow>
         )}
 
+        {/* Ciclistas en tiempo real (solo modo operador) */}
+        {modoOperador && ciclistas.map(c => (
+          <OverlayView
+            key={c.id}
+            position={{ lat: c.lat, lng: c.lng }}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+          >
+            <div style={{ transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+              {/* Halo pulsante */}
+              <div style={{
+                position: 'absolute', inset: -14, borderRadius: '50%',
+                background: 'rgba(59,130,246,0.25)',
+                animation: 'sbbici-ciclista-pulse 2s ease-out infinite',
+              }} />
+              {/* Punto central */}
+              <div style={{
+                position: 'relative', width: 20, height: 20, borderRadius: '50%',
+                background: '#3b82f6', border: '3px solid white',
+                boxShadow: '0 2px 8px rgba(59,130,246,0.6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10,
+              }}>
+                🚴
+              </div>
+              {/* Etiqueta */}
+              <div style={{
+                position: 'absolute', top: 22, left: '50%', transform: 'translateX(-50%)',
+                background: 'rgba(30,58,138,0.9)', color: 'white',
+                borderRadius: 6, padding: '2px 6px', fontSize: 9, fontWeight: 700,
+                whiteSpace: 'nowrap', fontFamily: 'inherit',
+              }}>
+                {c.bicicleta}
+              </div>
+            </div>
+          </OverlayView>
+        ))}
+
         {userLocation && !modoOperador && (
           <OverlayView position={userLocation} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
             <div style={{ position: 'relative', width: 22, height: 22, transform: 'translate(-11px, -11px)' }}>
@@ -210,6 +256,10 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
         @keyframes sbbici-pulse {
           0%   { transform: scale(0.4); opacity: 0.8; }
           100% { transform: scale(1.4); opacity: 0; }
+        }
+        @keyframes sbbici-ciclista-pulse {
+          0%   { transform: scale(0.5); opacity: 0.7; }
+          100% { transform: scale(2.2); opacity: 0; }
         }
       `}</style>
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
+import { type CiclistaVivo } from '@/components/maps/MapaEstaciones'
 import { Activity, Bike, Clock, MapPin, User, RefreshCw, Leaf, Download, FileText } from 'lucide-react'
 import { exportarCsv } from '@/lib/utils/exportCsv'
 import { exportarPdf } from '@/lib/utils/exportPdf'
@@ -16,6 +17,8 @@ const MapaEstaciones = dynamicImport(
 interface ViajeVivo {
   id: string
   inicio_at: string
+  lat: number | null
+  lng: number | null
   usuario: { nombre: string; email: string } | null
   bicicleta: { codigo: string; tipo: string } | null
   estacion_origen: { id: string; nombre: string; latitud: number; longitud: number; direccion: string } | null
@@ -189,6 +192,16 @@ export default function ViajesEnVivoPage() {
                 estaciones={estaciones}
                 modoOperador
                 focusEstacion={null}
+                ciclistas={viajes
+                  .filter((v): v is ViajeVivo & { lat: number; lng: number } =>
+                    v.lat != null && v.lng != null)
+                  .map<CiclistaVivo>(v => ({
+                    id: v.id,
+                    nombre: v.usuario?.nombre ?? 'Ciclista',
+                    bicicleta: v.bicicleta?.codigo ?? '—',
+                    lat: v.lat,
+                    lng: v.lng,
+                  }))}
               />
           }
         </div>

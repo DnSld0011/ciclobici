@@ -29,7 +29,7 @@ export async function GET() {
     // Obtener viajes activos (sin joins complejos para evitar errores de FK)
     const { data: viajes, error: errViajes } = await admin
       .from('viajes')
-      .select('id, inicio_at, usuario_id, bicicleta_id, estacion_origen_id')
+      .select('id, inicio_at, usuario_id, bicicleta_id, estacion_origen_id, lat, lng')
       .eq('estado', 'activo')
       .order('inicio_at', { ascending: false })
 
@@ -59,6 +59,8 @@ export async function GET() {
     const viajesEnriquecidos = viajes.map(v => ({
       id: v.id,
       inicio_at: v.inicio_at,
+      lat: v.lat ?? null,
+      lng: v.lng ?? null,
       usuario: usuarioMap[v.usuario_id] ?? null,
       bicicleta: bicicletaMap[v.bicicleta_id] ?? null,
       estacion_origen: estacionMap[v.estacion_origen_id] ?? null,
