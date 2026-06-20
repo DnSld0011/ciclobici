@@ -261,8 +261,8 @@ export default function ViajeActivoPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {gpsActivo === 'denied'  && <WifiOff size={16} className="text-error" title="Sin GPS" />}
-          {gpsActivo === 'ok'      && <Wifi size={16} className="text-[#166534]" title="GPS activo" />}
+          {gpsActivo === 'denied'  && <WifiOff size={16} className="text-error" />}
+          {gpsActivo === 'ok'      && <Wifi size={16} className="text-[#166634]" />}
           {gpsActivo === 'waiting' && (
             <div className="w-3.5 h-3.5 rounded-full border-2 border-primary-container/30 border-t-primary-container animate-spin" />
           )}
