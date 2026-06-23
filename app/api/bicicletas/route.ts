@@ -33,9 +33,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Ya existe una bicicleta con código ${codigo}` }, { status: 409 })
   }
 
+  // qr_code almacena el texto que codifica el QR (= codigo), no la imagen base64
   const { data: bici, error } = await admin
     .from('bicicletas')
-    .insert({ codigo, tipo, marca: marca || null, modelo: modelo || null, qr_code: qr_url || null, estado: estado ?? 'disponible', estacion_id: estacion_id || null })
+    .insert({ codigo, tipo, marca: marca || null, modelo: modelo || null, qr_code: codigo, estado: estado ?? 'disponible', estacion_id: estacion_id || null })
     .select()
     .single()
 
