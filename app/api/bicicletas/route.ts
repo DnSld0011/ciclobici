@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   const { data: bici, error } = await admin
     .from('bicicletas')
-    .insert({ codigo, tipo, marca: marca || null, modelo: modelo || null, qr_url: qr_url || null, estado: estado ?? 'disponible', estacion_id: estacion_id || null })
+    .insert({ codigo, tipo, marca: marca || null, modelo: modelo || null, qr_code: qr_url || null, estado: estado ?? 'disponible', estacion_id: estacion_id || null })
     .select()
     .single()
 
