@@ -86,12 +86,19 @@ export default function BicicletasPage() {
       const { count } = await supabase.from('bicicletas').select('*', { count: 'exact', head: true })
       const codigo = generarCodigoBicicleta((count ?? 0) + 1)
       const qrUrl = await generarQR(codigo)
-      const { error: err } = await supabase.from('bicicletas').insert({
-        codigo, tipo: form.tipo.trim(), marca: form.marca || null,
-        modelo: form.modelo || null, qr_url: qrUrl,
-        estado: form.estado, estacion_id: form.estacion_id || null,
+
+      const res = await fetch('/api/bicicletas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo, tipo: form.tipo.trim(), marca: form.marca || null,
+          modelo: form.modelo || null, qr_url: qrUrl,
+          estado: form.estado, estacion_id: form.estacion_id || null,
+        }),
       })
-      if (err) throw err
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al guardar')
+
       setModalNueva(false)
       setForm(formVacio)
       await cargar()
