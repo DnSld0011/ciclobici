@@ -33,8 +33,12 @@ const btnPrimary = 'inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-prima
 const btnOutline = 'inline-flex items-center gap-2 px-4 h-10 rounded-xl border border-outline-variant/40 bg-white text-on-surface text-sm font-semibold hover:bg-surface-container-low active:scale-[.98] transition-all'
 const btnGhost = 'w-8 h-8 flex items-center justify-center rounded-xl hover:bg-surface-container-low transition-colors'
 
+interface EstacionConBicis extends Estacion {
+  bicicletas?: { estado: string }[]
+}
+
 export default function EstacionesPage() {
-  const [estaciones, setEstaciones] = useState<Estacion[]>([])
+  const [estaciones, setEstaciones] = useState<EstacionConBicis[]>([])
   const [filtro, setFiltro] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<string>('todos')
   const [modalAbierto, setModalAbierto] = useState(false)
@@ -45,8 +49,11 @@ export default function EstacionesPage() {
 
   const cargar = useCallback(async () => {
     const supabase = createClient()
-    const { data } = await supabase.from('estaciones').select('*').order('nombre')
-    if (data) setEstaciones(data)
+    const { data } = await supabase
+      .from('estaciones')
+      .select('*, bicicletas(estado)')
+      .order('nombre')
+    if (data) setEstaciones(data as EstacionConBicis[])
   }, [])
 
   useEffect(() => {
@@ -218,7 +225,31 @@ export default function EstacionesPage() {
                     {est.direccion}
                   </div>
                 </td>
-                <td className="px-5 py-3 text-on-surface font-medium">{est.capacidad} bicis</td>
+                <td className="px-5 py-3">
+                  {(() => {
+                    const bicis = est.bicicletas ?? []
+                    const ancladas = bicis.length
+                    const disponibles = bicis.filter(b => b.estado === 'disponible').length
+                    const cap = est.capacidad
+                    const pct = cap > 0 ? ancladas / cap : 0
+                    const barColor = pct >= 0.9 ? '#ba1a1a' : pct >= 0.6 ? '#d97706' : '#16a34a'
+                    return (
+                      <div className="min-w-[90px]">
+                        <div className="flex items-baseline gap-1">
+                          <span className="font-extrabold text-sm text-on-surface">{ancladas}</span>
+                          <span className="text-xs text-outline font-medium">/ {cap}</span>
+                        </div>
+                        {/* Barra de ocupación */}
+                        <div className="mt-1 h-1.5 w-16 rounded-full bg-surface-container-low overflow-hidden">
+                          <div style={{ width: `${Math.min(pct * 100, 100)}%`, background: barColor }} className="h-full rounded-full transition-all" />
+                        </div>
+                        <p className="text-[10px] text-outline mt-0.5">
+                          {disponibles} disp.
+                        </p>
+                      </div>
+                    )
+                  })()}
+                </td>
                 <td className="px-5 py-3 font-mono text-[11px] text-outline">
                   {est.latitud.toFixed(4)}, {est.longitud.toFixed(4)}
                 </td>
