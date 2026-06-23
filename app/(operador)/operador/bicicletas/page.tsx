@@ -33,6 +33,7 @@ export default function BicicletasPage() {
   const [estaciones, setEstaciones] = useState<EstacionConBicis[]>([])
   const [filtro, setFiltro] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
+  const [filtroEstacion, setFiltroEstacion] = useState('todas')
   const [modalNueva, setModalNueva] = useState(false)
   const [modalQr, setModalQr] = useState<Bicicleta | null>(null)
   const [form, setForm] = useState<FormBici>(formVacio)
@@ -120,10 +121,13 @@ export default function BicicletasPage() {
     await cargar()
   }
 
-  const filtradas = bicicletas.filter(b =>
-    b.codigo.toLowerCase().includes(filtro.toLowerCase()) &&
-    (filtroEstado === 'todos' || b.estado === filtroEstado)
-  )
+  const filtradas = bicicletas.filter(b => {
+    if (!b.codigo.toLowerCase().includes(filtro.toLowerCase())) return false
+    if (filtroEstado !== 'todos' && b.estado !== filtroEstado) return false
+    if (filtroEstacion === 'sin_asignar') return !b.estacion_id
+    if (filtroEstacion !== 'todas') return b.estacion_id === filtroEstacion
+    return true
+  })
 
   return (
     <div className="p-6 space-y-5 max-w-[1300px]">
@@ -171,8 +175,8 @@ export default function BicicletasPage() {
       </div>
 
       {/* Filtros */}
-      <div className="card p-4 flex gap-3">
-        <div className="relative flex-1">
+      <div className="card p-4 flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-3 text-outline" size={14} />
           <input placeholder="Buscar por código..." className={`${inputCls} pl-9`}
             value={filtro} onChange={e => setFiltro(e.target.value)} />
@@ -185,6 +189,26 @@ export default function BicicletasPage() {
           <option value="mantenimiento">Mantenimiento</option>
           <option value="baja">Baja</option>
         </select>
+        <select className="h-11 px-3 rounded-xl border border-outline-variant/40 bg-surface text-sm text-on-surface focus:outline-none max-w-[220px]"
+          value={filtroEstacion} onChange={e => setFiltroEstacion(e.target.value)}>
+          <option value="todas">Todas las estaciones</option>
+          <option value="sin_asignar">— Sin asignar</option>
+          {estaciones.map(e => {
+            const ancladas = (e.bicicletas ?? []).length
+            return (
+              <option key={e.id} value={e.id}>
+                {e.nombre} ({ancladas}/{e.capacidad})
+              </option>
+            )
+          })}
+        </select>
+        {(filtroEstado !== 'todos' || filtroEstacion !== 'todas' || filtro) && (
+          <button
+            onClick={() => { setFiltro(''); setFiltroEstado('todos'); setFiltroEstacion('todas') }}
+            className="h-11 px-3 rounded-xl border border-outline-variant/40 bg-surface text-xs text-outline hover:bg-surface-container-low transition-colors flex items-center gap-1.5">
+            <X size={12} /> Limpiar
+          </button>
+        )}
       </div>
 
       {/* Tabla */}
