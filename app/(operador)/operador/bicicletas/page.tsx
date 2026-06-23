@@ -3,7 +3,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Bicicleta, BicicletaEstado, Estacion } from '@/types'
-import { Plus, Search, QrCode, Download, Bike, X, FileText } from 'lucide-react'
+
+interface EstacionConBicis extends Estacion {
+  bicicletas?: { estado: string }[]
+}
+import { Plus, Search, QrCode, Download, Bike, X, FileText, ChevronDown } from 'lucide-react'
 import { generarCodigoBicicleta } from '@/lib/utils/codigos'
 import { exportarCsv } from '@/lib/utils/exportCsv'
 import { exportarPdf } from '@/lib/utils/exportPdf'
@@ -26,7 +30,7 @@ const btnOutline = 'inline-flex items-center gap-2 px-4 h-10 rounded-xl border b
 
 export default function BicicletasPage() {
   const [bicicletas, setBicicletas] = useState<Bicicleta[]>([])
-  const [estaciones, setEstaciones] = useState<Estacion[]>([])
+  const [estaciones, setEstaciones] = useState<EstacionConBicis[]>([])
   const [filtro, setFiltro] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [modalNueva, setModalNueva] = useState(false)
@@ -35,14 +39,15 @@ export default function BicicletasPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState('')
+  const [dropdownEst, setDropdownEst] = useState(false)
   const cargar = useCallback(async () => {
     const supabase = createClient()
     const [{ data: bicis }, { data: ests }] = await Promise.all([
       supabase.from('bicicletas').select('*, estacion:estaciones(nombre)').order('created_at', { ascending: false }),
-      supabase.from('estaciones').select('*').eq('estado', 'activa').order('nombre'),
+      supabase.from('estaciones').select('*, bicicletas(estado)').eq('estado', 'activa').order('nombre'),
     ])
     if (bicis) setBicicletas(bicis)
-    if (ests) setEstaciones(ests)
+    if (ests) setEstaciones(ests as EstacionConBicis[])
   }, [])
 
   useEffect(() => {
@@ -261,12 +266,85 @@ export default function BicicletasPage() {
                     value={form.modelo} onChange={e => setForm(p => ({ ...p, modelo: e.target.value }))} />
                 </div>
               </div>
-              <div>
+              <div className="relative">
                 <label className={labelCls}>Estación inicial</label>
-                <select className={inputCls} value={form.estacion_id} onChange={e => setForm(p => ({ ...p, estacion_id: e.target.value }))}>
-                  <option value="">Sin asignar</option>
-                  {estaciones.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                </select>
+                {/* Dropdown custom con capacidad en tiempo real */}
+                <button type="button"
+                  onClick={() => setDropdownEst(v => !v)}
+                  className={inputCls + ' flex items-center justify-between text-left'}
+                >
+                  <span className={form.estacion_id ? 'text-on-surface' : 'text-outline'}>
+                    {form.estacion_id
+                      ? estaciones.find(e => e.id === form.estacion_id)?.nombre ?? 'Sin asignar'
+                      : 'Sin asignar'}
+                  </span>
+                  <ChevronDown size={14} className={`text-outline transition-transform ${dropdownEst ? 'rotate-180' : ''}`} />
+                </button>
+
+                {dropdownEst && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white rounded-xl border border-outline-variant/30 shadow-xl overflow-hidden max-h-56 overflow-y-auto">
+                    {/* Sin asignar */}
+                    <button type="button"
+                      onClick={() => { setForm(p => ({ ...p, estacion_id: '' })); setDropdownEst(false) }}
+                      className={`w-full px-4 py-2.5 text-left text-sm hover:bg-surface-container-low transition-colors ${!form.estacion_id ? 'bg-primary-container/10 font-semibold' : ''}`}
+                    >
+                      Sin asignar
+                    </button>
+                    <div className="border-t border-outline-variant/10" />
+                    {estaciones.map(est => {
+                      const ancladas = (est.bicicletas ?? []).length
+                      const disponibles = (est.bicicletas ?? []).filter(b => b.estado === 'disponible').length
+                      const llena = ancladas >= est.capacidad
+                      const casiLlena = ancladas >= est.capacidad * 0.8
+                      const badgeBg = llena ? '#ffdad6' : casiLlena ? '#fef3c7' : '#dcfce7'
+                      const badgeText = llena ? '#ba1a1a' : casiLlena ? '#92400e' : '#166534'
+                      const seleccionada = form.estacion_id === est.id
+                      return (
+                        <button type="button" key={est.id}
+                          onClick={() => { setForm(p => ({ ...p, estacion_id: est.id })); setDropdownEst(false) }}
+                          className={`w-full px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-surface-container-low transition-colors ${seleccionada ? 'bg-primary-container/10' : ''}`}
+                        >
+                          <span className={`text-sm text-left ${seleccionada ? 'font-semibold text-on-surface' : 'text-on-surface'}`}>
+                            {est.nombre}
+                          </span>
+                          <div className="shrink-0 flex items-center gap-2">
+                            <span className="text-[10px] text-outline">{disponibles} disp.</span>
+                            <span style={{ background: badgeBg, color: badgeText }}
+                              className="text-[11px] font-extrabold px-2 py-0.5 rounded-full">
+                              {ancladas}/{est.capacidad}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Info card de la estación seleccionada */}
+                {form.estacion_id && (() => {
+                  const est = estaciones.find(e => e.id === form.estacion_id)
+                  if (!est) return null
+                  const ancladas = (est.bicicletas ?? []).length
+                  const disponibles = (est.bicicletas ?? []).filter(b => b.estado === 'disponible').length
+                  const libre = est.capacidad - ancladas
+                  const pct = est.capacidad > 0 ? ancladas / est.capacidad : 0
+                  const barColor = pct >= 0.9 ? '#ba1a1a' : pct >= 0.6 ? '#d97706' : '#16a34a'
+                  return (
+                    <div className="mt-2 px-3 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-outline">Ocupación</span>
+                        <span className="font-bold text-on-surface">{ancladas} / {est.capacidad} docks</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-outline-variant/20 overflow-hidden">
+                        <div style={{ width: `${Math.min(pct * 100, 100)}%`, background: barColor }} className="h-full rounded-full" />
+                      </div>
+                      <div className="flex gap-3 text-[11px]">
+                        <span className="text-[#166534]">✓ {disponibles} disponibles</span>
+                        <span className="text-outline">· {libre} dock{libre !== 1 ? 's' : ''} libre{libre !== 1 ? 's' : ''}</span>
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
               <div className="px-4 py-3 rounded-xl bg-surface-container-low text-xs text-outline border border-outline-variant/20">
                 El código (BC-YYYYMMDD-XXXX) y el QR se generarán automáticamente.
