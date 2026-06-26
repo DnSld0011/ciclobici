@@ -7,7 +7,7 @@ import { Bicicleta, BicicletaEstado, Estacion } from '@/types'
 interface EstacionConBicis extends Estacion {
   bicicletas?: { estado: string }[]
 }
-import { Plus, Search, QrCode, Download, Bike, X, FileText, ChevronDown } from 'lucide-react'
+import { Plus, Search, QrCode, Download, Bike, X, FileText, ChevronDown, Pencil, Trash2, MapPin } from 'lucide-react'
 import { generarCodigoBicicleta } from '@/lib/utils/codigos'
 import { exportarCsv } from '@/lib/utils/exportCsv'
 import { exportarPdf } from '@/lib/utils/exportPdf'
@@ -41,6 +41,13 @@ export default function BicicletasPage() {
   const [loading, setLoading] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [dropdownEst, setDropdownEst] = useState(false)
+  const [modalEditar, setModalEditar] = useState<Bicicleta | null>(null)
+  const [formEdit, setFormEdit] = useState<FormBici>(formVacio)
+  const [dropdownEstEdit, setDropdownEstEdit] = useState(false)
+  const [errorEdit, setErrorEdit] = useState('')
+  const [loadingEdit, setLoadingEdit] = useState(false)
+  const [modalEliminar, setModalEliminar] = useState<Bicicleta | null>(null)
+  const [loadingDelete, setLoadingDelete] = useState(false)
   const cargar = useCallback(async () => {
     const supabase = createClient()
     const [{ data: bicis }, { data: ests }] = await Promise.all([
@@ -119,6 +126,51 @@ export default function BicicletasPage() {
     const supabase = createClient()
     await supabase.from('bicicletas').update({ estado }).eq('id', id)
     await cargar()
+  }
+
+  function abrirEditar(b: Bicicleta) {
+    setModalEditar(b)
+    setFormEdit({ tipo: b.tipo, marca: b.marca ?? '', modelo: b.modelo ?? '', estacion_id: b.estacion_id ?? '', estado: b.estado })
+    setErrorEdit('')
+    setDropdownEstEdit(false)
+  }
+
+  async function guardarEdicion(e: React.FormEvent) {
+    e.preventDefault()
+    if (!modalEditar) return
+    if (!formEdit.tipo.trim()) { setErrorEdit('El tipo es requerido'); return }
+    setLoadingEdit(true)
+    try {
+      const res = await fetch(`/api/bicicletas/${modalEditar.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: formEdit.tipo, marca: formEdit.marca || null, modelo: formEdit.modelo || null, estado: formEdit.estado, estacion_id: formEdit.estacion_id || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al guardar')
+      setModalEditar(null)
+      await cargar()
+    } catch (err: unknown) {
+      setErrorEdit(err instanceof Error ? err.message : 'Error al guardar')
+    } finally {
+      setLoadingEdit(false)
+    }
+  }
+
+  async function ejecutarEliminar() {
+    if (!modalEliminar) return
+    setLoadingDelete(true)
+    try {
+      const res = await fetch(`/api/bicicletas/${modalEliminar.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al eliminar')
+      setModalEliminar(null)
+      await cargar()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Error al eliminar')
+    } finally {
+      setLoadingDelete(false)
+    }
   }
 
   const filtradas = bicicletas.filter(b => {
@@ -251,9 +303,20 @@ export default function BicicletasPage() {
                   {(b.estacion as unknown as { nombre?: string })?.nombre ?? '—'}
                 </td>
                 <td className="px-5 py-3 text-right">
-                  <button className={btnOutline + ' text-xs px-3 h-8'} onClick={() => abrirQr(b)}>
-                    <QrCode size={13} /> QR
-                  </button>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button onClick={() => abrirQr(b)} title="Ver QR"
+                      className="w-8 h-8 rounded-xl border border-outline-variant/40 bg-white hover:bg-surface-container-low flex items-center justify-center transition-all active:scale-95 text-outline hover:text-on-surface">
+                      <QrCode size={14} />
+                    </button>
+                    <button onClick={() => abrirEditar(b)} title="Editar bicicleta"
+                      className="w-8 h-8 rounded-xl border border-primary-container/30 bg-[#e5eeff] hover:bg-[#d0dcff] flex items-center justify-center transition-all active:scale-95 text-primary-container">
+                      <Pencil size={14} />
+                    </button>
+                    <button onClick={() => setModalEliminar(b)} title="Eliminar bicicleta"
+                      className="w-8 h-8 rounded-xl border border-[#ffdad6] bg-[#fff0ef] hover:bg-[#ffdad6] flex items-center justify-center transition-all active:scale-95 text-error">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -380,6 +443,161 @@ export default function BicicletasPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Bicicleta */}
+      {modalEditar && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-outline-variant/20">
+              <div>
+                <h2 className="font-extrabold text-on-surface">Editar Bicicleta</h2>
+                <p className="font-mono text-xs text-outline mt-0.5">{modalEditar.codigo}</p>
+              </div>
+              <button onClick={() => setModalEditar(null)} className="w-8 h-8 rounded-xl bg-surface-container-low flex items-center justify-center hover:bg-surface-container transition-colors">
+                <X size={16} className="text-outline" />
+              </button>
+            </div>
+            {errorEdit && <div className="mx-6 mt-4 px-4 py-3 rounded-xl bg-[#ffdad6] text-error text-sm font-semibold">{errorEdit}</div>}
+            <form onSubmit={guardarEdicion} className="p-6 space-y-4">
+              <div>
+                <label className={labelCls}>Tipo *</label>
+                <input className={inputCls} placeholder="Urbana, MTB, Eléctrica..."
+                  value={formEdit.tipo} onChange={e => setFormEdit(p => ({ ...p, tipo: e.target.value }))} required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Marca</label>
+                  <input className={inputCls} placeholder="Trek, Giant..."
+                    value={formEdit.marca} onChange={e => setFormEdit(p => ({ ...p, marca: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={labelCls}>Modelo</label>
+                  <input className={inputCls} placeholder="FX3, 2024..."
+                    value={formEdit.modelo} onChange={e => setFormEdit(p => ({ ...p, modelo: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Estado</label>
+                <select className={inputCls} value={formEdit.estado} onChange={e => setFormEdit(p => ({ ...p, estado: e.target.value as BicicletaEstado }))}>
+                  {(['disponible', 'en_viaje', 'mantenimiento', 'baja'] as BicicletaEstado[]).map(e => (
+                    <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Dropdown estación con capacidad */}
+              <div className="relative">
+                <label className={labelCls}>Estación asignada</label>
+                <button type="button"
+                  onClick={() => setDropdownEstEdit(v => !v)}
+                  className={inputCls + ' flex items-center justify-between text-left'}
+                >
+                  <span className={formEdit.estacion_id ? 'text-on-surface' : 'text-outline'}>
+                    {formEdit.estacion_id
+                      ? estaciones.find(e => e.id === formEdit.estacion_id)?.nombre ?? 'Sin asignar'
+                      : 'Sin asignar'}
+                  </span>
+                  <ChevronDown size={14} className={`text-outline transition-transform ${dropdownEstEdit ? 'rotate-180' : ''}`} />
+                </button>
+                {dropdownEstEdit && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white rounded-xl border border-outline-variant/30 shadow-xl overflow-hidden max-h-56 overflow-y-auto">
+                    <button type="button"
+                      onClick={() => { setFormEdit(p => ({ ...p, estacion_id: '' })); setDropdownEstEdit(false) }}
+                      className={`w-full px-4 py-2.5 text-left text-sm hover:bg-surface-container-low transition-colors ${!formEdit.estacion_id ? 'bg-primary-container/10 font-semibold' : ''}`}>
+                      Sin asignar
+                    </button>
+                    <div className="border-t border-outline-variant/10" />
+                    {estaciones.map(est => {
+                      const ancladas = (est.bicicletas ?? []).length
+                      const disponibles = (est.bicicletas ?? []).filter(b => b.estado === 'disponible').length
+                      const llena = ancladas >= est.capacidad
+                      const casiLlena = ancladas >= est.capacidad * 0.8
+                      const badgeBg = llena ? '#ffdad6' : casiLlena ? '#fef3c7' : '#dcfce7'
+                      const badgeText = llena ? '#ba1a1a' : casiLlena ? '#92400e' : '#166534'
+                      const seleccionada = formEdit.estacion_id === est.id
+                      return (
+                        <button type="button" key={est.id}
+                          onClick={() => { setFormEdit(p => ({ ...p, estacion_id: est.id })); setDropdownEstEdit(false) }}
+                          className={`w-full px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-surface-container-low transition-colors ${seleccionada ? 'bg-primary-container/10' : ''}`}>
+                          <span className={`text-sm text-left ${seleccionada ? 'font-semibold text-on-surface' : 'text-on-surface'}`}>{est.nombre}</span>
+                          <div className="shrink-0 flex items-center gap-2">
+                            <span className="text-[10px] text-outline">{disponibles} disp.</span>
+                            <span style={{ background: badgeBg, color: badgeText }} className="text-[11px] font-extrabold px-2 py-0.5 rounded-full">
+                              {ancladas}/{est.capacidad}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                {formEdit.estacion_id && (() => {
+                  const est = estaciones.find(e => e.id === formEdit.estacion_id)
+                  if (!est) return null
+                  const ancladas = (est.bicicletas ?? []).length
+                  const libre = est.capacidad - ancladas
+                  const pct = est.capacidad > 0 ? ancladas / est.capacidad : 0
+                  const barColor = pct >= 0.9 ? '#ba1a1a' : pct >= 0.6 ? '#d97706' : '#16a34a'
+                  return (
+                    <div className="mt-2 px-3 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-outline flex items-center gap-1"><MapPin size={10} /> {est.direccion}</span>
+                        <span className="font-bold text-on-surface">{ancladas}/{est.capacidad} docks</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-outline-variant/20 overflow-hidden">
+                        <div style={{ width: `${Math.min(pct * 100, 100)}%`, background: barColor }} className="h-full rounded-full" />
+                      </div>
+                      <span className="text-outline">{libre} dock{libre !== 1 ? 's' : ''} libre{libre !== 1 ? 's' : ''}</span>
+                    </div>
+                  )
+                })()}
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" className={btnOutline + ' flex-1'} onClick={() => setModalEditar(null)}>Cancelar</button>
+                <button type="submit" className={btnPrimary + ' flex-1 justify-center'} disabled={loadingEdit}>
+                  {loadingEdit ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminación */}
+      {modalEliminar && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="p-6">
+              {/* Icono de alerta */}
+              <div className="w-14 h-14 rounded-2xl bg-[#fff0ef] border-2 border-[#ffdad6] flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={24} className="text-error" />
+              </div>
+              <h2 className="text-center font-extrabold text-on-surface text-lg mb-1">¿Eliminar bicicleta?</h2>
+              <p className="text-center text-sm text-outline mb-1">
+                Vas a eliminar permanentemente
+              </p>
+              <p className="text-center font-mono font-bold text-primary-container text-base mb-4">
+                {modalEliminar.codigo}
+              </p>
+              {modalEliminar.estado === 'en_viaje' && (
+                <div className="mb-4 px-4 py-3 rounded-xl bg-[#fff0ef] border border-[#ffdad6] text-error text-xs font-semibold text-center">
+                  Esta bicicleta está en viaje activo y no puede eliminarse.
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button className={btnOutline + ' flex-1 justify-center'} onClick={() => setModalEliminar(null)}>
+                  Cancelar
+                </button>
+                <button
+                  disabled={loadingDelete || modalEliminar.estado === 'en_viaje'}
+                  onClick={ejecutarEliminar}
+                  className="flex-1 h-10 rounded-xl bg-error text-white text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-[.98] transition-all disabled:opacity-40">
+                  {loadingDelete ? 'Eliminando...' : <><Trash2 size={14} /> Eliminar</>}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
