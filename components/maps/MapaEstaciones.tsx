@@ -120,7 +120,11 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
       >
         {estaciones.map(est => {
           const disponibles = est.bicicletas_disponibles ?? 0
-          const { solid, text } = estiloPorDisponibilidad(disponibles, est.capacidad)
+          const enMantenimiento = est.estado === 'mantenimiento'
+          // En mantenimiento: gris; si no, color por disponibilidad
+          const { solid, text } = enMantenimiento
+            ? { solid: '#78716c', text: '#ffffff' }
+            : estiloPorDisponibilidad(disponibles, est.capacidad)
           const activo = activeId === est.id
           return (
             <OverlayView
@@ -135,6 +139,7 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
                   cursor: 'pointer',
                   paddingBottom: 6,
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  opacity: enMantenimiento ? 0.75 : 1,
                 }}
               >
                 {/* Tarjeta */}
@@ -151,15 +156,15 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
                   transform: activo ? 'scale(1.08)' : 'scale(1)',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                 }}>
-                  {/* Badge disponibilidad */}
+                  {/* Badge: mantenimiento o disponibilidad */}
                   <div style={{
                     background: solid,
                     padding: '3px 7px',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                   }}>
-                    <span style={{ fontSize: 11 }}>🚲</span>
+                    <span style={{ fontSize: 11 }}>{enMantenimiento ? '🔧' : '🚲'}</span>
                     <span style={{ color: text, fontWeight: 800, fontSize: 12, fontFamily: 'inherit' }}>
-                      {disponibles}/{est.capacidad}
+                      {enMantenimiento ? 'Mant.' : `${disponibles}/${est.capacidad}`}
                     </span>
                   </div>
                   {/* Nombre */}

@@ -60,7 +60,7 @@ export default function ViajesEnVivoPage() {
       supabase
         .from('estaciones')
         .select('*, bicicletas(id,estado)')
-        .eq('estado', 'activa'),
+        .in('estado', ['activa', 'mantenimiento']),
     ])
 
     if (viajesRes?.viajes) setViajes(viajesRes.viajes as ViajeVivo[])
