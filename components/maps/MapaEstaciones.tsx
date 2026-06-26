@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { GoogleMap, InfoWindow, OverlayView, useJsApiLoader } from '@react-google-maps/api'
+import { GoogleMap, InfoWindow, OverlayView, Polygon, useJsApiLoader } from '@react-google-maps/api'
 import { EstacionConDisponibilidad } from '@/types'
 import { LocateFixed } from 'lucide-react'
+import { SAN_BORJA_BOUNDARY } from '@/lib/constants/sanBorjaLimite'
 
 export interface CiclistaVivo {
   id: string
@@ -118,6 +119,20 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
           gestureHandling: 'greedy',
         }}
       >
+        {/* Límite del distrito de San Borja */}
+        <Polygon
+          paths={SAN_BORJA_BOUNDARY}
+          options={{
+            strokeColor: '#006a4b',
+            strokeOpacity: 0.75,
+            strokeWeight: 2.5,
+            fillColor: '#b2f746',
+            fillOpacity: 0.06,
+            clickable: false,
+            zIndex: 1,
+          }}
+        />
+
         {estaciones.map(est => {
           const disponibles = est.bicicletas_disponibles ?? 0
           const { solid, text } = estiloPorDisponibilidad(disponibles, est.capacidad)
