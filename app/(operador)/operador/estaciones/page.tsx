@@ -46,6 +46,8 @@ export default function EstacionesPage() {
   const [form, setForm] = useState<FormEstacion>(formVacio)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [modalEliminar, setModalEliminar] = useState<EstacionConBicis | null>(null)
+  const [loadingDelete, setLoadingDelete] = useState(false)
 
   const cargar = useCallback(async () => {
     const supabase = createClient()
@@ -109,10 +111,13 @@ export default function EstacionesPage() {
     }
   }
 
-  async function eliminar(id: string) {
-    if (!confirm('¿Eliminar esta estación?')) return
+  async function ejecutarEliminar() {
+    if (!modalEliminar) return
+    setLoadingDelete(true)
     const supabase = createClient()
-    await supabase.from('estaciones').delete().eq('id', id)
+    await supabase.from('estaciones').delete().eq('id', modalEliminar.id)
+    setModalEliminar(null)
+    setLoadingDelete(false)
     await cargar()
   }
 
@@ -267,7 +272,7 @@ export default function EstacionesPage() {
                     <button className={btnGhost} onClick={() => abrirEditar(est)}>
                       <Pencil size={14} className="text-outline" />
                     </button>
-                    <button className={btnGhost} onClick={() => eliminar(est.id)}>
+                    <button className={btnGhost} onClick={() => setModalEliminar(est)}>
                       <Trash2 size={14} className="text-error" />
                     </button>
                   </div>
@@ -358,6 +363,41 @@ export default function EstacionesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminación */}
+      {modalEliminar && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="p-6">
+              <div className="w-14 h-14 rounded-2xl bg-[#fff0ef] border-2 border-[#ffdad6] flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={24} className="text-error" />
+              </div>
+              <h2 className="text-center font-extrabold text-on-surface text-lg mb-1">¿Eliminar estación?</h2>
+              <p className="text-center text-sm text-outline mb-1">Vas a eliminar permanentemente</p>
+              <p className="text-center font-bold text-primary-container text-base mb-1">{modalEliminar.nombre}</p>
+              <p className="text-center text-xs text-outline mb-4 flex items-center justify-center gap-1">
+                <MapPin size={11} />{modalEliminar.direccion}
+              </p>
+              {(modalEliminar.bicicletas ?? []).length > 0 && (
+                <div className="mb-4 px-4 py-3 rounded-xl bg-[#fff3cd] border border-[#ffd54f] text-[#92400e] text-xs font-semibold text-center">
+                  Esta estación tiene {(modalEliminar.bicicletas ?? []).length} bici{(modalEliminar.bicicletas ?? []).length !== 1 ? 's' : ''} asignada{(modalEliminar.bicicletas ?? []).length !== 1 ? 's' : ''}. Reasígnalas antes de eliminar.
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button className={btnOutline + ' flex-1 justify-center'} onClick={() => setModalEliminar(null)}>
+                  Cancelar
+                </button>
+                <button
+                  disabled={loadingDelete || (modalEliminar.bicicletas ?? []).length > 0}
+                  onClick={ejecutarEliminar}
+                  className="flex-1 h-10 rounded-xl bg-error text-white text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-[.98] transition-all disabled:opacity-40">
+                  {loadingDelete ? 'Eliminando...' : <><Trash2 size={14} /> Eliminar</>}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

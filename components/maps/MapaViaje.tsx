@@ -1,10 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { GoogleMap, OverlayView, InfoWindow, Polygon, useJsApiLoader } from '@react-google-maps/api'
+import { GoogleMap, OverlayView, InfoWindow, useJsApiLoader } from '@react-google-maps/api'
 import { EstacionConDisponibilidad } from '@/types'
 import { Locate } from 'lucide-react'
-import { SAN_BORJA_BOUNDARY } from '@/lib/constants/sanBorjaLimite'
 
 interface Coord { lat: number; lng: number }
 
@@ -99,20 +98,6 @@ export function MapaViaje({ estaciones, userLocation, estacionDestino }: MapaVia
           clickableIcons: false,
         }}
       >
-        {/* Límite del distrito de San Borja */}
-        <Polygon
-          paths={SAN_BORJA_BOUNDARY}
-          options={{
-            strokeColor: '#006a4b',
-            strokeOpacity: 0.75,
-            strokeWeight: 2.5,
-            fillColor: '#b2f746',
-            fillOpacity: 0.06,
-            clickable: false,
-            zIndex: 1,
-          }}
-        />
-
         {/* Marcadores de estaciones */}
         {estaciones.map(est => {
           const pct = est.capacidad > 0 ? est.bicicletas_disponibles / est.capacidad : 0
