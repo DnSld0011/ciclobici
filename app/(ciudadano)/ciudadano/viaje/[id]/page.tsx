@@ -28,6 +28,7 @@ interface ViajeResumen {
 export default function ResumenViajePage() {
   const { id } = useParams()
   const [viaje, setViaje] = useState<ViajeResumen | null>(null)
+  const [waypoints, setWaypoints] = useState<{ lat: number; lng: number }[]>([])
   const [loading, setLoading] = useState(true)
   const [calificacion, setCalificacion] = useState<number | null>(null)
   const [calificacionGuardada, setCalificacionGuardada] = useState(false)
@@ -51,6 +52,14 @@ export default function ResumenViajePage() {
         .eq('id', id as string)
         .eq('usuario_id', user.id)
         .single()
+
+      // Cargar waypoints del recorrido (tabla creada en migración)
+      const { data: wpts } = await supabase
+        .from('viaje_waypoints')
+        .select('lat, lng')
+        .eq('viaje_id', id as string)
+        .order('recorded_at')
+      if (wpts) setWaypoints(wpts)
 
       if (error?.message?.includes('calificacion')) {
         // Migración 0001 pendiente — cargar sin calificacion
@@ -188,19 +197,37 @@ export default function ResumenViajePage() {
 
         {/* Mapa con la ruta */}
         <div className="relative rounded-2xl overflow-hidden border border-outline-variant/20" style={{ height: 280 }}>
-          {origenCoord && destinoCoord ? (
-            <MapaResumenViaje origen={origenCoord} destino={destinoCoord} />
+          {origenCoord ? (
+            <MapaResumenViaje
+              origen={origenCoord}
+              destino={destinoCoord}
+              waypoints={waypoints}
+            />
           ) : (
             <div className="w-full h-full bg-surface-container-low flex items-center justify-center">
               <p className="text-xs text-outline">Ruta no disponible</p>
             </div>
           )}
-          {viaje.estacion_destino && (
-            <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 shadow-md">
-              <span className="w-2 h-2 rounded-full bg-[#16a34a]" />
-              <span className="text-xs font-semibold text-on-surface flex items-center gap-1">
+          {/* Leyenda inferior */}
+          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+            {viaje.estacion_origen && (
+              <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 shadow-md">
+                <span className="w-2 h-2 rounded-full bg-[#16a34a]" />
+                <span className="text-xs font-semibold text-on-surface">{viaje.estacion_origen.nombre}</span>
+              </div>
+            )}
+            {viaje.estacion_destino && (
+              <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 shadow-md ml-auto">
                 <MapPin size={11} className="text-[#16a34a]" />
-                Ruta {viaje.estacion_destino.nombre}
+                <span className="text-xs font-semibold text-on-surface">{viaje.estacion_destino.nombre}</span>
+              </div>
+            )}
+          </div>
+          {/* Badge: ruta GPS vs estimada */}
+          {origenCoord && (
+            <div className="absolute top-3 right-3">
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${waypoints.length >= 2 ? 'bg-[#dcfce7] text-[#166534]' : 'bg-[#f3f4f6] text-[#6b7280]'}`}>
+                {waypoints.length >= 2 ? `📍 ${waypoints.length} puntos GPS` : 'Ruta estimada'}
               </span>
             </div>
           )}

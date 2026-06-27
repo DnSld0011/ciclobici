@@ -25,7 +25,11 @@ export async function POST(req: NextRequest) {
 
   if (!viaje) return NextResponse.json({ ok: false }, { status: 404 })
 
-  await admin.from('viajes').update({ lat, lng }).eq('id', viaje_id)
+  // Actualizar posición actual + acumular waypoint para el recorrido
+  await Promise.all([
+    admin.from('viajes').update({ lat, lng }).eq('id', viaje_id),
+    admin.from('viaje_waypoints').insert({ viaje_id, lat, lng }),
+  ])
 
   return NextResponse.json({ ok: true })
 }

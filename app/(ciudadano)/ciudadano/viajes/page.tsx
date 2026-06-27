@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Bike, Clock, CalendarDays, Route, Star, ChevronRight } from 'lucide-react'
 
@@ -138,7 +137,8 @@ export default function ViajesPage() {
             const dist = v.distancia_km
             return (
               <div key={v.id}
-                className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:border-gray-200 transition-colors">
+                onClick={() => (finalizado || activo) && router.push(`/ciudadano/viaje/${v.id}`)}
+                className={`bg-white rounded-2xl p-4 shadow-sm border border-gray-100 transition-all ${(finalizado || activo) ? 'cursor-pointer hover:border-gray-300 hover:shadow-md active:scale-[0.99]' : ''}`}>
 
                 {/* Fecha + bici + estado */}
                 <div className="flex items-center justify-between mb-3">
@@ -209,7 +209,7 @@ export default function ViajesPage() {
                     </div>
                   )}
 
-                  {/* Calificación */}
+                  {/* Calificación o badge "Calificar" */}
                   {v.calificacion != null ? (
                     <div className="flex items-center gap-0.5 ml-auto">
                       {[1, 2, 3, 4, 5].map(n => (
@@ -220,18 +220,14 @@ export default function ViajesPage() {
                       ))}
                     </div>
                   ) : finalizado ? (
-                    <Link href={`/ciudadano/viaje/${v.id}`}
-                      className="ml-auto flex items-center gap-1 text-xs font-semibold text-amber-600 hover:underline">
+                    <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-amber-600">
                       <Star size={11} />Calificar
-                    </Link>
+                    </span>
                   ) : null}
 
-                  {/* Link al resumen */}
-                  {finalizado && (
-                    <Link href={`/ciudadano/viaje/${v.id}`}
-                      className={`${v.calificacion != null ? 'ml-2' : ''} flex items-center text-xs text-gray-400 hover:text-gray-600 transition-colors`}>
-                      <ChevronRight size={14} />
-                    </Link>
+                  {/* Chevron indicador de navegación */}
+                  {(finalizado || activo) && (
+                    <ChevronRight size={14} className={`text-gray-300 shrink-0 ${v.calificacion != null ? 'ml-2' : ''}`} />
                   )}
                 </div>
               </div>
