@@ -80,6 +80,14 @@ export default function DashboardCiudadano() {
       setLoading(false)
     }
     cargar()
+    const supabase = createClient()
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const debounced = () => { if (timeout) clearTimeout(timeout); timeout = setTimeout(cargar, 800) }
+    const ch = supabase.channel('dashboard-ciudadano-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, debounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, debounced)
+      .subscribe()
+    return () => { if (timeout) clearTimeout(timeout); supabase.removeChannel(ch) }
   }, [router])
 
   // El saludo depende de la hora local — calcularlo en el cliente tras montar

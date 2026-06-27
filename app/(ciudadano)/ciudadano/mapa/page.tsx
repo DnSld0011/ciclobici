@@ -61,7 +61,7 @@ export default function MapaCiudadanoPage() {
       timeout = setTimeout(cargar, 800)
     }
     const ch = supabase.channel('mapa-ciudadano-rt')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bicicletas' }, debouncedCargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, debouncedCargar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, debouncedCargar)
       .subscribe()
     return () => {
