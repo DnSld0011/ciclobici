@@ -147,7 +147,18 @@ export default function KPIsPage() {
     setLoading(false)
   }, [periodo])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => {
+    cargar()
+    const supabase = createClient()
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const debounced = () => { if (timeout) clearTimeout(timeout); timeout = setTimeout(cargar, 1500) }
+    const ch = supabase.channel('kpis-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, debounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, debounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios' }, debounced)
+      .subscribe()
+    return () => { if (timeout) clearTimeout(timeout); supabase.removeChannel(ch) }
+  }, [cargar])
 
   // KPIs derivados
   const pctCrecimiento = viajesPrev > 0

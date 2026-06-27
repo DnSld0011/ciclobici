@@ -66,6 +66,7 @@ export default function BicicletasPage() {
     const supabase = createClient()
     const ch = supabase.channel('bicicletas-admin-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [cargar])

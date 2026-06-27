@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { createClient } from '@/lib/supabase/client'
 import {
   Users, Search, Shield, Bike, Wrench, CheckCircle2, Crown,
   XCircle, Trash2, Key, ChevronDown, RefreshCw, X, Eye, EyeOff, Pencil,
@@ -315,7 +316,14 @@ export default function UsuariosPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => {
+    cargar()
+    const supabase = createClient()
+    const ch = supabase.channel('usuarios-admin-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios' }, cargar)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [cargar])
 
   function actualizarLocal(id: string, campo: string, valor: string) {
     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, [campo]: valor } : u))

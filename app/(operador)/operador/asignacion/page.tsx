@@ -85,6 +85,7 @@ export default function AsignacionPage() {
     cargar()
     const ch = supabase.channel('asig-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
