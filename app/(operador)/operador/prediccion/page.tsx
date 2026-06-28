@@ -250,8 +250,8 @@ export default function PrediccionPage() {
                       background: '#fff', border: '1px solid #e5e7eb',
                       borderRadius: 12, fontSize: 12, boxShadow: '0 4px 24px rgba(0,0,0,.10)',
                     }}
-                    formatter={(value: number, name: string) => [
-                      `${value} bicis`,
+                    formatter={(value, name) => [
+                      `${value ?? 0} bicis`,
                       name === 'prediccion' ? '🎯 Predicción necesaria' : '🚲 Disponibles ahora',
                     ]}
                     labelFormatter={(label: string) => `📍 ${label}`}
