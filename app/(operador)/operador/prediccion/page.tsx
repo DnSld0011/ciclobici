@@ -1,237 +1,341 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { Estacion } from '@/types'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, LabelList, Cell,
+} from 'recharts'
+import { TrendingUp, Calendar, Clock, AlertTriangle, CheckCircle2, ArrowUp, ArrowDown, Info } from 'lucide-react'
 
-interface PrediccionHora {
-  hora: number
-  hora_label: string
-  demanda_estimada: number
+interface EstPrediccion {
+  id: string
+  nombre: string
   capacidad: number
-  estacion_nombre: string
+  bicis_actuales: number
+  demanda_predicha: number
+  diferencia: number
+  accion: 'deficit' | 'surplus' | 'ok'
   confianza: 'alta' | 'media' | 'baja'
 }
 
-interface PrediccionResponse {
-  prediccion?: PrediccionHora[]
-  sin_datos?: boolean
-  total_muestras?: number
-  semanas_cubiertas?: number
+interface Metadatos {
+  total_viajes: number
+  meses_historial: number
+  fecha_prediccion: string
+  hora_prediccion: number
+  dia_semana: string
 }
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Cell,
-} from 'recharts'
-import { TrendingUp, Info, AlertTriangle } from 'lucide-react'
+
+// Tick personalizado para nombres de estación (rotado -40°)
+function TickEstacion({ x = 0, y = 0, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  const nombre = payload?.value ?? ''
+  const short  = nombre.length > 12 ? nombre.slice(0, 11) + '…' : nombre
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={12} textAnchor="end" fill="#6b7280" fontSize={10} fontWeight={600}
+        transform="rotate(-40)">{short}</text>
+    </g>
+  )
+}
 
 export default function PrediccionPage() {
-  const [estaciones, setEstaciones] = useState<Estacion[]>([])
-  const [estacionId, setEstacionId] = useState('')
-  const [intervalo, setIntervalo] = useState('3')
-  const [datos, setDatos] = useState<PrediccionHora[]>([])
-  const [loading, setLoading] = useState(false)
-  const [sinDatos, setSinDatos] = useState(false)
-  const [metadatos, setMetadatos] = useState<{ total_muestras: number; semanas_cubiertas: number } | null>(null)
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.from('estaciones').select('*').eq('estado', 'activa').order('nombre')
-      .then(({ data }) => { if (data) setEstaciones(data) })
-  }, [])
+  const [modo, setModo]         = useState<'horas' | 'fecha'>('horas')
+  const [intervalo, setIntervalo] = useState(4)
+  const [fecha, setFecha]       = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10)
+  })
+  const [hora, setHora]         = useState(8)
+  const [loading, setLoading]   = useState(false)
+  const [datos, setDatos]       = useState<EstPrediccion[]>([])
+  const [meta, setMeta]         = useState<Metadatos | null>(null)
+
+  const today = new Date().toISOString().slice(0, 10)
 
   const consultar = useCallback(async () => {
-    if (!estacionId) return
-    setLoading(true); setSinDatos(false)
+    setLoading(true)
     try {
-      const res = await fetch(`/api/prediccion?estacion_id=${estacionId}&intervalo=${intervalo}`)
-      const json: PrediccionResponse = await res.json()
-      if (json.sin_datos) { setSinDatos(true); setDatos([]); setMetadatos(null) }
-      else {
-        setDatos(json.prediccion ?? [])
-        setMetadatos(json.total_muestras != null ? { total_muestras: json.total_muestras, semanas_cubiertas: json.semanas_cubiertas ?? 0 } : null)
-      }
-    } catch {
-      setSinDatos(true)
+      const qs = modo === 'horas' ? `intervalo=${intervalo}` : `fecha=${fecha}&hora=${hora}`
+      const res  = await fetch(`/api/prediccion/todas?${qs}`)
+      const json = await res.json()
+      setDatos(json.estaciones ?? [])
+      setMeta(json.metadatos ?? null)
     } finally {
       setLoading(false)
     }
-  }, [estacionId, intervalo])
+  }, [modo, intervalo, fecha, hora])
 
   useEffect(() => { consultar() }, [consultar])
 
-  const estacionSeleccionada = estaciones.find(e => e.id === estacionId)
+  const deficit = datos.filter(e => e.accion === 'deficit').length
+  const surplus = datos.filter(e => e.accion === 'surplus').length
+  const ok      = datos.filter(e => e.accion === 'ok').length
 
-  const maxDemanda = datos.reduce((m, d) => Math.max(m, d.demanda_estimada), 0)
+  const fechaLabel = meta
+    ? new Date(meta.fecha_prediccion).toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })
+    : ''
+
+  // Etiqueta de acción encima de la barra de predicción
+  const renderAccionLabel = (props: { x?: number; y?: number; width?: number; index?: number }) => {
+    const { x = 0, y = 0, width = 0, index = 0 } = props
+    const d = datos[index]
+    if (!d) return null
+    const diff  = d.diferencia
+    const text  = diff > 1 ? `+${diff}` : diff < -2 ? `${diff}` : '✓'
+    const color = diff > 1 ? '#dc2626' : diff < -2 ? '#d97706' : '#16a34a'
+    return (
+      <text key={index} x={x + width / 2} y={y - 6}
+        textAnchor="middle" fill={color} fontSize={10} fontWeight={800}>{text}</text>
+    )
+  }
+
+  const chartData = datos.map(e => ({
+    nombre:     e.nombre,
+    prediccion: e.demanda_predicha,
+    actuales:   e.bicis_actuales,
+    diferencia: e.diferencia,
+    accion:     e.accion,
+  }))
 
   return (
-    <div className="p-6 space-y-5 max-w-[1100px]">
+    <div className="min-h-screen bg-[#f8fafb]">
 
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-extrabold text-primary-container">Predicción de Demanda</h1>
-        <p className="text-xs text-outline mt-0.5">Disponibilidad proyectada con datos históricos</p>
+      {/* ── Header ── */}
+      <div className="bg-white border-b border-gray-100 px-8 py-5">
+        <h1 className="text-2xl font-black text-[#0f2419]">Predicción de Demanda</h1>
+        <p className="text-xs text-gray-400 mt-1">
+          Anticipa cuántas bicicletas necesitará cada estación y planifica la redistribución con antelación
+        </p>
       </div>
 
-      {/* Controles */}
-      <div className="card p-5">
-        <div className="flex gap-4 flex-wrap items-end">
-          <div className="flex-1 min-w-48">
-            <label className="block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1">Estación</label>
-            <select
-              className="w-full h-11 px-3 rounded-xl border border-outline-variant/40 bg-surface text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
-              value={estacionId} onChange={e => setEstacionId(e.target.value)}>
-              <option value="">Seleccionar estación...</option>
-              {estaciones.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-            </select>
-          </div>
-          <div className="w-44">
-            <label className="block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1">Horizonte</label>
-            <select
-              className="w-full h-11 px-3 rounded-xl border border-outline-variant/40 bg-surface text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
-              value={intervalo} onChange={e => setIntervalo(e.target.value)}>
-              <option value="1">Próxima 1h</option>
-              <option value="3">Próximas 3h</option>
-              <option value="6">Próximas 6h</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      <div className="px-8 py-5 space-y-5">
 
-      {/* Estado vacío */}
-      {!estacionId && (
-        <div className="card p-6 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center shrink-0">
-            <Info size={18} className="text-outline" />
-          </div>
-          <p className="text-sm text-on-surface">Selecciona una estación para ver la predicción de demanda.</p>
-        </div>
-      )}
+        {/* ── Controles ── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex flex-wrap gap-4 items-end">
 
-      {/* Loading skeleton */}
-      {loading && (
-        <div className="card p-6">
-          <div className="h-72 bg-surface-container-low animate-pulse rounded-xl" />
-        </div>
-      )}
-
-      {/* Sin datos */}
-      {sinDatos && !loading && (
-        <div className="card p-6 flex items-start gap-4">
-          <div className="w-10 h-10 rounded-xl bg-[#fef9c3] flex items-center justify-center shrink-0">
-            <AlertTriangle size={18} className="text-[#854d0e]" />
-          </div>
-          <div>
-            <p className="font-bold text-on-surface text-sm">Modelo en entrenamiento</p>
-            <p className="text-xs text-outline mt-1">
-              No hay suficientes datos históricos de viajes para esta estación.
-              La predicción estará disponible una vez que se registren más viajes.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Gráfico */}
-      {datos.length > 0 && !loading && (
-        <div className="card p-6 space-y-4">
-          <div className="flex items-center justify-between">
+            {/* Tabs modo */}
             <div>
-              <h2 className="font-extrabold text-on-surface flex items-center gap-2">
-                <TrendingUp size={18} className="text-primary-container" />
-                Demanda Proyectada — {estacionSeleccionada?.nombre}
-              </h2>
-              <p className="text-xs text-outline mt-0.5">
-                Próximas {intervalo}h · Capacidad total: {estacionSeleccionada?.capacidad} bicicletas
-              </p>
-            </div>
-            {/* Mini leyenda */}
-            <div className="flex items-center gap-4 text-xs text-outline">
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm" style={{ background: '#003527' }} />
-                Demanda est.
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm bg-error opacity-60" />
-                Capacidad
-              </div>
-            </div>
-          </div>
-
-          <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={datos} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5eeff" vertical={false} />
-              <XAxis dataKey="hora" tickFormatter={(h) => `${h}:00`} tick={{ fontSize: 11, fill: '#707974' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#707974' }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{
-                  background: 'rgba(255,255,255,0.95)', border: '1px solid #e5eeff',
-                  borderRadius: 12, fontSize: 12, boxShadow: '0 4px 20px rgba(51,65,85,.12)'
-                }}
-                formatter={(value, name) => [
-                  value as number,
-                  name === 'demanda_estimada' ? 'Demanda Estimada' : 'Capacidad',
-                ]}
-              />
-              <ReferenceLine
-                y={estacionSeleccionada?.capacidad}
-                stroke="#ba1a1a" strokeDasharray="6 3" strokeWidth={1.5}
-                label={{ value: 'Capacidad', position: 'insideTopRight', fontSize: 11, fill: '#ba1a1a' }}
-              />
-              <Bar dataKey="demanda_estimada" radius={[6, 6, 0, 0]} maxBarSize={40}>
-                {datos.map((d, i) => (
-                  <Cell
-                    key={i}
-                    fill={
-                      d.demanda_estimada >= (estacionSeleccionada?.capacidad ?? 999)
-                        ? '#ba1a1a'
-                        : d.demanda_estimada >= (estacionSeleccionada?.capacidad ?? 0) * 0.8
-                        ? '#f59e0b'
-                        : '#003527'
-                    }
-                    opacity={d.confianza === 'baja' ? 0.5 : d.confianza === 'media' ? 0.75 : 1}
-                  />
+              <p className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase mb-2">Modo de consulta</p>
+              <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                {([
+                  { id: 'horas', label: 'Próximas horas',    Icon: Clock    },
+                  { id: 'fecha', label: 'Fecha y hora',      Icon: Calendar },
+                ] as const).map(m => (
+                  <button key={m.id} onClick={() => setModo(m.id)}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold transition-all ${
+                      modo === m.id ? 'bg-[#0f2419] text-white' : 'text-gray-500 hover:bg-gray-50'
+                    }`}>
+                    <m.Icon size={13} />{m.label}
+                  </button>
                 ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+              </div>
+            </div>
 
-          {/* Insight cards */}
-          <div className="grid grid-cols-3 gap-3 pt-2">
-            <div className="bg-surface-container-low rounded-xl p-4">
-              <p className="text-[10px] text-outline uppercase font-extrabold tracking-widest">Hora pico</p>
-              <p className="text-lg font-extrabold text-primary-container mt-1">
-                {(() => { const h = datos.find(d => d.demanda_estimada === maxDemanda)?.hora; return h != null ? `${h}:00` : '—' })()}
-              </p>
-            </div>
-            <div className="bg-surface-container-low rounded-xl p-4">
-              <p className="text-[10px] text-outline uppercase font-extrabold tracking-widest">Demanda máx.</p>
-              <p className="text-lg font-extrabold text-on-surface mt-1">{maxDemanda} bicis</p>
-            </div>
-            <div className="bg-surface-container-low rounded-xl p-4">
-              <p className="text-[10px] text-outline uppercase font-extrabold tracking-widest">Capacidad libre</p>
-              <p className={`text-lg font-extrabold mt-1 ${(estacionSeleccionada?.capacidad ?? 0) - maxDemanda < 0 ? 'text-error' : 'text-[#166534]'}`}>
-                {Math.max(0, (estacionSeleccionada?.capacidad ?? 0) - maxDemanda)} bicis
-              </p>
-            </div>
-          </div>
+            {/* Horizonte (modo horas) */}
+            {modo === 'horas' && (
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase mb-2">Horizonte</p>
+                <div className="flex gap-2">
+                  {[1, 2, 4, 6].map(h => (
+                    <button key={h} onClick={() => setIntervalo(h)}
+                      className={`w-14 h-10 rounded-xl text-sm font-bold border transition-all ${
+                        intervalo === h
+                          ? 'bg-[#0f2419] text-white border-[#0f2419]'
+                          : 'border-gray-200 text-gray-600 hover:border-[#0f2419]'
+                      }`}>{h}h
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-          {/* Confianza por slot */}
-          {datos.some(d => d.confianza === 'baja') && (
-            <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-100 text-xs text-amber-800">
-              <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-              Algunos slots tienen pocos datos históricos (confianza baja). La predicción mejorará con más viajes registrados.
-            </div>
-          )}
-
-          <div className="px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/20 text-xs text-outline flex items-center justify-between flex-wrap gap-2">
-            <span>Media ponderada: semanas recientes tienen mayor peso en el cálculo.</span>
-            {metadatos && (
-              <span className="font-semibold text-on-surface">
-                {metadatos.total_muestras} viajes · {metadatos.semanas_cubiertas} semanas de historial
-              </span>
+            {/* Fecha + Hora */}
+            {modo === 'fecha' && (
+              <>
+                <div>
+                  <p className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase mb-2">Fecha</p>
+                  <input type="date" min={today} value={fecha}
+                    onChange={e => setFecha(e.target.value)}
+                    className="h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-700
+                               focus:outline-none focus:border-[#0f2419] focus:ring-1 focus:ring-[#0f2419]/20" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase mb-2">Hora</p>
+                  <select value={hora} onChange={e => setHora(Number(e.target.value))}
+                    className="h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-700
+                               focus:outline-none focus:border-[#0f2419] focus:ring-1 focus:ring-[#0f2419]/20">
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
           </div>
         </div>
-      )}
+
+        {/* ── KPIs ── */}
+        {datos.length > 0 && (
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: 'Necesitan más bicis', value: deficit, icon: ArrowUp,       bg: '#fef2f2', ic: '#dc2626' },
+              { label: 'Tienen exceso',        value: surplus, icon: ArrowDown,    bg: '#fffbeb', ic: '#d97706' },
+              { label: 'Balanceadas',          value: ok,      icon: CheckCircle2, bg: '#f0fdf4', ic: '#16a34a' },
+            ].map(({ label, value, icon: Icon, bg, ic }) => (
+              <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg }}>
+                  <Icon size={18} style={{ color: ic }} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">{label}</p>
+                  <p className="text-2xl font-black text-[#0f2419]">
+                    {value} <span className="text-sm font-normal text-gray-400">estaciones</span>
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Gráfico principal ── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+
+          {/* Cabecera gráfico */}
+          <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="font-bold text-[#0f2419] flex items-center gap-2 text-sm">
+                <TrendingUp size={16} className="text-[#16a34a]" />
+                {meta && (
+                  modo === 'horas'
+                    ? `Predicción para las próximas ${intervalo}h — ${fechaLabel}`
+                    : `Predicción para el ${fechaLabel} a las ${String(hora).padStart(2, '0')}:00`
+                )}
+                {!meta && 'Cargando predicción…'}
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Etiqueta encima de cada barra: <span className="text-red-600 font-bold">+N faltan</span> · <span className="text-amber-600 font-bold">-N sobran</span> · <span className="text-green-600 font-bold">✓ OK</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-4 text-xs shrink-0">
+              <span className="flex items-center gap-1.5 text-gray-500 font-medium">
+                <span className="w-3 h-3 rounded-sm inline-block bg-[#0f2419]" />Predicción necesaria
+              </span>
+              <span className="flex items-center gap-1.5 text-gray-500 font-medium">
+                <span className="w-3 h-3 rounded-sm inline-block bg-[#b2f746]" />Actuales en estación
+              </span>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="h-80 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0f2419]" />
+            </div>
+          ) : chartData.length === 0 ? (
+            <div className="h-80 flex flex-col items-center justify-center gap-3 text-gray-400">
+              <AlertTriangle size={28} />
+              <p className="text-sm">No hay datos disponibles</p>
+            </div>
+          ) : (
+            <div className="px-4 pt-8 pb-2">
+              <ResponsiveContainer width="100%" height={380}>
+                <BarChart data={chartData} margin={{ top: 28, right: 16, left: 0, bottom: 72 }}
+                  barGap={3} barCategoryGap="28%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="nombre" tick={<TickEstacion />}
+                    axisLine={false} tickLine={false} interval={0} />
+                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false}
+                    label={{ value: 'Bicis', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#9ca3af' } }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: '#fff', border: '1px solid #e5e7eb',
+                      borderRadius: 12, fontSize: 12, boxShadow: '0 4px 24px rgba(0,0,0,.10)',
+                    }}
+                    formatter={(value: number, name: string) => [
+                      `${value} bicis`,
+                      name === 'prediccion' ? '🎯 Predicción necesaria' : '🚲 Disponibles ahora',
+                    ]}
+                    labelFormatter={(label: string) => `📍 ${label}`}
+                  />
+
+                  {/* Barra predicción (coloreada por estado) */}
+                  <Bar dataKey="prediccion" name="prediccion" radius={[5, 5, 0, 0]} maxBarSize={30}>
+                    {chartData.map((d, i) => (
+                      <Cell key={i}
+                        fill={d.accion === 'deficit' ? '#dc2626' : d.accion === 'surplus' ? '#d97706' : '#0f2419'}
+                        fillOpacity={0.88}
+                      />
+                    ))}
+                    <LabelList content={renderAccionLabel} />
+                  </Bar>
+
+                  {/* Barra actuales (verde lima) */}
+                  <Bar dataKey="actuales" name="actuales" fill="#b2f746" radius={[5, 5, 0, 0]}
+                    maxBarSize={30} fillOpacity={0.85} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Mensaje informativo */}
+          {meta && (
+            <div className="mx-6 mb-5 mt-1 px-4 py-3 rounded-xl flex items-start gap-3"
+              style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+              <Info size={14} className="text-[#16a34a] shrink-0 mt-0.5" />
+              <p className="text-xs text-[#166534] leading-relaxed">
+                Predicción calculada con{' '}
+                <strong>{meta.total_viajes.toLocaleString('es-PE')} viajes</strong> registrados
+                durante los últimos{' '}
+                <strong>{meta.meses_historial} {meta.meses_historial === 1 ? 'mes' : 'meses'}</strong>.
+                {' '}Los resultados son orientativos y mejoran cuanto más historial de uso existe.
+                {meta.meses_historial < 3 && (
+                  <span className="text-amber-700"> Se recomiendan al menos 3 meses para mayor precisión.</span>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Plan de acción ── */}
+        {!loading && datos.some(e => e.accion !== 'ok') && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h3 className="font-bold text-[#0f2419] mb-1">Plan de acción recomendado</h3>
+            <p className="text-xs text-gray-400 mb-4">
+              Preparar estos traslados antes de que comience el período predicho
+            </p>
+            <div className="space-y-2">
+              {datos
+                .filter(e => e.accion !== 'ok')
+                .sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
+                .map(e => {
+                  const isDeficit = e.accion === 'deficit'
+                  const cantidad  = Math.abs(e.diferencia)
+                  return (
+                    <div key={e.id}
+                      className="flex items-center gap-3 p-3.5 rounded-xl"
+                      style={{ background: isDeficit ? '#fef2f2' : '#fffbeb' }}>
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${isDeficit ? 'bg-red-500' : 'bg-amber-400'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800">
+                          <strong>{e.nombre}</strong>
+                          {isDeficit
+                            ? <> — llevar <strong>{cantidad} {cantidad === 1 ? 'bicicleta' : 'bicicletas'}</strong> · tiene {e.bicis_actuales}, necesita {e.demanda_predicha}</>
+                            : <> — retirar <strong>{cantidad} {cantidad === 1 ? 'bicicleta' : 'bicicletas'}</strong> · tiene {e.bicis_actuales}, necesita {e.demanda_predicha}</>
+                          }
+                        </p>
+                      </div>
+                      <span className={`shrink-0 text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
+                        isDeficit ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {isDeficit ? `Faltan ${cantidad}` : `Sobran ${cantidad}`}
+                      </span>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+
+      </div>
     </div>
   )
 }
