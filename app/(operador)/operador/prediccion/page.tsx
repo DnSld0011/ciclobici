@@ -313,15 +313,15 @@ export default function PrediccionPage() {
                 <p>
                   Predicción elaborada con{' '}
                   <strong className="text-[#0f2419]">Gradient Boosting</strong>
-                  {' '}({meta.estimadores ?? 40} estimadores, profundidad 3) ·{' '}
-                  entrenado con <strong>{meta.muestras_entreno?.toLocaleString('es-PE') ?? '—'} muestras</strong> de{' '}
+                  {' '}— mismo algoritmo base que XGBoost/LightGBM ({meta.estimadores ?? 40} estimadores, profundidad 3, lr 0.12) ·{' '}
+                  entrenado con <strong>{meta.muestras_entreno?.toLocaleString('es-PE') ?? '—'} muestras</strong> extraídas de{' '}
                   <strong>{meta.total_viajes.toLocaleString('es-PE')} viajes</strong> de los últimos{' '}
                   <strong>{meta.meses_historial} {meta.meses_historial === 1 ? 'mes' : 'meses'}</strong>.
                 </p>
                 <p className="text-[#166534]/70">
-                  El modelo aprende patrones de día, hora, estacionalidad y franjas pico usando{' '}
-                  11 variables (codificación cíclica de hora y día + indicadores de rush hour).
-                  Los resultados mejoran con más historial de uso.
+                  El modelo aprende patrones de demanda usando 11 variables: hora y día codificados cíclicamente
+                  (sen/cos), mes, indicadores de fin de semana y franjas pico (7-9h, 17-19h).
+                  Cada estimador corrige el error residual del anterior — los resultados mejoran con más historial.
                 </p>
                 {meta.meses_historial < 3 && (
                   <p className="text-amber-700 font-medium">⚠ Se recomiendan al menos 3 meses de datos para mayor precisión.</p>
