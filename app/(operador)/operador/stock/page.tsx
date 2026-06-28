@@ -87,8 +87,11 @@ export default function StockPage() {
   const sobreStock = datos.filter(e => e.accion === 'surplus').length
   const movimientos = calcularMovimientos(datos)
 
-  const renderLabel = (props: { x?: number; y?: number; width?: number; index?: number }) => {
-    const { x = 0, y = 0, width = 0, index = 0 } = props
+  const renderLabel = (props: { x?: string | number; y?: string | number; width?: string | number; index?: number }) => {
+    const x     = Number(props.x     ?? 0)
+    const y     = Number(props.y     ?? 0)
+    const width = Number(props.width ?? 0)
+    const index = props.index ?? 0
     const d = datos[index]
     if (!d) return null
     const diff  = d.diferencia
