@@ -254,7 +254,7 @@ export default function PrediccionPage() {
                       `${value ?? 0} bicis`,
                       name === 'prediccion' ? '🎯 Predicción necesaria' : '🚲 Disponibles ahora',
                     ]}
-                    labelFormatter={(label: string) => `📍 ${label}`}
+                    labelFormatter={(label) => `📍 ${label}`}
                   />
 
                   {/* Barra predicción (coloreada por estado) */}

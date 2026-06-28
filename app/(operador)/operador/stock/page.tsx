@@ -218,7 +218,7 @@ export default function StockPage() {
                       `${value ?? 0} bicis`,
                       name === 'optimo' ? '🎯 Stock óptimo' : '🚲 Disponibles ahora',
                     ]}
-                    labelFormatter={(label: string) => `📍 ${label}`}
+                    labelFormatter={(label) => `📍 ${label}`}
                   />
                   <Bar dataKey="optimo" name="optimo" radius={[5, 5, 0, 0]} maxBarSize={30}>
                     {chartData.map((d, i) => (
