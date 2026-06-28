@@ -205,17 +205,39 @@ export default function PrediccionPage() {
 
           {/* Cabecera gráfico */}
           <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-wrap">
-            <div>
+            <div className="space-y-2">
               <h2 className="font-bold text-[#0f2419] flex items-center gap-2 text-sm">
                 <TrendingUp size={16} className="text-[#16a34a]" />
-                {meta && (
-                  modo === 'horas'
-                    ? `Predicción para las próximas ${intervalo}h — ${fechaLabel}`
-                    : `Predicción para el ${fechaLabel} a las ${String(hora).padStart(2, '0')}:00`
-                )}
-                {!meta && 'Cargando predicción…'}
+                Demanda predicha por estación
               </h2>
-              <p className="text-xs text-gray-400 mt-0.5">
+
+              {/* Badge fecha/hora exacta */}
+              {meta && (
+                <div className="inline-flex items-center gap-3 px-3 py-2 rounded-xl border border-[#b2f746] bg-[#f0fdf4]">
+                  <span className="flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">
+                    <Calendar size={11} />Fecha
+                  </span>
+                  <span className="text-sm font-bold text-[#0f2419]">{fechaLabel}</span>
+                  <span className="w-px h-4 bg-gray-200" />
+                  <span className="flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">
+                    <Clock size={11} />Hora
+                  </span>
+                  <span className="text-sm font-bold text-[#0f2419]">
+                    {modo === 'horas'
+                      ? `${String(new Date(meta.fecha_prediccion).getHours()).padStart(2, '0')}:00 — ${String(new Date(meta.fecha_prediccion).getHours() + intervalo - 1).padStart(2, '0')}:59`
+                      : `${String(hora).padStart(2, '0')}:00 — ${String(hora).padStart(2, '0')}:59`
+                    }
+                  </span>
+                  {modo === 'horas' && (
+                    <>
+                      <span className="w-px h-4 bg-gray-200" />
+                      <span className="text-[10px] font-bold text-[#16a34a]">Próximas {intervalo}h</span>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <p className="text-xs text-gray-400">
                 Etiqueta encima de cada barra: <span className="text-red-600 font-bold">+N faltan</span> · <span className="text-amber-600 font-bold">-N sobran</span> · <span className="text-green-600 font-bold">✓ OK</span>
               </p>
             </div>
