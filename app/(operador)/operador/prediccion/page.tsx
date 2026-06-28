@@ -23,6 +23,9 @@ interface Metadatos {
   meses_historial: number
   fecha_prediccion: string
   hora_prediccion: number
+  algoritmo?: string
+  muestras_entreno?: number
+  estimadores?: number
   dia_semana: string
 }
 
@@ -306,16 +309,24 @@ export default function PrediccionPage() {
             <div className="mx-6 mb-5 mt-1 px-4 py-3 rounded-xl flex items-start gap-3"
               style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
               <Info size={14} className="text-[#16a34a] shrink-0 mt-0.5" />
-              <p className="text-xs text-[#166534] leading-relaxed">
-                Predicción calculada con{' '}
-                <strong>{meta.total_viajes.toLocaleString('es-PE')} viajes</strong> registrados
-                durante los últimos{' '}
-                <strong>{meta.meses_historial} {meta.meses_historial === 1 ? 'mes' : 'meses'}</strong>.
-                {' '}Los resultados son orientativos y mejoran cuanto más historial de uso existe.
+              <div className="text-xs text-[#166534] leading-relaxed space-y-1">
+                <p>
+                  Predicción elaborada con{' '}
+                  <strong className="text-[#0f2419]">Gradient Boosting</strong>
+                  {' '}({meta.estimadores ?? 40} estimadores, profundidad 3) ·{' '}
+                  entrenado con <strong>{meta.muestras_entreno?.toLocaleString('es-PE') ?? '—'} muestras</strong> de{' '}
+                  <strong>{meta.total_viajes.toLocaleString('es-PE')} viajes</strong> de los últimos{' '}
+                  <strong>{meta.meses_historial} {meta.meses_historial === 1 ? 'mes' : 'meses'}</strong>.
+                </p>
+                <p className="text-[#166534]/70">
+                  El modelo aprende patrones de día, hora, estacionalidad y franjas pico usando{' '}
+                  11 variables (codificación cíclica de hora y día + indicadores de rush hour).
+                  Los resultados mejoran con más historial de uso.
+                </p>
                 {meta.meses_historial < 3 && (
-                  <span className="text-amber-700"> Se recomiendan al menos 3 meses para mayor precisión.</span>
+                  <p className="text-amber-700 font-medium">⚠ Se recomiendan al menos 3 meses de datos para mayor precisión.</p>
                 )}
-              </p>
+              </div>
             </div>
           )}
         </div>
