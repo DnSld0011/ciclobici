@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList, Cell,
 } from 'recharts'
-import { TrendingUp, Calendar, Clock, AlertTriangle, CheckCircle2, ArrowUp, ArrowDown, Info } from 'lucide-react'
+import { TrendingUp, Calendar, Clock, AlertTriangle, CheckCircle2, ArrowUp, ArrowDown, Info, Bike, Sunrise } from 'lucide-react'
 
 interface EstPrediccion {
   id: string
@@ -26,6 +26,7 @@ interface Metadatos {
   algoritmo?: string
   muestras_entreno?: number
   estimadores?: number
+  es_dia_futuro?: boolean
   dia_semana: string
 }
 
@@ -69,9 +70,17 @@ export default function PrediccionPage() {
 
   useEffect(() => { consultar() }, [consultar])
 
+  const esFuturo = meta?.es_dia_futuro ?? false
+
   const deficit = datos.filter(e => e.accion === 'deficit').length
   const surplus = datos.filter(e => e.accion === 'surplus').length
   const ok      = datos.filter(e => e.accion === 'ok').length
+
+  // KPIs para día futuro (no hay bicis colocadas → solo importa cuánto preparar)
+  const totalPreparar   = datos.reduce((s, e) => s + e.demanda_predicha, 0)
+  const conDemanda      = datos.filter(e => e.demanda_predicha > 0).length
+  const estacionTop     = datos.reduce<EstPrediccion | null>(
+    (top, e) => (!top || e.demanda_predicha > top.demanda_predicha) ? e : top, null)
 
   const fechaLabel = meta
     ? new Date(meta.fecha_prediccion).toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -85,6 +94,13 @@ export default function PrediccionPage() {
     const index = props.index ?? 0
     const d = datos[index]
     if (!d) return null
+    // Día futuro: mostrar la cantidad de bicis a preparar (no hay comparación)
+    if (esFuturo) {
+      return (
+        <text key={index} x={x + width / 2} y={y - 6}
+          textAnchor="middle" fill="#0f2419" fontSize={11} fontWeight={800}>{d.demanda_predicha}</text>
+      )
+    }
     const diff  = d.diferencia
     const text  = diff > 1 ? `+${diff}` : diff < -2 ? `${diff}` : '✓'
     const color = diff > 1 ? '#dc2626' : diff < -2 ? '#d97706' : '#16a34a'
@@ -181,7 +197,7 @@ export default function PrediccionPage() {
         </div>
 
         {/* ── KPIs ── */}
-        {datos.length > 0 && (
+        {datos.length > 0 && !esFuturo && (
           <div className="grid grid-cols-3 gap-4">
             {[
               { label: 'Necesitan más bicis', value: deficit, icon: ArrowUp,       bg: '#fef2f2', ic: '#dc2626' },
@@ -200,6 +216,46 @@ export default function PrediccionPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ── KPIs día futuro ── */}
+        {datos.length > 0 && esFuturo && (
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#f0fdf4]">
+                <Bike size={18} className="text-[#16a34a]" />
+              </div>
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">Total a preparar</p>
+                <p className="text-2xl font-black text-[#0f2419]">
+                  {totalPreparar} <span className="text-sm font-normal text-gray-400">bicicletas</span>
+                </p>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#fef9ec]">
+                <TrendingUp size={18} className="text-[#d97706]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">Mayor demanda</p>
+                <p className="text-lg font-black text-[#0f2419] truncate">
+                  {estacionTop?.nombre ?? '—'}
+                  {estacionTop && <span className="text-sm font-normal text-gray-400"> · {estacionTop.demanda_predicha} bicis</span>}
+                </p>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#eff6ff]">
+                <Sunrise size={18} className="text-[#2563eb]" />
+              </div>
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">Con demanda</p>
+                <p className="text-2xl font-black text-[#0f2419]">
+                  {conDemanda} <span className="text-sm font-normal text-gray-400">de {datos.length} estaciones</span>
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -237,20 +293,35 @@ export default function PrediccionPage() {
                       <span className="text-[10px] font-bold text-[#16a34a]">Próximas {intervalo}h</span>
                     </>
                   )}
+                  {esFuturo && (
+                    <>
+                      <span className="w-px h-4 bg-gray-200" />
+                      <span className="text-[10px] font-bold text-[#2563eb]">Día futuro</span>
+                    </>
+                  )}
                 </div>
               )}
 
-              <p className="text-xs text-gray-400">
-                Etiqueta encima de cada barra: <span className="text-red-600 font-bold">+N faltan</span> · <span className="text-amber-600 font-bold">-N sobran</span> · <span className="text-green-600 font-bold">✓ OK</span>
-              </p>
+              {esFuturo ? (
+                <p className="text-xs text-gray-400">
+                  El número encima de cada barra indica cuántas bicicletas <strong className="text-[#0f2419]">preparar y colocar a primera hora</strong> en esa estación
+                </p>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  Etiqueta encima de cada barra: <span className="text-red-600 font-bold">+N faltan</span> · <span className="text-amber-600 font-bold">-N sobran</span> · <span className="text-green-600 font-bold">✓ OK</span>
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-4 text-xs shrink-0">
               <span className="flex items-center gap-1.5 text-gray-500 font-medium">
-                <span className="w-3 h-3 rounded-sm inline-block bg-[#0f2419]" />Predicción necesaria
+                <span className="w-3 h-3 rounded-sm inline-block bg-[#0f2419]" />
+                {esFuturo ? 'Bicis a preparar' : 'Predicción necesaria'}
               </span>
-              <span className="flex items-center gap-1.5 text-gray-500 font-medium">
-                <span className="w-3 h-3 rounded-sm inline-block bg-[#b2f746]" />Actuales en estación
-              </span>
+              {!esFuturo && (
+                <span className="flex items-center gap-1.5 text-gray-500 font-medium">
+                  <span className="w-3 h-3 rounded-sm inline-block bg-[#b2f746]" />Actuales en estación
+                </span>
+              )}
             </div>
           </div>
 
@@ -280,25 +351,32 @@ export default function PrediccionPage() {
                     }}
                     formatter={(value, name) => [
                       `${value ?? 0} bicis`,
-                      name === 'prediccion' ? '🎯 Predicción necesaria' : '🚲 Disponibles ahora',
+                      name === 'prediccion'
+                        ? (esFuturo ? '🎯 Bicis a preparar' : '🎯 Predicción necesaria')
+                        : '🚲 Disponibles ahora',
                     ]}
                     labelFormatter={(label) => `📍 ${label}`}
                   />
 
-                  {/* Barra predicción (coloreada por estado) */}
-                  <Bar dataKey="prediccion" name="prediccion" radius={[5, 5, 0, 0]} maxBarSize={30}>
+                  {/* Barra predicción (coloreada por estado; verde oscuro en día futuro) */}
+                  <Bar dataKey="prediccion" name="prediccion" radius={[5, 5, 0, 0]}
+                    maxBarSize={esFuturo ? 44 : 30}>
                     {chartData.map((d, i) => (
                       <Cell key={i}
-                        fill={d.accion === 'deficit' ? '#dc2626' : d.accion === 'surplus' ? '#d97706' : '#0f2419'}
+                        fill={esFuturo ? '#0f2419'
+                          : d.accion === 'deficit' ? '#dc2626'
+                          : d.accion === 'surplus' ? '#d97706' : '#0f2419'}
                         fillOpacity={0.88}
                       />
                     ))}
                     <LabelList content={renderAccionLabel} />
                   </Bar>
 
-                  {/* Barra actuales (verde lima) */}
-                  <Bar dataKey="actuales" name="actuales" fill="#b2f746" radius={[5, 5, 0, 0]}
-                    maxBarSize={30} fillOpacity={0.85} />
+                  {/* Barra actuales (verde lima) — solo cuando la predicción es para hoy */}
+                  {!esFuturo && (
+                    <Bar dataKey="actuales" name="actuales" fill="#b2f746" radius={[5, 5, 0, 0]}
+                      maxBarSize={30} fillOpacity={0.85} />
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -331,8 +409,45 @@ export default function PrediccionPage() {
           )}
         </div>
 
+        {/* ── Plan de preparación (día futuro) ── */}
+        {!loading && esFuturo && conDemanda > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h3 className="font-bold text-[#0f2419] mb-1 flex items-center gap-2">
+              <Sunrise size={16} className="text-[#d97706]" />
+              Plan de preparación para el {fechaLabel}
+            </h3>
+            <p className="text-xs text-gray-400 mb-4">
+              Bicicletas a colocar en cada estación a primera hora, según la demanda predicha para las {String(hora).padStart(2, '0')}:00
+            </p>
+            <div className="space-y-2">
+              {datos
+                .filter(e => e.demanda_predicha > 0)
+                .sort((a, b) => b.demanda_predicha - a.demanda_predicha)
+                .map(e => (
+                  <div key={e.id}
+                    className="flex items-center gap-3 p-3.5 rounded-xl bg-[#f8fafb] border border-gray-100">
+                    <div className="w-2 h-2 rounded-full shrink-0 bg-[#16a34a]" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-800">
+                        <strong>{e.nombre}</strong>
+                        {' '}— colocar <strong>{e.demanda_predicha} {e.demanda_predicha === 1 ? 'bicicleta' : 'bicicletas'}</strong>
+                        {' '}· capacidad {e.capacidad}
+                        {e.confianza === 'baja' && <span className="text-amber-600"> · pocos datos históricos</span>}
+                      </p>
+                    </div>
+                    <span className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold text-[#0f2419]"
+                      style={{ background: '#b2f746' }}>
+                      <Bike size={11} />
+                      {e.demanda_predicha}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Plan de acción ── */}
-        {!loading && datos.some(e => e.accion !== 'ok') && (
+        {!loading && !esFuturo && datos.some(e => e.accion !== 'ok') && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h3 className="font-bold text-[#0f2419] mb-1">Plan de acción recomendado</h3>
             <p className="text-xs text-gray-400 mb-4">

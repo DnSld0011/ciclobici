@@ -124,10 +124,16 @@ export async function GET(request: NextRequest) {
 
   const slots: { dow: number; hour: number; month: number }[] = []
   let targetDate: Date
+  let esDiaFuturo = false
 
   if (fechaParam && horaParam !== null) {
     targetDate = new Date(`${fechaParam}T${String(horaParam).padStart(2, '0')}:00:00`)
     slots.push({ dow: targetDate.getDay(), hour: targetDate.getHours(), month: targetDate.getMonth() + 1 })
+    // Día futuro = fecha solicitada posterior al día de hoy (las bicis se
+    // retiran en la noche, así que "actuales" no aplica para otros días)
+    const hoy = new Date(ahora)
+    hoy.setHours(23, 59, 59, 999)
+    esDiaFuturo = targetDate.getTime() > hoy.getTime()
   } else {
     targetDate = new Date(ahora.getTime() + Math.floor(intervalo / 2) * 3600000)
     for (let i = 0; i < intervalo; i++) {
@@ -149,7 +155,7 @@ export async function GET(request: NextRequest) {
       bicisMap[b.estacion_id] = (bicisMap[b.estacion_id] ?? 0) + 1
   }
 
-  const desde = new Date(ahora.getTime() - 180 * 24 * 3600000).toISOString()
+  const desde = new Date(ahora.getTime() - 365 * 24 * 3600000).toISOString()
   const { data: viajes } = await admin
     .from('viajes')
     .select('estacion_origen_id, inicio_at')
@@ -174,6 +180,7 @@ export async function GET(request: NextRequest) {
         hora_prediccion: targetDate.getHours(),
         dia_semana: '',
         algoritmo: 'gradient_boosting',
+        es_dia_futuro: esDiaFuturo,
       },
     })
   }
@@ -228,14 +235,15 @@ export async function GET(request: NextRequest) {
 
     const demanda_predicha = Math.min(Math.round(demandaPico), e.capacidad ?? 10)
     const bicis_actuales   = bicisMap[e.id] ?? 0
-    const diferencia       = demanda_predicha - bicis_actuales
+    // En día futuro no hay bicis colocadas todavía → la comparación no aplica
+    const diferencia       = esDiaFuturo ? 0 : demanda_predicha - bicis_actuales
 
     // Confianza basada en nº de muestras históricas de esta estación
     const estSamples = samples.filter(s => s.features[0] === idx).length
     const confianza: 'alta' | 'media' | 'baja' =
       estSamples >= 20 ? 'alta' : estSamples >= 8 ? 'media' : 'baja'
 
-    const accion: 'deficit' | 'surplus' | 'ok' =
+    const accion: 'deficit' | 'surplus' | 'ok' = esDiaFuturo ? 'ok' :
       diferencia >  1 ? 'deficit' :
       diferencia < -2 ? 'surplus' : 'ok'
 
@@ -253,6 +261,7 @@ export async function GET(request: NextRequest) {
       algoritmo:         'gradient_boosting',
       muestras_entreno:  samples.length,
       estimadores:       40,
+      es_dia_futuro:     esDiaFuturo,
     },
   })
 }
