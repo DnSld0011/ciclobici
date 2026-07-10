@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import dynamicImport from 'next/dynamic'
@@ -9,7 +9,7 @@ import { EstacionConDisponibilidad, Alerta } from '@/types'
 import {
   TrendingUp, TrendingDown, Bell, Leaf, RefreshCw, ChevronRight,
   AlertTriangle, CheckCircle, Info, Search, HelpCircle, Sun,
-  CalendarDays, Sparkles, ArrowRightLeft,
+  CalendarDays, Sparkles, ArrowRightLeft, Bike, Route, Timer, MapPin, History,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
@@ -19,6 +19,13 @@ const MapaEstaciones = dynamicImport(
   () => import('@/components/maps/MapaEstaciones').then(m => m.MapaEstaciones),
   { ssr: false, loading: () => <div className="w-full h-full bg-surface-container-low animate-pulse rounded-xl" /> }
 )
+
+interface ViajeAnual {
+  inicio_at: string
+  estacion_origen_id: string | null
+  distancia_km: number | null
+  duracion_min: number | null
+}
 
 interface KPIs {
   bicisDisponibles: number
@@ -64,6 +71,7 @@ export default function DashboardOperadorPage() {
   })
   const [estaciones, setEstaciones]     = useState<EstacionConDisponibilidad[]>([])
   const [alertas, setAlertas]           = useState<Alerta[]>([])
+  const [viajesAnio, setViajesAnio]     = useState<ViajeAnual[]>([])
   const [demandaPorHora, setDemandaPorHora] = useState<{ hora: number; viajes: number }[]>([])
   const [ultimaAct, setUltimaAct]       = useState<Date | null>(null)
   const [loading, setLoading]           = useState(true)
@@ -144,6 +152,19 @@ export default function DashboardOperadorPage() {
     setLoading(false)
   }, [router])
 
+  // Historial anual: se carga una sola vez (no necesita tiempo real)
+  useEffect(() => {
+    const supabase = createClient()
+    const desde = new Date(Date.now() - 365 * 24 * 3600000).toISOString()
+    supabase
+      .from('viajes')
+      .select('inicio_at, estacion_origen_id, distancia_km, duracion_min')
+      .eq('estado', 'finalizado')
+      .gte('inicio_at', desde)
+      .limit(10000)
+      .then(({ data }) => { if (data) setViajesAnio(data as ViajeAnual[]) })
+  }, [])
+
   useEffect(() => {
     cargar()
     const supabase = createClient()
@@ -174,7 +195,6 @@ export default function DashboardOperadorPage() {
   const demandaData = demandaPorHora.length > 0
     ? demandaPorHora.map(d => ({ hora: d.hora, demanda: d.viajes }))
     : Array.from({ length: 24 }, (_, h) => ({ hora: h, demanda: 0 }))
-  const picoDemanda = Math.max(...demandaData.map(d => d.demanda), 1)
   const horaActual  = new Date().getHours()
 
   /* ── filtro búsqueda de estaciones ── */
@@ -186,6 +206,104 @@ export default function DashboardOperadorPage() {
   const hoy = new Date()
   const esLaboral = hoy.getDay() >= 1 && hoy.getDay() <= 5
   const mesActual = hoy.getMonth() // 0-11
+
+  /* ── Histórico anual (12 meses) ─────────────────────────────── */
+  const MESES  = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const DIAS   = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+  const anual = useMemo(() => {
+    // Últimos 12 meses en orden cronológico
+    const meses: { key: string; label: string; viajes: number }[] = []
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
+      meses.push({
+        key: `${d.getFullYear()}-${d.getMonth()}`,
+        label: `${MESES[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`,
+        viajes: 0,
+      })
+    }
+    const mesIdx = Object.fromEntries(meses.map((m, i) => [m.key, i]))
+
+    const porDia   = DIAS.map(d => ({ dia: d, viajes: 0 }))
+    const porEst: Record<string, number> = {}
+    const porHora: Record<number, number> = {}
+    let km = 0, durTotal = 0, conDur = 0
+
+    for (const v of viajesAnio) {
+      const t = new Date(v.inicio_at)
+      const mk = `${t.getFullYear()}-${t.getMonth()}`
+      if (mesIdx[mk] !== undefined) meses[mesIdx[mk]].viajes++
+      porDia[t.getDay()].viajes++
+      porHora[t.getHours()] = (porHora[t.getHours()] ?? 0) + 1
+      if (v.estacion_origen_id) porEst[v.estacion_origen_id] = (porEst[v.estacion_origen_id] ?? 0) + 1
+      km += v.distancia_km ?? 0
+      if (v.duracion_min) { durTotal += v.duracion_min; conDur++ }
+    }
+
+    // Top 5 estaciones de origen (con nombre)
+    const nombreEst = Object.fromEntries(estaciones.map(e => [e.id, e.nombre]))
+    const topEst = Object.entries(porEst)
+      .map(([id, viajes]) => ({ nombre: nombreEst[id] ?? 'Estación', viajes }))
+      .sort((a, b) => b.viajes - a.viajes)
+      .slice(0, 5)
+
+    // Reordenar días empezando en Lunes
+    const porDiaLun = [...porDia.slice(1), porDia[0]]
+
+    const mesPico = meses.reduce((top, m) => m.viajes > top.viajes ? m : top, meses[0])
+    const diaPico = porDiaLun.reduce((top, d) => d.viajes > top.viajes ? d : top, porDiaLun[0])
+    const horaPicoNum = Object.entries(porHora).sort((a, b) => b[1] - a[1])[0]?.[0]
+
+    return {
+      total:    viajesAnio.length,
+      km:       Math.round(km),
+      co2:      Math.round(km * 0.21 * 10) / 10,   // kg CO2
+      durProm:  conDur ? Math.round(durTotal / conDur) : 0,
+      porMes:   meses,
+      porDia:   porDiaLun,
+      topEst,
+      mesPico,
+      diaPico,
+      horaPico: horaPicoNum !== undefined ? `${String(horaPicoNum).padStart(2, '0')}:00` : '—',
+      viajesPorDia: viajesAnio.length ? Math.round(viajesAnio.length / 365 * 10) / 10 : 0,
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viajesAnio, estaciones])
+
+  const maxMes    = Math.max(...anual.porMes.map(m => m.viajes), 1)
+  const maxDia    = Math.max(...anual.porDia.map(d => d.viajes), 1)
+  const maxTopEst = anual.topEst[0]?.viajes ?? 1
+
+  /* ── datos del gráfico Analítica Predictiva según pestaña ───── */
+  const predChart = useMemo(() => {
+    if (tabPred === 'hoy') {
+      return demandaData.map(d => ({ label: `${d.hora}:00`, demanda: d.demanda, esActual: d.hora === horaActual }))
+    }
+    const dias = tabPred === 'semana' ? 7 : 30
+    const buckets: { label: string; demanda: number; esActual: boolean }[] = []
+    const idx: Record<string, number> = {}
+    for (let i = dias - 1; i >= 0; i--) {
+      const d = new Date(hoy); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0)
+      const key = d.toDateString()
+      idx[key] = buckets.length
+      buckets.push({
+        label: tabPred === 'semana' ? `${DIAS[d.getDay()]} ${d.getDate()}` : `${d.getDate()}/${d.getMonth() + 1}`,
+        demanda: 0,
+        esActual: i === 0,
+      })
+    }
+    const desde = new Date(hoy); desde.setDate(desde.getDate() - (dias - 1)); desde.setHours(0, 0, 0, 0)
+    for (const v of viajesAnio) {
+      const t = new Date(v.inicio_at)
+      if (t < desde) continue
+      const key = new Date(t.getFullYear(), t.getMonth(), t.getDate()).toDateString()
+      if (idx[key] !== undefined) buckets[idx[key]].demanda++
+    }
+    return buckets
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabPred, demandaData, viajesAnio, horaActual])
+
+  const picoPred = Math.max(...predChart.map(d => d.demanda), 1)
 
   return (
     <div className="min-h-screen" style={{ background: '#f4f6f5' }}>
@@ -467,31 +585,32 @@ export default function DashboardOperadorPage() {
             </div>
 
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
-              Viajes iniciados hoy · Por hora
+              {tabPred === 'hoy'    && 'Viajes iniciados hoy · Por hora'}
+              {tabPred === 'semana' && 'Viajes finalizados · Últimos 7 días'}
+              {tabPred === 'mes'    && 'Viajes finalizados · Últimos 30 días'}
             </p>
 
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={demandaData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="hora" tickFormatter={h => `${h}:00`}
+              <BarChart data={predChart} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                <XAxis dataKey="label"
                   tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false}
-                  interval={3} />
+                  interval={tabPred === 'hoy' ? 3 : tabPred === 'mes' ? 4 : 0} />
                 <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 12 }}
-                  formatter={(v) => [v, 'Viajes iniciados']}
-                  labelFormatter={h => `${h}:00 hs`}
+                  formatter={(v) => [v, tabPred === 'hoy' ? 'Viajes iniciados' : 'Viajes finalizados']}
                 />
-                {picoDemanda > 1 && (
-                  <ReferenceLine y={picoDemanda}
+                {picoPred > 1 && (
+                  <ReferenceLine y={picoPred}
                     stroke="#003527" strokeDasharray="4 3" strokeWidth={1.5}
-                    label={{ value: `PICO: ${picoDemanda.toLocaleString()}`, position: 'insideTopLeft', fontSize: 10, fill: '#003527', fontWeight: 800 }}
+                    label={{ value: `PICO: ${picoPred.toLocaleString()}`, position: 'insideTopLeft', fontSize: 10, fill: '#003527', fontWeight: 800 }}
                   />
                 )}
                 <Bar dataKey="demanda" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                  {demandaData.map((d, i) => (
+                  {predChart.map((d, i) => (
                     <Cell key={i}
-                      fill={d.demanda === picoDemanda ? '#003527' : i % 2 === 0 ? '#b2f746' : '#c5f768'}
-                      opacity={d.hora > horaActual ? 0.5 : 1}
+                      fill={d.demanda === picoPred ? '#003527' : i % 2 === 0 ? '#b2f746' : '#c5f768'}
+                      opacity={d.esActual ? 1 : tabPred === 'hoy' && i > horaActual ? 0.5 : 1}
                     />
                   ))}
                 </Bar>
@@ -562,6 +681,167 @@ export default function DashboardOperadorPage() {
             <Link href="/operador/prediccion"
               className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
               Ver predicción completa <ChevronRight size={13} />
+            </Link>
+          </div>
+        </div>
+
+        {/* ══ HISTÓRICO ANUAL ══════════════════════════════════════ */}
+        <div className="flex items-center gap-3 pt-2">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#0f2419' }}>
+            <History size={16} style={{ color: '#b2f746' }} />
+          </div>
+          <div>
+            <h2 className="font-black text-gray-800 text-base leading-tight">Histórico Anual</h2>
+            <p className="text-xs text-gray-400">Últimos 12 meses de operación · {anual.total.toLocaleString('es-PE')} viajes registrados</p>
+          </div>
+        </div>
+
+        {/* ── KPIs del año ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: 'Viajes en el año',   value: anual.total.toLocaleString('es-PE'),          sub: `≈ ${anual.viajesPorDia} viajes/día`,        Icon: Bike,  bg: '#f0fdf4', ic: '#16a34a' },
+            { label: 'Km recorridos',      value: `${anual.km.toLocaleString('es-PE')} km`,     sub: 'Distancia total acumulada',                  Icon: Route, bg: '#eff6ff', ic: '#2563eb' },
+            { label: 'CO₂ evitado',        value: `${anual.co2.toLocaleString('es-PE')} kg`,    sub: 'vs. mismo trayecto en auto',                 Icon: Leaf,  bg: '#f0fdf4', ic: '#16a34a' },
+            { label: 'Duración promedio',  value: `${anual.durProm} min`,                        sub: 'Por viaje finalizado',                       Icon: Timer, bg: '#fef9ec', ic: '#d97706' },
+          ].map(({ label, value, sub, Icon, bg, ic }) => (
+            <div key={label} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg }}>
+                <Icon size={18} style={{ color: ic }} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</p>
+                <p className="text-2xl font-black text-gray-900 leading-tight">{loading && anual.total === 0 ? '—' : value}</p>
+                <p className="text-[10px] text-gray-400">{sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Gráfico mensual + Top estaciones ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+          {/* Viajes por mes */}
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h3 className="font-black text-gray-800 text-sm">Viajes por mes</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Mes pico: <strong className="text-gray-600">{anual.mesPico?.label}</strong> con {anual.mesPico?.viajes.toLocaleString('es-PE')} viajes
+                </p>
+              </div>
+              <span className="text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider"
+                style={{ background: '#f0fdf4', color: '#16a34a' }}>
+                12 meses
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={230}>
+              <BarChart data={anual.porMes} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9ca3af' }}
+                  axisLine={false} tickLine={false} interval={0} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 12 }}
+                  formatter={(v) => [`${v} viajes`, 'Total del mes']}
+                />
+                <Bar dataKey="viajes" radius={[5, 5, 0, 0]} maxBarSize={40}>
+                  {anual.porMes.map((m, i) => (
+                    <Cell key={i} fill={m.viajes === maxMes ? '#003527' : '#b2f746'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Top 5 estaciones */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col">
+            <div className="flex items-center gap-2 mb-1">
+              <MapPin size={15} className="text-[#16a34a]" />
+              <h3 className="font-black text-gray-800 text-sm">Estaciones más usadas</h3>
+            </div>
+            <p className="text-xs text-gray-400 mb-5">Por viajes de origen en el año</p>
+
+            <div className="flex-1 space-y-4">
+              {anual.topEst.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-8">Sin datos aún</p>
+              )}
+              {anual.topEst.map((e, i) => (
+                <div key={e.nombre}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black shrink-0 ${
+                        i === 0 ? 'text-[#0f2419]' : 'text-gray-500 bg-gray-100'
+                      }`} style={i === 0 ? { background: '#b2f746' } : {}}>
+                        {i + 1}
+                      </span>
+                      <span className="text-xs font-bold text-gray-700 truncate">{e.nombre}</span>
+                    </div>
+                    <span className="text-xs font-black text-gray-800 shrink-0 ml-2">{e.viajes.toLocaleString('es-PE')}</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-gray-100">
+                    <div className="h-1.5 rounded-full transition-all duration-700"
+                      style={{ width: `${Math.round((e.viajes / maxTopEst) * 100)}%`, background: i === 0 ? '#003527' : '#b2f746' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Distribución semanal + Datos clave ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+          {/* Por día de semana */}
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <h3 className="font-black text-gray-800 text-sm">Uso por día de la semana</h3>
+            <p className="text-xs text-gray-400 mt-0.5 mb-5">
+              Día más activo: <strong className="text-gray-600">{anual.diaPico?.dia}</strong> · acumulado de los últimos 12 meses
+            </p>
+            <ResponsiveContainer width="100%" height={190}>
+              <BarChart data={anual.porDia} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                <XAxis dataKey="dia" tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  axisLine={false} tickLine={false} interval={0} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 12 }}
+                  formatter={(v) => [`${v} viajes`, 'Total acumulado']}
+                />
+                <Bar dataKey="viajes" radius={[5, 5, 0, 0]} maxBarSize={54}>
+                  {anual.porDia.map((d, i) => (
+                    <Cell key={i} fill={d.viajes === maxDia ? '#003527' : '#b2f746'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Datos clave del año */}
+          <div className="rounded-2xl p-6 shadow-sm flex flex-col gap-4" style={{ background: '#0f2419' }}>
+            <div>
+              <h3 className="font-black text-white text-sm">Datos clave del año</h3>
+              <p className="text-[10px] uppercase tracking-widest font-bold mt-0.5" style={{ color: 'rgba(178,247,70,0.6)' }}>
+                Resumen operativo
+              </p>
+            </div>
+
+            <div className="flex-1 space-y-3">
+              {[
+                { label: 'Mes con más viajes',   value: anual.mesPico?.label ?? '—',  extra: `${anual.mesPico?.viajes ?? 0} viajes` },
+                { label: 'Día más activo',        value: anual.diaPico?.dia ?? '—',    extra: `${anual.diaPico?.viajes ?? 0} viajes acumulados` },
+                { label: 'Hora punta del año',    value: anual.horaPico,               extra: 'Mayor concentración de salidas' },
+                { label: 'Estación líder',        value: anual.topEst[0]?.nombre ?? '—', extra: `${anual.topEst[0]?.viajes ?? 0} viajes de origen` },
+              ].map(({ label, value, extra }) => (
+                <div key={label} className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.4)' }}>{label}</p>
+                  <p className="text-base font-black truncate" style={{ color: '#b2f746' }}>{value}</p>
+                  <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{extra}</p>
+                </div>
+              ))}
+            </div>
+
+            <Link href="/operador/kpis"
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black text-[#0f2419]"
+              style={{ background: '#b2f746' }}>
+              Ver KPIs completos <ChevronRight size={13} />
             </Link>
           </div>
         </div>
