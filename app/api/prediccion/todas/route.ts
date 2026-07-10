@@ -104,9 +104,10 @@ function predictGB(model: GBModel, features: number[]): number {
 // Feature engineering (todas las horas/días en UTC para ser
 // consistentes con inicio_at, que se guarda en UTC)
 // ─────────────────────────────────────────────────────────────
-function buildFeatures(stationIdx: number, hourUTC: number, dowUTC: number): number[] {
+function buildFeatures(stationIdx: number, hourUTC: number, dowUTC: number, popularity: number): number[] {
   return [
     stationIdx,
+    popularity,          // viajes históricos de la estación / máximo (0-1)
     hourUTC / 23,
     dowUTC  / 6,
     (dowUTC === 0 || dowUTC === 6) ? 1 : 0,
@@ -216,12 +217,15 @@ export async function GET(request: NextRequest) {
     totalPorEstacion[idx] = (totalPorEstacion[idx] ?? 0) + 1
   }
 
+  const maxEstTotal = Math.max(...Object.values(totalPorEstacion), 1)
+  const popularidad = (idx: number) => (totalPorEstacion[idx] ?? 0) / maxEstTotal
+
   const samples: Sample[] = []
   for (let idx = 0; idx < stationIds.length; idx++) {
     for (let dow = 0; dow < 7; dow++) {
       for (let hour = 0; hour < 24; hour++) {
         samples.push({
-          features: buildFeatures(idx, hour, dow),
+          features: buildFeatures(idx, hour, dow, popularidad(idx)),
           target:   buckets[`${idx}-${dow}-${hour}`] ?? 0,
         })
       }
@@ -246,7 +250,7 @@ export async function GET(request: NextRequest) {
     let demandaPico = 0
     let ocurrencias = 0
     for (const slot of slots) {
-      const pred = predictGB(model, buildFeatures(idx, slot.hour, slot.dow))
+      const pred = predictGB(model, buildFeatures(idx, slot.hour, slot.dow, popularidad(idx)))
       if (pred > demandaPico) demandaPico = pred
       ocurrencias = Math.max(ocurrencias, buckets[`${idx}-${slot.dow}-${slot.hour}`] ?? 0)
     }
