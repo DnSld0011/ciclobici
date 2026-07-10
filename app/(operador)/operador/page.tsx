@@ -152,17 +152,12 @@ export default function DashboardOperadorPage() {
     setLoading(false)
   }, [router])
 
-  // Historial anual: se carga una sola vez (no necesita tiempo real)
+  // Historial anual: se carga una sola vez vía API (adminClient evita RLS)
   useEffect(() => {
-    const supabase = createClient()
-    const desde = new Date(Date.now() - 365 * 24 * 3600000).toISOString()
-    supabase
-      .from('viajes')
-      .select('inicio_at, estacion_origen_id, distancia_km, duracion_min')
-      .eq('estado', 'finalizado')
-      .gte('inicio_at', desde)
-      .limit(10000)
-      .then(({ data }) => { if (data) setViajesAnio(data as ViajeAnual[]) })
+    fetch('/api/dashboard/historico')
+      .then(res => res.json())
+      .then(json => { if (json.viajes) setViajesAnio(json.viajes as ViajeAnual[]) })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
