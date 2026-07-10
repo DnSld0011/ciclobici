@@ -24,8 +24,22 @@ function meanTarget(samples: Sample[]): number {
   return samples.length ? samples.reduce((s, x) => s + x.target, 0) / samples.length : 0
 }
 
+// Máx 16 umbrales candidatos por feature (cuantiles) para mantener velocidad
+function candidateThresholds(vals: number[]): number[] {
+  const uniq = [...new Set(vals)].sort((a, b) => a - b)
+  if (uniq.length <= 16) {
+    return uniq.slice(0, -1).map((v, i) => (v + uniq[i + 1]) / 2)
+  }
+  const out: number[] = []
+  for (let i = 1; i < 16; i++) {
+    const q = uniq[Math.floor((i / 16) * uniq.length)]
+    if (out[out.length - 1] !== q) out.push(q)
+  }
+  return out
+}
+
 function buildTree(samples: Sample[], depth: number, maxDepth: number): TreeNode {
-  if (depth >= maxDepth || samples.length < 3) return { value: meanTarget(samples) }
+  if (depth >= maxDepth || samples.length < 6) return { value: meanTarget(samples) }
 
   const nFeatures = samples[0].features.length
   let bestGain = -Infinity, bestF = 0, bestT = 0
@@ -33,12 +47,10 @@ function buildTree(samples: Sample[], depth: number, maxDepth: number): TreeNode
   const baseMSE = mse(samples)
 
   for (let f = 0; f < nFeatures; f++) {
-    const vals = [...new Set(samples.map(s => s.features[f]))].sort((a, b) => a - b)
-    for (let i = 0; i < vals.length - 1; i++) {
-      const t = (vals[i] + vals[i + 1]) / 2
+    for (const t of candidateThresholds(samples.map(s => s.features[f]))) {
       const L = samples.filter(s => s.features[f] <= t)
       const R = samples.filter(s => s.features[f] >  t)
-      if (L.length < 2 || R.length < 2) continue
+      if (L.length < 3 || R.length < 3) continue
       const gain = baseMSE - (L.length / samples.length) * mse(L) - (R.length / samples.length) * mse(R)
       if (gain > bestGain) { bestGain = gain; bestF = f; bestT = t; bestL = L; bestR = R }
     }
@@ -63,7 +75,7 @@ function predictTree(node: TreeNode, features: number[]): number {
 
 interface GBModel { baseMean: number; trees: TreeNode[]; lr: number }
 
-function trainGB(samples: Sample[], nEstimators = 40, lr = 0.12, maxDepth = 3): GBModel {
+function trainGB(samples: Sample[], nEstimators = 30, lr = 0.15, maxDepth = 3): GBModel {
   if (!samples.length) return { baseMean: 0, trees: [], lr }
 
   const baseMean = meanTarget(samples)
@@ -89,29 +101,30 @@ function predictGB(model: GBModel, features: number[]): number {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Feature engineering
+// Feature engineering (todas las horas/días en UTC para ser
+// consistentes con inicio_at, que se guarda en UTC)
 // ─────────────────────────────────────────────────────────────
-// Features: [stationIdx, hour, dow, month, isWeekend, isMorningRush, isEveningRush, hourSin, hourCos, dowSin, dowCos]
-
-function buildFeatures(stationIdx: number, hour: number, dow: number, month: number): number[] {
+function buildFeatures(stationIdx: number, hourUTC: number, dowUTC: number): number[] {
   return [
     stationIdx,
-    hour / 23,                           // normalizado 0-1
-    dow  / 6,                            // normalizado 0-1
-    month / 12,                          // normalizado 0-1
-    (dow === 0 || dow === 6) ? 1 : 0,   // fin de semana
-    (hour >= 7  && hour <= 9)  ? 1 : 0, // rush mañana
-    (hour >= 17 && hour <= 19) ? 1 : 0, // rush tarde
-    Math.sin(2 * Math.PI * hour / 24),  // ciclicidad hora
-    Math.cos(2 * Math.PI * hour / 24),
-    Math.sin(2 * Math.PI * dow  / 7),   // ciclicidad día
-    Math.cos(2 * Math.PI * dow  / 7),
+    hourUTC / 23,
+    dowUTC  / 6,
+    (dowUTC === 0 || dowUTC === 6) ? 1 : 0,
+    // Rush hours de Lima expresados en UTC (Lima = UTC-5)
+    (hourUTC >= 12 && hourUTC <= 14) ? 1 : 0,  // 7-9 Lima
+    (hourUTC >= 22 || hourUTC <= 0)  ? 1 : 0,  // 17-19 Lima
+    Math.sin(2 * Math.PI * hourUTC / 24),
+    Math.cos(2 * Math.PI * hourUTC / 24),
+    Math.sin(2 * Math.PI * dowUTC  / 7),
+    Math.cos(2 * Math.PI * dowUTC  / 7),
   ]
 }
 
+const LIMA_OFFSET_MS = 5 * 3600000  // Lima = UTC-5
+
 // ─────────────────────────────────────────────────────────────
 // GET /api/prediccion/todas?intervalo=4
-// GET /api/prediccion/todas?fecha=2026-07-09&hora=8
+// GET /api/prediccion/todas?fecha=2026-07-11&hora=8   (hora de Lima)
 // ─────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -122,23 +135,22 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient()
   const ahora = new Date()
 
-  const slots: { dow: number; hour: number; month: number }[] = []
+  const slots: { dow: number; hour: number }[] = []   // en UTC
   let targetDate: Date
   let esDiaFuturo = false
 
   if (fechaParam && horaParam !== null) {
-    targetDate = new Date(`${fechaParam}T${String(horaParam).padStart(2, '0')}:00:00`)
-    slots.push({ dow: targetDate.getDay(), hour: targetDate.getHours(), month: targetDate.getMonth() + 1 })
-    // Día futuro = fecha solicitada posterior al día de hoy (las bicis se
-    // retiran en la noche, así que "actuales" no aplica para otros días)
-    const hoy = new Date(ahora)
-    hoy.setHours(23, 59, 59, 999)
-    esDiaFuturo = targetDate.getTime() > hoy.getTime()
+    // La hora elegida es hora de Lima → fijar offset -05:00 explícito
+    targetDate = new Date(`${fechaParam}T${String(horaParam).padStart(2, '0')}:00:00-05:00`)
+    slots.push({ dow: targetDate.getUTCDay(), hour: targetDate.getUTCHours() })
+    // Día futuro comparando fechas calendario de Lima
+    const hoyLima = new Date(ahora.getTime() - LIMA_OFFSET_MS).toISOString().slice(0, 10)
+    esDiaFuturo = fechaParam > hoyLima
   } else {
     targetDate = new Date(ahora.getTime() + Math.floor(intervalo / 2) * 3600000)
     for (let i = 0; i < intervalo; i++) {
       const t = new Date(ahora.getTime() + i * 3600000)
-      slots.push({ dow: t.getDay(), hour: t.getHours(), month: t.getMonth() + 1 })
+      slots.push({ dow: t.getUTCDay(), hour: t.getUTCHours() })
     }
   }
 
@@ -161,11 +173,11 @@ export async function GET(request: NextRequest) {
     .select('estacion_origen_id, inicio_at')
     .eq('estado', 'finalizado')
     .gte('inicio_at', desde)
+    .limit(10000)
 
-  const stationIds  = estaciones.map(e => e.id)
-  const stationIdx  = Object.fromEntries(stationIds.map((id, i) => [id, i]))
+  const stationIds = estaciones.map(e => e.id)
+  const stationIdx = Object.fromEntries(stationIds.map((id, i) => [id, i]))
 
-  // Sin historial → devolver zeros con confianza baja
   if (!viajes?.length) {
     return NextResponse.json({
       estaciones: estaciones.map(e => ({
@@ -185,63 +197,67 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // ── Construir dataset de entrenamiento ──────────────────────
-  // Agrupar por (estacion_id, fecha_dia, hora) → conteo de viajes
+  // ── Dataset: conteo anual por (estación, díaSemana, hora) ────
+  // Incluye TODAS las combinaciones (con ceros) para que el modelo
+  // aprenda también cuándo NO hay demanda.
   const buckets: Record<string, number> = {}
+  const totalPorEstacion: Record<number, number> = {}
   let minFecha = ahora, maxFecha = new Date(0)
 
   for (const v of viajes) {
     if (!v.estacion_origen_id || !v.inicio_at) continue
+    const idx = stationIdx[v.estacion_origen_id]
+    if (idx === undefined) continue
     const t = new Date(v.inicio_at)
     if (t < minFecha) minFecha = t
     if (t > maxFecha) maxFecha = t
-    const dateKey = t.toISOString().slice(0, 13) // "2026-01-15T08"
-    const key = `${v.estacion_origen_id}|${dateKey}`
+    const key = `${idx}-${t.getUTCDay()}-${t.getUTCHours()}`
     buckets[key] = (buckets[key] ?? 0) + 1
+    totalPorEstacion[idx] = (totalPorEstacion[idx] ?? 0) + 1
   }
 
   const samples: Sample[] = []
-  for (const [key, count] of Object.entries(buckets)) {
-    const [estId, dateHour] = key.split('|')
-    const t = new Date(`${dateHour}:00:00Z`)
-    const idx = stationIdx[estId]
-    if (idx === undefined) continue
-    samples.push({
-      features: buildFeatures(idx, t.getUTCHours(), t.getUTCDay(), t.getUTCMonth() + 1),
-      target:   count,
-    })
+  for (let idx = 0; idx < stationIds.length; idx++) {
+    for (let dow = 0; dow < 7; dow++) {
+      for (let hour = 0; hour < 24; hour++) {
+        samples.push({
+          features: buildFeatures(idx, hour, dow),
+          target:   buckets[`${idx}-${dow}-${hour}`] ?? 0,
+        })
+      }
+    }
   }
 
-  // ── Entrenar modelo Gradient Boosting ──────────────────────
-  const model = trainGB(samples, 40, 0.12, 3)
+  // ── Entrenar Gradient Boosting ───────────────────────────────
+  const model = trainGB(samples, 30, 0.15, 3)
 
   const mesesHistorial = Math.max(1,
     Math.round((maxFecha.getTime() - minFecha.getTime()) / (30 * 24 * 3600000)))
 
   const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+  // Componentes de fecha/hora en Lima para los metadatos
+  const targetLima = new Date(targetDate.getTime() - LIMA_OFFSET_MS)
 
-  // ── Predecir para cada estación ────────────────────────────
+  // ── Predicción por estación ──────────────────────────────────
   const estResult = estaciones.map(e => {
     const idx = stationIdx[e.id]
     if (idx === undefined) return null
 
-    // Pico de demanda predicha entre todos los slots del intervalo
     let demandaPico = 0
+    let ocurrencias = 0
     for (const slot of slots) {
-      const feat  = buildFeatures(idx, slot.hour, slot.dow, slot.month)
-      const pred  = predictGB(model, feat)
+      const pred = predictGB(model, buildFeatures(idx, slot.hour, slot.dow))
       if (pred > demandaPico) demandaPico = pred
+      ocurrencias = Math.max(ocurrencias, buckets[`${idx}-${slot.dow}-${slot.hour}`] ?? 0)
     }
 
     const demanda_predicha = Math.min(Math.round(demandaPico), e.capacidad ?? 10)
     const bicis_actuales   = bicisMap[e.id] ?? 0
-    // En día futuro no hay bicis colocadas todavía → la comparación no aplica
     const diferencia       = esDiaFuturo ? 0 : demanda_predicha - bicis_actuales
 
-    // Confianza basada en nº de muestras históricas de esta estación
-    const estSamples = samples.filter(s => s.features[0] === idx).length
+    const estTotal = totalPorEstacion[idx] ?? 0
     const confianza: 'alta' | 'media' | 'baja' =
-      estSamples >= 20 ? 'alta' : estSamples >= 8 ? 'media' : 'baja'
+      estTotal >= 40 ? 'alta' : estTotal >= 15 ? 'media' : 'baja'
 
     const accion: 'deficit' | 'surplus' | 'ok' = esDiaFuturo ? 'ok' :
       diferencia >  1 ? 'deficit' :
@@ -256,11 +272,11 @@ export async function GET(request: NextRequest) {
       total_viajes:      viajes.length,
       meses_historial:   mesesHistorial,
       fecha_prediccion:  targetDate.toISOString(),
-      hora_prediccion:   targetDate.getHours(),
-      dia_semana:        diasSemana[targetDate.getDay()],
+      hora_prediccion:   targetLima.getUTCHours(),
+      dia_semana:        diasSemana[targetLima.getUTCDay()],
       algoritmo:         'gradient_boosting',
       muestras_entreno:  samples.length,
-      estimadores:       40,
+      estimadores:       30,
       es_dia_futuro:     esDiaFuturo,
     },
   })
