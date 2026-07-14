@@ -14,10 +14,6 @@ type Periodo = '30d' | '90d' | '365d'
 
 const PERIODO_DIAS: Record<Periodo, number> = { '30d': 30, '90d': 90, '365d': 365 }
 
-const VBD_PATTERN = [
-  0.58, 0.72, 0.68, 0.82, 0.94, 0.85, 0.70,
-  0.62, 0.76, 0.69, 0.85, 0.96, 0.82, 0.88,
-]
 const DIAS_SEM = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 interface EstKPI {
@@ -53,37 +49,30 @@ export default function KPIsPage() {
   const cargar = useCallback(async () => {
     setLoading(true)
     const supabase = createClient()
-    const ahora = new Date()
-    const dias   = PERIODO_DIAS[periodo]
-    const desde  = new Date(ahora.getTime() - dias * 86400000).toISOString()
-    const desdePrev = new Date(ahora.getTime() - dias * 2 * 86400000).toISOString()
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+    const dias = PERIODO_DIAS[periodo]
 
-    const [
-      { count: totalV },
-      { count: prevV },
-      { count: totalU },
-      { data: estData },
-    ] = await Promise.all([
-      supabase.from('viajes').select('*', { count: 'exact', head: true }).gte('created_at', desde),
-      supabase.from('viajes').select('*', { count: 'exact', head: true })
-        .gte('created_at', desdePrev).lt('created_at', desde),
-      supabase.from('usuarios').select('*', { count: 'exact', head: true }),
+    // Métricas agregadas vía API (adminClient evita el bloqueo RLS)
+    const [resumenRes, { data: estData }] = await Promise.all([
+      fetch(`/api/kpis/resumen?dias=${dias}`).then(r => r.json()),
       supabase.from('estaciones').select('id, nombre, direccion, capacidad, estado').order('nombre'),
     ])
 
-    setViajesTotal(totalV ?? 0)
-    setViajesPrev(prevV ?? 0)
-    setUsuarios(totalU ?? 0)
+    const totalV = resumenRes.viajes_total ?? 0
+    setViajesTotal(totalV)
+    setViajesPrev(resumenRes.viajes_prev ?? 0)
+    setUsuarios(resumenRes.usuarios ?? 0)
 
-    // Chart: VBD últimos 14 días escalado a datos reales
-    const avgDiario = (totalV ?? 0) / Math.max(dias, 1)
-    const objetivo  = Math.round(avgDiario * 1.15)
-    setChartData(VBD_PATTERN.map((f, i) => {
-      const d = new Date(ahora.getTime() - (13 - i) * 86400000)
+    // Chart: viajes reales por día de los últimos 14 días
+    const porDia: { fecha: string; viajes: number }[] = resumenRes.por_dia ?? []
+    const avgDiario = porDia.length
+      ? porDia.reduce((s, d) => s + d.viajes, 0) / porDia.length
+      : 0
+    const objetivo = Math.max(1, Math.round(avgDiario * 1.15))
+    setChartData(porDia.map(d => {
+      const fecha = new Date(`${d.fecha}T12:00:00`)
       return {
-        dia:     DIAS_SEM[d.getDay() === 0 ? 6 : d.getDay() - 1],
-        actual:  Math.round(avgDiario * f * (1 + i * 0.01)),
+        dia:     DIAS_SEM[fecha.getDay() === 0 ? 6 : fecha.getDay() - 1],
+        actual:  d.viajes,
         objetivo,
       }
     }))
@@ -91,10 +80,8 @@ export default function KPIsPage() {
     // Enriquecer estaciones
     if (estData && estData.length > 0) {
       const ids = estData.map(e => e.id)
-      const [{ data: bicis }, { data: vHoyData }] = await Promise.all([
-        supabase.from('bicicletas').select('estacion_id, estado').in('estacion_id', ids),
-        supabase.from('viajes').select('estacion_origen_id').gte('created_at', hoy.toISOString()),
-      ])
+      const { data: bicis } = await supabase
+        .from('bicicletas').select('estacion_id, estado').in('estacion_id', ids)
 
       const bMap: Record<string, { total: number; disp: number; mant: number }> = {}
       for (const b of bicis ?? []) {
@@ -105,10 +92,7 @@ export default function KPIsPage() {
         if (b.estado === 'mantenimiento') m.mant++
       }
 
-      const vMap: Record<string, number> = {}
-      for (const v of vHoyData ?? []) {
-        if (v.estacion_origen_id) vMap[v.estacion_origen_id] = (vMap[v.estacion_origen_id] ?? 0) + 1
-      }
+      const vMap: Record<string, number> = resumenRes.viajes_hoy_por_estacion ?? {}
 
       const enriq: EstKPI[] = estData.map(e => {
         const b    = bMap[e.id] ?? { total: 0, disp: 0, mant: 0 }
