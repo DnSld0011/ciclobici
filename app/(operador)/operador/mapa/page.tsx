@@ -4,34 +4,73 @@ import { useEffect, useState, useCallback } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
-import { RefreshCw, MapPin, Bike, AlertTriangle } from 'lucide-react'
+import { type CiclistaVivo } from '@/components/maps/MapaEstaciones'
+import {
+  RefreshCw, MapPin, Bike, AlertTriangle, Activity, User, Download, FileText,
+} from 'lucide-react'
+import { exportarCsv } from '@/lib/utils/exportCsv'
+import { exportarPdf } from '@/lib/utils/exportPdf'
 
 const MapaEstaciones = dynamicImport(
   () => import('@/components/maps/MapaEstaciones').then(m => m.MapaEstaciones),
   { ssr: false, loading: () => <div className="w-full h-full bg-surface-container-low animate-pulse rounded-xl" /> }
 )
 
+interface ViajeVivo {
+  id: string
+  inicio_at: string
+  lat: number | null
+  lng: number | null
+  usuario: { nombre: string } | null
+  bicicleta: { codigo: string; tipo: string } | null
+  estacion_origen: { id: string; nombre: string } | null
+}
+
+function tiempoTranscurrido(inicioAt: string) {
+  const seg = Math.floor((Date.now() - new Date(inicioAt).getTime()) / 1000)
+  const mm  = String(Math.floor(seg / 60) % 60).padStart(2, '0')
+  const ss  = String(seg % 60).padStart(2, '0')
+  if (seg >= 3600) return `${String(Math.floor(seg / 3600)).padStart(2, '0')}:${mm}:${ss}`
+  return `${mm}:${ss}`
+}
+
+function useTick(active: boolean) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    const id = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [active])
+}
+
 export default function MapaOperadorPage() {
-  const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
+  const [estaciones, setEstaciones]     = useState<EstacionConDisponibilidad[]>([])
+  const [viajes, setViajes]             = useState<ViajeVivo[]>([])
   const [seleccionada, setSeleccionada] = useState<EstacionConDisponibilidad | null>(null)
-  const [ultimaAct, setUltimaAct] = useState(new Date())
-  const [loading, setLoading] = useState(true)
+  const [ultimaAct, setUltimaAct]       = useState(new Date())
+  const [loading, setLoading]           = useState(true)
+  const [tabPanel, setTabPanel]         = useState<'estaciones' | 'viajes'>('estaciones')
+  const [verCiclistas, setVerCiclistas] = useState(true)
+
+  useTick(viajes.length > 0)
 
   const cargar = useCallback(async () => {
     const supabase = createClient()
-    const { data } = await supabase
-      .from('estaciones')
-      .select('*, bicicletas(id, estado)')
-      .order('nombre')
-    if (data) {
+    const [{ data: estData }, viajesRes] = await Promise.all([
+      supabase.from('estaciones').select('*, bicicletas(id, estado)').order('nombre'),
+      // API con adminClient — el cliente del navegador no ve viajes ajenos (RLS)
+      fetch('/api/operador/viajes-activos').then(r => r.json()).catch(() => null),
+    ])
+    if (estData) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setEstaciones((data as any[]).map(e => ({
+      setEstaciones((estData as any[]).map(e => ({
         ...e,
         bicicletas_disponibles: Array.isArray(e.bicicletas)
           ? e.bicicletas.filter((b: { estado: string }) => b.estado === 'disponible').length : 0,
       })))
-      setUltimaAct(new Date())
     }
+    if (viajesRes?.viajes) setViajes(viajesRes.viajes as ViajeVivo[])
+    setUltimaAct(new Date())
     setLoading(false)
   }, [])
 
@@ -41,57 +80,121 @@ export default function MapaOperadorPage() {
     const ch = supabase.channel('mapa-op-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bicicletas' }, cargar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'estaciones' }, cargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [cargar])
 
-  const activas      = estaciones.filter(e => e.estado === 'activa').length
-  const enMantenimiento = estaciones.filter(e => e.estado === 'mantenimiento').length
-  const inactivas    = estaciones.filter(e => e.estado === 'inactiva').length
-  const criticas     = estaciones.filter(e => e.bicicletas_disponibles === 0 && e.estado === 'activa').length
+  const activas  = estaciones.filter(e => e.estado === 'activa').length
+  const criticas = estaciones.filter(e => e.bicicletas_disponibles === 0 && e.estado === 'activa').length
+  const bicisDisp = estaciones.reduce((s, e) => s + e.bicicletas_disponibles, 0)
+
+  const ciclistas = verCiclistas
+    ? viajes
+        .filter((v): v is ViajeVivo & { lat: number; lng: number } => v.lat != null && v.lng != null)
+        .map<CiclistaVivo>(v => ({
+          id: v.id,
+          nombre: v.usuario?.nombre ?? 'Ciclista',
+          bicicleta: v.bicicleta?.codigo ?? '—',
+          lat: v.lat,
+          lng: v.lng,
+        }))
+    : []
 
   return (
     <div className="p-6 space-y-4 max-w-[1400px]">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-extrabold text-primary-container">Mapa en Tiempo Real</h1>
-          <p className="text-xs text-outline mt-0.5">Estado de estaciones · San Borja en Bici</p>
+          <p className="text-xs text-outline mt-0.5">Estaciones y viajes en curso · San Borja en Bici</p>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-outline bg-white border border-outline-variant/30 px-3 py-1.5 rounded-full shadow-sm">
-          <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '4s' }} />
-          {ultimaAct.toLocaleTimeString('es-PE')}
+        <div className="flex items-center gap-2">
+          <button onClick={() => exportarCsv(viajes.map(v => ({
+            Usuario: v.usuario?.nombre ?? '', Bicicleta: v.bicicleta?.codigo ?? '',
+            'Estación origen': v.estacion_origen?.nombre ?? '',
+            Inicio: new Date(v.inicio_at).toLocaleString('es-PE'),
+            'Minutos activo': Math.floor((Date.now() - new Date(v.inicio_at).getTime()) / 60000),
+          })), 'viajes-vivo-sanborja')}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-outline-variant/30 bg-white text-xs font-semibold text-on-surface hover:bg-surface-container-low transition-colors">
+            <Download size={13} /> CSV
+          </button>
+          <button onClick={() => exportarPdf({
+            titulo: 'Reporte de Viajes en Curso',
+            subtitulo: `Viajes activos al ${new Date().toLocaleString('es-PE')} · San Borja en Bici`,
+            columnas: ['Usuario', 'Bicicleta', 'Tipo', 'Estación Origen', 'Inicio', 'Minutos'],
+            filas: viajes.map(v => [
+              v.usuario?.nombre ?? '', v.bicicleta?.codigo ?? '', v.bicicleta?.tipo ?? '',
+              v.estacion_origen?.nombre ?? '',
+              new Date(v.inicio_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+              Math.floor((Date.now() - new Date(v.inicio_at).getTime()) / 60000),
+            ]),
+            nombreArchivo: 'viajes-vivo-sanborja',
+            orientacion: 'landscape',
+          })}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-outline-variant/30 bg-white text-xs font-semibold text-on-surface hover:bg-surface-container-low transition-colors">
+            <FileText size={13} /> PDF
+          </button>
+          <div className="flex items-center gap-1.5 text-xs text-outline bg-white border border-outline-variant/30 px-3 py-2 rounded-full shadow-sm">
+            <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '4s' }} />
+            {ultimaAct.toLocaleTimeString('es-PE')}
+          </div>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { icon: MapPin,       label: 'Activas',        value: activas,        color: 'text-[#166534] bg-[#dcfce7]' },
-          { icon: RefreshCw,    label: 'Mantenimiento',  value: enMantenimiento, color: 'text-[#854d0e] bg-[#fef9c3]' },
-          { icon: AlertTriangle,label: 'Vacías',         value: criticas,       color: 'text-error bg-[#ffdad6]' },
-          { icon: Bike,         label: 'Bicis disponibles', value: estaciones.reduce((s, e) => s + e.bicicletas_disponibles, 0), color: 'text-primary-container bg-[#e5eeff]' },
-        ].map(({ icon: Icon, label, value, color }) => (
+          { icon: Activity,     label: 'Viajes en curso', value: viajes.length, color: 'text-primary-container bg-[#e5eeff]', pulse: viajes.length > 0 },
+          { icon: MapPin,       label: 'Estaciones activas', value: activas,    color: 'text-[#166534] bg-[#dcfce7]', pulse: false },
+          { icon: AlertTriangle,label: 'Vacías / críticas',  value: criticas,   color: 'text-error bg-[#ffdad6]', pulse: false },
+          { icon: Bike,         label: 'Bicis disponibles',  value: bicisDisp,  color: 'text-[#854d0e] bg-[#fef9c3]', pulse: false },
+        ].map(({ icon: Icon, label, value, color, pulse }) => (
           <div key={label} className="card p-4 flex items-center gap-3">
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
               <Icon size={16} />
             </div>
             <div>
-              <p className="text-xl font-extrabold text-on-surface">{loading ? '—' : value}</p>
+              <p className="text-xl font-extrabold text-on-surface flex items-center gap-1.5">
+                {loading ? '—' : value}
+                {pulse && <span className="w-2 h-2 rounded-full bg-[#b2f746] animate-pulse inline-block" />}
+              </p>
               <p className="text-[10px] text-outline uppercase font-semibold tracking-wide">{label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Mapa + Lista */}
-      <div className="flex gap-4" style={{ height: 520 }}>
+      {/* Mapa + Panel lateral */}
+      <div className="flex gap-4" style={{ height: 540 }}>
+
+        {/* Mapa */}
         <div className="flex-1 card overflow-hidden relative">
           {loading
             ? <div className="w-full h-full bg-surface-container-low animate-pulse" />
-            : <MapaEstaciones estaciones={estaciones} modoOperador onEstacionClick={setSeleccionada} focusEstacion={seleccionada} />
+            : <MapaEstaciones
+                estaciones={estaciones}
+                modoOperador
+                onEstacionClick={setSeleccionada}
+                focusEstacion={seleccionada}
+                ciclistas={ciclistas}
+              />
           }
+
+          {/* Toggle capa ciclistas */}
+          <div className="absolute top-3 right-3 z-10">
+            <button onClick={() => setVerCiclistas(v => !v)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold shadow-md border transition-all ${
+                verCiclistas
+                  ? 'bg-[#0f2419] text-white border-[#0f2419]'
+                  : 'bg-white/90 text-gray-500 border-white/60'
+              }`}>
+              <User size={12} />
+              Ciclistas {verCiclistas ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
           {/* Leyenda */}
           <div className="absolute bottom-4 left-4 glass-panel px-3 py-2.5 rounded-xl border border-white/50 shadow-md space-y-1.5">
             {[
@@ -108,33 +211,100 @@ export default function MapaOperadorPage() {
           </div>
         </div>
 
-        {/* Lista lateral */}
-        <div className="w-72 card flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-outline-variant/20">
-            <h2 className="font-extrabold text-sm text-on-surface">Estaciones</h2>
-            <p className="text-[10px] text-outline mt-0.5">Por disponibilidad</p>
+        {/* Panel lateral con pestañas */}
+        <div className="w-80 card flex flex-col overflow-hidden">
+
+          {/* Tabs */}
+          <div className="flex border-b border-outline-variant/20">
+            {([
+              { id: 'estaciones', label: 'Estaciones', count: estaciones.length },
+              { id: 'viajes',     label: 'Viajes activos', count: viajes.length },
+            ] as const).map(t => (
+              <button key={t.id} onClick={() => setTabPanel(t.id)}
+                className={`flex-1 px-3 py-3 text-xs font-extrabold transition-colors flex items-center justify-center gap-1.5 ${
+                  tabPanel === t.id
+                    ? 'text-primary-container border-b-2 border-[#0f2419] bg-surface-container-low/40'
+                    : 'text-outline hover:bg-surface-container-low/40'
+                }`}>
+                {t.label}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                  t.id === 'viajes' && t.count > 0 ? 'bg-[#b2f746] text-[#0f2419]' : 'bg-surface-container-low text-outline'
+                }`}>{t.count}</span>
+              </button>
+            ))}
           </div>
-          <div className="flex-1 overflow-y-auto divide-y divide-outline-variant/10">
-            {[...estaciones]
-              .sort((a, b) => a.bicicletas_disponibles - b.bicicletas_disponibles)
-              .map(est => {
-                const pct = est.capacidad > 0 ? est.bicicletas_disponibles / est.capacidad : 0
-                const dot = pct === 0 ? 'bg-error' : pct < 0.2 ? 'bg-amber-400' : 'bg-[#b2f746]'
+
+          {/* Lista estaciones */}
+          {tabPanel === 'estaciones' && (
+            <div className="flex-1 overflow-y-auto divide-y divide-outline-variant/10">
+              {[...estaciones]
+                .sort((a, b) => a.bicicletas_disponibles - b.bicicletas_disponibles)
+                .map(est => {
+                  const pct = est.capacidad > 0 ? est.bicicletas_disponibles / est.capacidad : 0
+                  const dot = pct === 0 ? 'bg-error' : pct < 0.2 ? 'bg-amber-400' : 'bg-[#b2f746]'
+                  return (
+                    <button key={est.id} onClick={() => setSeleccionada(est)}
+                      className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-surface-container-low transition-colors ${seleccionada?.id === est.id ? 'bg-surface-container-low' : ''}`}>
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-on-surface truncate">{est.nombre}</p>
+                        <p className="text-[10px] text-outline truncate">{est.estado}</p>
+                      </div>
+                      <span className="text-xs font-bold text-on-surface shrink-0">
+                        {est.bicicletas_disponibles}<span className="text-outline font-normal">/{est.capacidad}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+            </div>
+          )}
+
+          {/* Lista viajes activos */}
+          {tabPanel === 'viajes' && (
+            <div className="flex-1 overflow-y-auto divide-y divide-outline-variant/10">
+              {viajes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-8 text-center h-full">
+                  <div className="w-14 h-14 bg-surface-container-low rounded-2xl flex items-center justify-center mb-3">
+                    <Bike size={24} className="text-outline" />
+                  </div>
+                  <p className="font-semibold text-on-surface text-sm">Sin viajes activos</p>
+                  <p className="text-xs text-outline mt-1">Cuando un ciudadano inicie un viaje aparecerá aquí</p>
+                </div>
+              ) : viajes.map(v => {
+                const durMin = Math.floor((Date.now() - new Date(v.inicio_at).getTime()) / 60000)
+                const urgent = durMin >= 60
                 return (
-                  <button key={est.id} onClick={() => setSeleccionada(est)}
-                    className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-surface-container-low transition-colors ${seleccionada?.id === est.id ? 'bg-surface-container-low' : ''}`}>
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-on-surface truncate">{est.nombre}</p>
-                      <p className="text-[10px] text-outline truncate">{est.estado}</p>
+                  <div key={v.id} className="px-4 py-3 hover:bg-surface-container-low/50 transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${urgent ? 'bg-[#ffdad6]' : 'bg-[#e5eeff]'}`}>
+                        <User size={15} className={urgent ? 'text-error' : 'text-primary-container'} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-bold text-on-surface truncate">{v.usuario?.nombre ?? 'Usuario'}</p>
+                          {urgent && <span className="text-[9px] font-bold bg-[#ffdad6] text-error px-1.5 py-0.5 rounded-full shrink-0">+1h</span>}
+                        </div>
+                        <p className="text-[10px] text-outline truncate flex items-center gap-1">
+                          <Bike size={9} className="shrink-0" />{v.bicicleta?.codigo ?? '—'}
+                        </p>
+                        <p className="text-[10px] text-outline truncate flex items-center gap-1">
+                          <MapPin size={9} className="shrink-0 text-primary-container" />{v.estacion_origen?.nombre ?? '—'}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className={`font-mono text-xs font-extrabold tabular-nums ${urgent ? 'text-error' : 'text-primary-container'}`}>
+                          {tiempoTranscurrido(v.inicio_at)}
+                        </p>
+                        <p className="text-[9px] text-outline mt-0.5">
+                          {new Date(v.inicio_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
                     </div>
-                    <span className="text-xs font-bold text-on-surface shrink-0">
-                      {est.bicicletas_disponibles}<span className="text-outline font-normal">/{est.capacidad}</span>
-                    </span>
-                  </button>
+                  </div>
                 )
               })}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

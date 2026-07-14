@@ -18,8 +18,8 @@ const VISTAS_CATALOG = [
   ]},
   { grupo: 'Operador', items: [
     { id: '/operador',                  label: 'Dashboard operador' },
-    { id: '/operador/viajes-en-vivo',   label: 'Viajes en vivo' },
     { id: '/operador/mapa',             label: 'Mapa en vivo' },
+    { id: '/operador/viajes',           label: 'Historial de viajes' },
     { id: '/operador/alertas',          label: 'Alertas' },
     { id: '/operador/estaciones',       label: 'Estaciones' },
     { id: '/operador/bicicletas',       label: 'Bicicletas' },

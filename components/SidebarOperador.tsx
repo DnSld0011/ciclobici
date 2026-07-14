@@ -5,14 +5,14 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Map, Bike, Building2, Wrench,
-  TrendingUp, Bell, Menu, X, LogOut, Activity, Users, Shield, Crown, ArrowRightLeft, BarChart2, PackageSearch,
+  TrendingUp, Bell, Menu, X, LogOut, Users, Shield, Crown, ArrowRightLeft, BarChart2, PackageSearch, History,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const NAV_OPERADOR = [
   { href: '/operador',                label: 'Dashboard',      icon: LayoutDashboard, exact: true },
-  { href: '/operador/viajes-en-vivo', label: 'Viajes en vivo', icon: Activity },
   { href: '/operador/mapa',           label: 'Mapa en vivo',   icon: Map },
+  { href: '/operador/viajes',         label: 'Historial de viajes', icon: History },
   { href: '/operador/alertas',        label: 'Alertas',        icon: Bell },
   { href: '/operador/estaciones',     label: 'Estaciones',     icon: Building2 },
   { href: '/operador/bicicletas',     label: 'Bicicletas',     icon: Bike },
@@ -107,7 +107,7 @@ export function SidebarOperador() {
             {alertasNoLeidas > 9 ? '9+' : alertasNoLeidas}
           </span>
         )}
-        {label === 'Viajes en vivo' && viajesActivos > 0 && (
+        {label === 'Mapa en vivo' && viajesActivos > 0 && (
           <span className={`ml-auto flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-[#064e3b] text-[#b2f746]'}`}>
             <span className="w-1.5 h-1.5 rounded-full bg-[#b2f746] animate-pulse" />
             {viajesActivos}

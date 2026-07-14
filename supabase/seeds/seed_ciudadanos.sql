@@ -104,17 +104,17 @@ INSERT INTO auth.identities (
 ON CONFLICT DO NOTHING;
 
 -- ─── 3. Perfil público en tabla usuarios ─────────────────────
-INSERT INTO usuarios (id, nombre, email, rol, estado, created_at) VALUES
-  ('a0000001-0000-0000-0000-000000000001', 'Ana Flores Quispe',      'ana.flores.sb@gmail.com',    'ciudadano', 'activo', now() - interval '6 months'),
-  ('a0000001-0000-0000-0000-000000000002', 'Carlos Mendoza Rivas',   'carlos.mendoza.sb@gmail.com','ciudadano', 'activo', now() - interval '6 months'),
-  ('a0000001-0000-0000-0000-000000000003', 'Lucía Torres Vargas',    'lucia.torres.sb@gmail.com',  'ciudadano', 'activo', now() - interval '6 months'),
-  ('a0000001-0000-0000-0000-000000000004', 'Diego Huamán Paredes',   'diego.huaman.sb@gmail.com',  'ciudadano', 'activo', now() - interval '6 months'),
-  ('a0000001-0000-0000-0000-000000000005', 'Valeria Soto Chávez',    'valeria.soto.sb@gmail.com',  'ciudadano', 'activo', now() - interval '6 months'),
-  ('a0000001-0000-0000-0000-000000000006', 'Sebastián Ríos Castillo','sebastian.rios.sb@gmail.com','ciudadano', 'activo', now() - interval '6 months'),
-  ('a0000001-0000-0000-0000-000000000007', 'Camila Aguilar León',    'camila.aguilar.sb@gmail.com','ciudadano', 'activo', now() - interval '6 months'),
-  ('a0000001-0000-0000-0000-000000000008', 'Matías Delgado Fuentes', 'matias.delgado.sb@gmail.com','ciudadano', 'activo', now() - interval '6 months'),
-  ('a0000001-0000-0000-0000-000000000009', 'Fernanda Núñez Cruz',    'fernanda.nunez.sb@gmail.com','ciudadano', 'activo', now() - interval '6 months'),
-  ('a0000001-0000-0000-0000-000000000010', 'Rafael Campos Vera',     'rafael.campos.sb@gmail.com', 'ciudadano', 'activo', now() - interval '6 months')
+INSERT INTO usuarios (id, nombre, correo, documento, celular, rol, estado, created_at) VALUES
+  ('a0000001-0000-0000-0000-000000000001', 'Ana Flores Quispe',      'ana.flores.sb@gmail.com',    '72341001', '987001001', 'ciudadano', 'activo', now() - interval '6 months'),
+  ('a0000001-0000-0000-0000-000000000002', 'Carlos Mendoza Rivas',   'carlos.mendoza.sb@gmail.com','72341002', '987001002', 'ciudadano', 'activo', now() - interval '6 months'),
+  ('a0000001-0000-0000-0000-000000000003', 'Lucía Torres Vargas',    'lucia.torres.sb@gmail.com',  '72341003', '987001003', 'ciudadano', 'activo', now() - interval '6 months'),
+  ('a0000001-0000-0000-0000-000000000004', 'Diego Huamán Paredes',   'diego.huaman.sb@gmail.com',  '72341004', '987001004', 'ciudadano', 'activo', now() - interval '6 months'),
+  ('a0000001-0000-0000-0000-000000000005', 'Valeria Soto Chávez',    'valeria.soto.sb@gmail.com',  '72341005', '987001005', 'ciudadano', 'activo', now() - interval '6 months'),
+  ('a0000001-0000-0000-0000-000000000006', 'Sebastián Ríos Castillo','sebastian.rios.sb@gmail.com','72341006', '987001006', 'ciudadano', 'activo', now() - interval '6 months'),
+  ('a0000001-0000-0000-0000-000000000007', 'Camila Aguilar León',    'camila.aguilar.sb@gmail.com','72341007', '987001007', 'ciudadano', 'activo', now() - interval '6 months'),
+  ('a0000001-0000-0000-0000-000000000008', 'Matías Delgado Fuentes', 'matias.delgado.sb@gmail.com','72341008', '987001008', 'ciudadano', 'activo', now() - interval '6 months'),
+  ('a0000001-0000-0000-0000-000000000009', 'Fernanda Núñez Cruz',    'fernanda.nunez.sb@gmail.com','72341009', '987001009', 'ciudadano', 'activo', now() - interval '6 months'),
+  ('a0000001-0000-0000-0000-000000000010', 'Rafael Campos Vera',     'rafael.campos.sb@gmail.com', '72341010', '987001010', 'ciudadano', 'activo', now() - interval '6 months')
 ON CONFLICT DO NOTHING;
 
 -- ─── 4. Viajes + waypoints GPS (6 meses, Enero–Junio 2026) ───
