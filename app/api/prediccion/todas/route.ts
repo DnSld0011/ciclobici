@@ -207,11 +207,15 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // ── Dataset: conteo anual por (estación, díaSemana, hora) ────
-  // Incluye TODAS las combinaciones (con ceros) para que el modelo
-  // aprenda también cuándo NO hay demanda.
-  const buckets: Record<string, number> = {}
-  const totalPorEstacion: Record<number, number> = {}
+  // ── Dataset: demanda ESPERADA POR HORA por (estación, díaSemana, hora) ──
+  // Cada viaje suma con peso por recencia (lo reciente pesa más) y luego se
+  // normaliza por las ocurrencias ponderadas de ese día de semana, de modo
+  // que el target es "viajes esperados en esa hora de ese día" — no un
+  // conteo acumulado del año. Incluye ceros para aprender cuándo NO hay demanda.
+  const pesoRecencia = (dias: number) => (dias <= 14 ? 6 : dias <= 45 ? 3 : 1)
+
+  const buckets: Record<string, number> = {}          // suma ponderada
+  const totalPorEstacion: Record<number, number> = {} // conteo crudo (confianza/popularidad)
   let minFecha = ahora, maxFecha = new Date(0)
 
   for (const v of viajes) {
@@ -221,9 +225,17 @@ export async function GET(request: NextRequest) {
     const t = new Date(v.inicio_at)
     if (t < minFecha) minFecha = t
     if (t > maxFecha) maxFecha = t
+    const dias = (ahora.getTime() - t.getTime()) / 86400000
     const key = `${idx}-${t.getUTCDay()}-${t.getUTCHours()}`
-    buckets[key] = (buckets[key] ?? 0) + 1
+    buckets[key] = (buckets[key] ?? 0) + pesoRecencia(dias)
     totalPorEstacion[idx] = (totalPorEstacion[idx] ?? 0) + 1
+  }
+
+  // Ocurrencias ponderadas de cada día de semana en la ventana de 365 días
+  const occSemana = Array(7).fill(0) as number[]
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(ahora.getTime() - i * 86400000)
+    occSemana[d.getUTCDay()] += pesoRecencia(i)
   }
 
   const maxEstTotal = Math.max(...Object.values(totalPorEstacion), 1)
@@ -235,7 +247,7 @@ export async function GET(request: NextRequest) {
       for (let hour = 0; hour < 24; hour++) {
         samples.push({
           features: buildFeatures(idx, hour, dow, popularidad(idx)),
-          target:   buckets[`${idx}-${dow}-${hour}`] ?? 0,
+          target:   (buckets[`${idx}-${dow}-${hour}`] ?? 0) / Math.max(occSemana[dow], 1),
         })
       }
     }
