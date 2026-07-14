@@ -132,6 +132,7 @@ export async function GET(request: NextRequest) {
   const intervalo  = parseInt(searchParams.get('intervalo') ?? '4')
   const fechaParam = searchParams.get('fecha')
   const horaParam  = searchParams.get('hora')
+  const diaParam   = searchParams.get('dia')   // modo día completo: ?dia=2026-07-15
 
   const admin = createAdminClient()
   const ahora = new Date()
@@ -140,7 +141,12 @@ export async function GET(request: NextRequest) {
   let targetDate: Date
   let esDiaFuturo = false
 
-  if (fechaParam && horaParam !== null) {
+  if (diaParam) {
+    targetDate = new Date(`${diaParam}T12:00:00-05:00`)
+    const hoyLima = new Date(ahora.getTime() - LIMA_OFFSET_MS).toISOString().slice(0, 10)
+    esDiaFuturo = diaParam > hoyLima
+    // los slots por hora se generan más abajo (modo día)
+  } else if (fechaParam && horaParam !== null) {
     // La hora elegida es hora de Lima → fijar offset -05:00 explícito
     targetDate = new Date(`${fechaParam}T${String(horaParam).padStart(2, '0')}:00:00-05:00`)
     slots.push({ dow: targetDate.getUTCDay(), hour: targetDate.getUTCHours() })
@@ -186,6 +192,9 @@ export async function GET(request: NextRequest) {
         bicis_actuales: bicisMap[e.id] ?? 0,
         demanda_predicha: 0, diferencia: -(bicisMap[e.id] ?? 0),
         accion: 'ok' as const, confianza: 'baja' as const,
+        demanda_dia: 0, demanda_restante: 0, faltan: 0,
+        hora_pico: 8, hora_agotamiento: null,
+        por_hora: [] as { hora: number; demanda: number }[],
       })),
       metadatos: {
         total_viajes: 0, meses_historial: 0,
@@ -241,6 +250,78 @@ export async function GET(request: NextRequest) {
   const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
   // Componentes de fecha/hora en Lima para los metadatos
   const targetLima = new Date(targetDate.getTime() - LIMA_OFFSET_MS)
+
+  // ── MODO DÍA COMPLETO: demanda por hora para todo el día ─────
+  if (diaParam) {
+    const dowLima   = new Date(`${diaParam}T00:00:00Z`).getUTCDay()
+    const horaAhoraLima = new Date(ahora.getTime() - LIMA_OFFSET_MS).getUTCHours()
+    const HORAS = Array.from({ length: 18 }, (_, i) => i + 5)  // 05:00–22:00 Lima
+
+    const estDia = estaciones.map(e => {
+      const idx = stationIdx[e.id]
+      if (idx === undefined) return null
+
+      // Demanda predicha por hora (Lima), convirtiendo a UTC para el modelo
+      const porHora = HORAS.map(h => {
+        const utc  = h + 5
+        const hour = utc % 24
+        const dow  = utc >= 24 ? (dowLima + 1) % 7 : dowLima
+        const pred = predictGB(model, buildFeatures(idx, hour, dow, popularidad(idx)))
+        return { hora: h, demanda: Math.round(pred * 10) / 10 }
+      })
+
+      const demanda_dia = Math.round(porHora.reduce((s, x) => s + x.demanda, 0))
+      const pico = porHora.reduce((top, x) => x.demanda > top.demanda ? x : top, porHora[0])
+      const bicis_actuales = bicisMap[e.id] ?? 0
+      const capacidad = e.capacidad ?? 10
+
+      // Hoy: hora estimada en que el stock se agota (demanda acumulada desde ahora)
+      let hora_agotamiento: number | null = null
+      if (!esDiaFuturo && bicis_actuales > 0) {
+        let acum = 0
+        for (const x of porHora) {
+          if (x.hora < horaAhoraLima) continue
+          acum += x.demanda
+          if (acum >= bicis_actuales) { hora_agotamiento = x.hora; break }
+        }
+      } else if (!esDiaFuturo && bicis_actuales === 0 && demanda_dia > 0) {
+        hora_agotamiento = Math.max(horaAhoraLima, 5)
+      }
+
+      // Bicis que faltan: para hoy vs stock actual; para día futuro vs cero
+      const demanda_restante = esDiaFuturo
+        ? demanda_dia
+        : Math.round(porHora.filter(x => x.hora >= horaAhoraLima).reduce((s, x) => s + x.demanda, 0))
+      const necesarias = Math.min(capacidad, demanda_restante)
+      const faltan = esDiaFuturo ? necesarias : Math.max(0, necesarias - bicis_actuales)
+
+      const estTotal = totalPorEstacion[idx] ?? 0
+      const confianza: 'alta' | 'media' | 'baja' =
+        estTotal >= 40 ? 'alta' : estTotal >= 15 ? 'media' : 'baja'
+
+      return {
+        id: e.id, nombre: e.nombre, capacidad,
+        bicis_actuales, demanda_dia, demanda_restante,
+        faltan, hora_pico: pico.hora, hora_agotamiento,
+        por_hora: porHora, confianza,
+      }
+    }).filter(Boolean)
+
+    return NextResponse.json({
+      estaciones: estDia,
+      metadatos: {
+        total_viajes:     viajes.length,
+        meses_historial:  mesesHistorial,
+        fecha_prediccion: targetDate.toISOString(),
+        dia_semana:       diasSemana[dowLima],
+        algoritmo:        'gradient_boosting',
+        muestras_entreno: samples.length,
+        estimadores:      30,
+        es_dia_futuro:    esDiaFuturo,
+        hora_actual:      horaAhoraLima,
+      },
+    })
+  }
 
   // ── Predicción por estación ──────────────────────────────────
   const estResult = estaciones.map(e => {
