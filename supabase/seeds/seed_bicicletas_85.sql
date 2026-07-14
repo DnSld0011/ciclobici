@@ -55,8 +55,9 @@ BEGIN
         modelo_b := (ARRAY['E-Bike Pro','Volt 250','GreenRide'])[1 + floor(random()*3)::INT];
       END IF;
 
-      INSERT INTO bicicletas (codigo, tipo, marca, modelo, estado, estacion_id)
+      INSERT INTO bicicletas (codigo, qr_code, tipo, marca, modelo, estado, estacion_id)
       VALUES (
+        'BC-' || to_char(now(), 'YYYYMMDD') || '-' || lpad(seq::TEXT, 4, '0'),
         'BC-' || to_char(now(), 'YYYYMMDD') || '-' || lpad(seq::TEXT, 4, '0'),
         tipo_b, marca_b, modelo_b,
         'disponible',
