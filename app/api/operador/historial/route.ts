@@ -32,15 +32,27 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Lista de viajes finalizados ─────────────────────────────
-    const { data: viajes, error } = await admin
-      .from('viajes')
-      .select('id, usuario_id, bicicleta_id, estacion_origen_id, estacion_destino_id, inicio_at, fin_at, duracion_min, distancia_km, calificacion')
-      .eq('estado', 'finalizado')
-      .order('inicio_at', { ascending: false })
-      .limit(2000)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (!viajes?.length) return NextResponse.json({ viajes: [] })
+    // Supabase limita cada request a 1000 filas → paginar (máx 3000)
+    type ViajeRow = {
+      id: string; usuario_id: string; bicicleta_id: string
+      estacion_origen_id: string; estacion_destino_id: string
+      inicio_at: string; fin_at: string | null
+      duracion_min: number | null; distancia_km: number | null; calificacion: number | null
+    }
+    const viajes: ViajeRow[] = []
+    for (let from = 0; from < 3000; from += 1000) {
+      const { data, error } = await admin
+        .from('viajes')
+        .select('id, usuario_id, bicicleta_id, estacion_origen_id, estacion_destino_id, inicio_at, fin_at, duracion_min, distancia_km, calificacion')
+        .eq('estado', 'finalizado')
+        .order('inicio_at', { ascending: false })
+        .range(from, from + 999)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (!data?.length) break
+      viajes.push(...(data as ViajeRow[]))
+      if (data.length < 1000) break
+    }
+    if (!viajes.length) return NextResponse.json({ viajes: [] })
 
     const usuarioIds   = [...new Set(viajes.map(v => v.usuario_id).filter(Boolean))]
     const bicicletaIds = [...new Set(viajes.map(v => v.bicicleta_id).filter(Boolean))]

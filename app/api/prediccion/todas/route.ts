@@ -174,13 +174,21 @@ export async function GET(request: NextRequest) {
       bicisMap[b.estacion_id] = (bicisMap[b.estacion_id] ?? 0) + 1
   }
 
+  // Supabase limita cada request a 1000 filas → paginar para traer todo el año
   const desde = new Date(ahora.getTime() - 365 * 24 * 3600000).toISOString()
-  const { data: viajes } = await admin
-    .from('viajes')
-    .select('estacion_origen_id, inicio_at')
-    .eq('estado', 'finalizado')
-    .gte('inicio_at', desde)
-    .limit(10000)
+  const viajes: { estacion_origen_id: string | null; inicio_at: string }[] = []
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data: pagina } = await admin
+      .from('viajes')
+      .select('estacion_origen_id, inicio_at')
+      .eq('estado', 'finalizado')
+      .gte('inicio_at', desde)
+      .order('inicio_at', { ascending: false })
+      .range(from, from + 999)
+    if (!pagina?.length) break
+    viajes.push(...pagina)
+    if (pagina.length < 1000) break
+  }
 
   const stationIds = estaciones.map(e => e.id)
   const stationIdx = Object.fromEntries(stationIds.map((id, i) => [id, i]))
@@ -346,7 +354,7 @@ export async function GET(request: NextRequest) {
         estimadores:      30,
         es_dia_futuro:    esDiaFuturo,
         hora_actual:      horaAhoraLima,
-        version:          'v3-empirico28',
+        version:          'v4-paginado',
       },
     })
   }

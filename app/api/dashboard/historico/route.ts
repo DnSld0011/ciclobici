@@ -11,14 +11,21 @@ export async function GET() {
   const admin = createAdminClient()
   const desde = new Date(Date.now() - 365 * 24 * 3600000).toISOString()
 
-  const { data, error } = await admin
-    .from('viajes')
-    .select('inicio_at, estacion_origen_id, distancia_km, duracion_min')
-    .eq('estado', 'finalizado')
-    .gte('inicio_at', desde)
-    .limit(10000)
+  // Supabase limita cada request a 1000 filas → paginar para traer todo el año
+  const viajes: unknown[] = []
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data, error } = await admin
+      .from('viajes')
+      .select('inicio_at, estacion_origen_id, distancia_km, duracion_min')
+      .eq('estado', 'finalizado')
+      .gte('inicio_at', desde)
+      .order('inicio_at', { ascending: false })
+      .range(from, from + 999)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data?.length) break
+    viajes.push(...data)
+    if (data.length < 1000) break
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  return NextResponse.json({ viajes: data ?? [] })
+  return NextResponse.json({ viajes })
 }
