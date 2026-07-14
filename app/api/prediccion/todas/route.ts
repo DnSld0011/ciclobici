@@ -254,7 +254,16 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Entrenar Gradient Boosting ───────────────────────────────
-  const model = trainGB(samples, 30, 0.15, 3)
+  const model = trainGB(samples, 50, 0.15, 3)
+
+  // Predicción final: mezcla del modelo GB con el promedio empírico del
+  // slot exacto — evita que el suavizado del modelo aplaste los picos
+  const empirico = (idx: number, dow: number, hour: number) =>
+    (buckets[`${idx}-${dow}-${hour}`] ?? 0) / Math.max(occSemana[dow], 1)
+  const predecir = (idx: number, dow: number, hour: number) => {
+    const gb = predictGB(model, buildFeatures(idx, hour, dow, popularidad(idx)))
+    return 0.5 * gb + 0.5 * empirico(idx, dow, hour)
+  }
 
   const mesesHistorial = Math.max(1,
     Math.round((maxFecha.getTime() - minFecha.getTime()) / (30 * 24 * 3600000)))
@@ -278,7 +287,7 @@ export async function GET(request: NextRequest) {
         const utc  = h + 5
         const hour = utc % 24
         const dow  = utc >= 24 ? (dowLima + 1) % 7 : dowLima
-        const pred = predictGB(model, buildFeatures(idx, hour, dow, popularidad(idx)))
+        const pred = predecir(idx, dow, hour)
         return { hora: h, demanda: Math.round(pred * 10) / 10 }
       })
 
@@ -343,7 +352,7 @@ export async function GET(request: NextRequest) {
     let demandaPico = 0
     let ocurrencias = 0
     for (const slot of slots) {
-      const pred = predictGB(model, buildFeatures(idx, slot.hour, slot.dow, popularidad(idx)))
+      const pred = predecir(idx, slot.dow, slot.hour)
       if (pred > demandaPico) demandaPico = pred
       ocurrencias = Math.max(ocurrencias, buckets[`${idx}-${slot.dow}-${slot.hour}`] ?? 0)
     }
