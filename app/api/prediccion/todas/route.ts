@@ -346,6 +346,7 @@ export async function GET(request: NextRequest) {
         estimadores:      30,
         es_dia_futuro:    esDiaFuturo,
         hora_actual:      horaAhoraLima,
+        version:          'v3-empirico28',
       },
     })
   }
