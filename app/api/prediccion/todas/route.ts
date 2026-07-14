@@ -214,7 +214,8 @@ export async function GET(request: NextRequest) {
   // conteo acumulado del año. Incluye ceros para aprender cuándo NO hay demanda.
   const pesoRecencia = (dias: number) => (dias <= 14 ? 6 : dias <= 45 ? 3 : 1)
 
-  const buckets: Record<string, number> = {}          // suma ponderada
+  const buckets: Record<string, number> = {}          // suma ponderada (año)
+  const buckets28: Record<string, number> = {}        // conteo crudo últimos 28 días
   const totalPorEstacion: Record<number, number> = {} // conteo crudo (confianza/popularidad)
   let minFecha = ahora, maxFecha = new Date(0)
 
@@ -228,14 +229,17 @@ export async function GET(request: NextRequest) {
     const dias = (ahora.getTime() - t.getTime()) / 86400000
     const key = `${idx}-${t.getUTCDay()}-${t.getUTCHours()}`
     buckets[key] = (buckets[key] ?? 0) + pesoRecencia(dias)
+    if (dias <= 28) buckets28[key] = (buckets28[key] ?? 0) + 1
     totalPorEstacion[idx] = (totalPorEstacion[idx] ?? 0) + 1
   }
 
   // Ocurrencias ponderadas de cada día de semana en la ventana de 365 días
   const occSemana = Array(7).fill(0) as number[]
+  const occSemana28 = Array(7).fill(0) as number[]
   for (let i = 0; i < 365; i++) {
     const d = new Date(ahora.getTime() - i * 86400000)
     occSemana[d.getUTCDay()] += pesoRecencia(i)
+    if (i < 28) occSemana28[d.getUTCDay()] += 1
   }
 
   const maxEstTotal = Math.max(...Object.values(totalPorEstacion), 1)
@@ -256,13 +260,15 @@ export async function GET(request: NextRequest) {
   // ── Entrenar Gradient Boosting ───────────────────────────────
   const model = trainGB(samples, 50, 0.15, 3)
 
-  // Predicción final: mezcla del modelo GB con el promedio empírico del
-  // slot exacto — evita que el suavizado del modelo aplaste los picos
-  const empirico = (idx: number, dow: number, hour: number) =>
-    (buckets[`${idx}-${dow}-${hour}`] ?? 0) / Math.max(occSemana[dow], 1)
+  // Predicción final: el promedio empírico de los últimos 28 días marca el
+  // nivel de demanda actual (piso), y el GB aporta el patrón aprendido del
+  // año — así ni el suavizado ni el historial antiguo diluyen la demanda real.
+  const empirico28 = (idx: number, dow: number, hour: number) =>
+    (buckets28[`${idx}-${dow}-${hour}`] ?? 0) / Math.max(occSemana28[dow], 1)
   const predecir = (idx: number, dow: number, hour: number) => {
-    const gb = predictGB(model, buildFeatures(idx, hour, dow, popularidad(idx)))
-    return 0.5 * gb + 0.5 * empirico(idx, dow, hour)
+    const gb  = predictGB(model, buildFeatures(idx, hour, dow, popularidad(idx)))
+    const e28 = empirico28(idx, dow, hour)
+    return Math.max(e28, 0.5 * (gb + e28))
   }
 
   const mesesHistorial = Math.max(1,
