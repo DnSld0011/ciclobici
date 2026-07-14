@@ -1,22 +1,12 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { getUserAccess } from '@/lib/server/getUserAccess'
 
+// Devuelve las vistas permitidas usando la misma lógica que el middleware
+// (fallbacks por rol + vistas core), para que el menú y los guards coincidan.
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ vistas: [] })
-
-    const admin = createAdminClient()
-    const { data: perfil } = await admin
-      .from('usuarios').select('rol').eq('id', user.id).single()
-    if (!perfil) return NextResponse.json({ vistas: [] })
-
-    const { data: rolData } = await admin
-      .from('roles').select('vistas').eq('id', perfil.rol).maybeSingle()
-
-    return NextResponse.json({ vistas: (rolData?.vistas as string[]) ?? [] })
+    const access = await getUserAccess()
+    return NextResponse.json({ vistas: access?.vistas ?? [] })
   } catch {
     return NextResponse.json({ vistas: [] })
   }
