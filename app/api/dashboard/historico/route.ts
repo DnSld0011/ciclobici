@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCache, setCache } from '@/lib/server/memoCache'
 
 // GET /api/dashboard/historico — viajes finalizados de los últimos 365 días
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+  const hit = getCache<object>('dashboard:historico')
+  if (hit) return NextResponse.json(hit)
 
   const admin = createAdminClient()
   const desde = new Date(Date.now() - 365 * 24 * 3600000).toISOString()
@@ -27,5 +31,7 @@ export async function GET() {
     if (data.length < 1000) break
   }
 
-  return NextResponse.json({ viajes })
+  const payload = { viajes }
+  setCache('dashboard:historico', payload, 60_000)
+  return NextResponse.json(payload)
 }

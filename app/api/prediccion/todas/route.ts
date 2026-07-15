@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCache, setCache } from '@/lib/server/memoCache'
 
 // ─────────────────────────────────────────────────────────────
 // Gradient Boosting Regressor — implementación pura TypeScript
@@ -248,6 +249,16 @@ export async function GET(request: NextRequest) {
   const horaParam  = searchParams.get('hora')
   const diaParam   = searchParams.get('dia')   // modo día completo: ?dia=2026-07-15
 
+  // Caché 60s: el primer request paga el entrenamiento del modelo,
+  // los siguientes reciben la respuesta al instante
+  const cacheKey = `prediccion:${searchParams.toString()}`
+  const hit = getCache<object>(cacheKey)
+  if (hit) return NextResponse.json(hit)
+  const responder = (payload: object) => {
+    setCache(cacheKey, payload, 60_000)
+    return NextResponse.json(payload)
+  }
+
   const admin = createAdminClient()
   const ahora = new Date()
 
@@ -308,7 +319,7 @@ export async function GET(request: NextRequest) {
   const stationIdx = Object.fromEntries(stationIds.map((id, i) => [id, i]))
 
   if (!viajes?.length) {
-    return NextResponse.json({
+    return responder({
       estaciones: estaciones.map(e => ({
         id: e.id, nombre: e.nombre, capacidad: e.capacidad ?? 10,
         bicis_actuales: bicisMap[e.id] ?? 0,
@@ -460,7 +471,7 @@ export async function GET(request: NextRequest) {
       }
     }).filter(Boolean)
 
-    return NextResponse.json({
+    return responder({
       estaciones: estDia,
       metadatos: {
         total_viajes:     viajes.length,
@@ -506,7 +517,7 @@ export async function GET(request: NextRequest) {
     return { id: e.id, nombre: e.nombre, capacidad: e.capacidad ?? 10, bicis_actuales, demanda_predicha, diferencia, accion, confianza }
   }).filter(Boolean)
 
-  return NextResponse.json({
+  return responder({
     estaciones: estResult,
     metadatos: {
       total_viajes:      viajes.length,

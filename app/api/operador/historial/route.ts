@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCache, setCache } from '@/lib/server/memoCache'
 
 // GET /api/operador/historial              → viajes finalizados (máx 2000, recientes primero)
 // GET /api/operador/historial?viaje_id=X   → detalle + waypoints GPS de un viaje
@@ -32,6 +33,9 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Lista de viajes finalizados ─────────────────────────────
+    const hit = getCache<object>('historial:lista')
+    if (hit) return NextResponse.json(hit)
+
     // Supabase limita cada request a 1000 filas → paginar (máx 3000)
     type ViajeRow = {
       id: string; usuario_id: string; bicicleta_id: string
@@ -71,7 +75,7 @@ export async function GET(request: NextRequest) {
     const bMap = Object.fromEntries((bicicletas ?? []).map(b => [b.id, b]))
     const eMap = Object.fromEntries((estaciones ?? []).map(e => [e.id, e]))
 
-    return NextResponse.json({
+    const payload = {
       viajes: viajes.map(v => ({
         id:            v.id,
         inicio_at:     v.inicio_at,
@@ -84,7 +88,9 @@ export async function GET(request: NextRequest) {
         origen:        eMap[v.estacion_origen_id] ?? null,
         destino:       eMap[v.estacion_destino_id] ?? null,
       })),
-    })
+    }
+    setCache('historial:lista', payload, 60_000)
+    return NextResponse.json(payload)
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }

@@ -1,5 +1,7 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCache, setCache } from '@/lib/server/memoCache'
 
 export interface UserAccess {
   userId: string
@@ -62,11 +64,18 @@ const VISTAS_FALLBACK: Record<string, string[]> = {
   ],
 }
 
-export async function getUserAccess(): Promise<UserAccess | null> {
+// cache() de React deduplica dentro del mismo request (layout + page);
+// el memoCache evita repetir las consultas de rol/vistas en cada
+// navegación (TTL 2 min — un cambio de permisos tarda máx. eso en verse).
+export const getUserAccess = cache(async (): Promise<UserAccess | null> => {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
+
+    const cacheKey = `access:${user.id}`
+    const hit = getCache<UserAccess>(cacheKey)
+    if (hit) return hit
 
     const admin = createAdminClient()
 
@@ -99,17 +108,19 @@ export async function getUserAccess(): Promise<UserAccess | null> {
         ? [...new Set([...vistasBD, ...(VISTAS_CORE[rol] ?? [])])]
         : (VISTAS_FALLBACK[rol] ?? [])
 
-    return {
+    const access: UserAccess = {
       userId: user.id,
       rol,
       vistas,
       rolNombre: rolData?.nombre ?? rol,
       rolColor: rolData?.color ?? '#6b7280',
     }
+    setCache(cacheKey, access, 120_000)
+    return access
   } catch {
     return null
   }
-}
+})
 
 // Rutas raíz de grupo: sólo coinciden con la ruta exacta, no con sub-rutas
 const GROUP_ROOTS = ['/ciudadano', '/operador', '/tecnico']

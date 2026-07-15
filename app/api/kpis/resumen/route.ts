@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCache, setCache } from '@/lib/server/memoCache'
 
 const LIMA_OFFSET_MS = 5 * 3600000  // Lima = UTC-5
 
@@ -12,6 +13,10 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const dias = Math.min(365, Math.max(1, parseInt(searchParams.get('dias') ?? '30')))
+
+  const cacheKey = `kpis:${dias}`
+  const hit = getCache<object>(cacheKey)
+  if (hit) return NextResponse.json(hit)
 
   const admin = createAdminClient()
   const ahora = new Date()
@@ -59,11 +64,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({
+  const payload = {
     viajes_total:  viajesTotal ?? 0,
     viajes_prev:   viajesPrev ?? 0,
     usuarios:      usuariosTotal ?? 0,
     por_dia:       porDia,
     viajes_hoy_por_estacion: viajesHoyPorEstacion,
-  })
+  }
+  setCache(cacheKey, payload, 60_000)
+  return NextResponse.json(payload)
 }
