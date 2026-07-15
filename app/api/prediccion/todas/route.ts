@@ -123,6 +123,120 @@ function buildFeatures(stationIdx: number, hourUTC: number, dowUTC: number, popu
 
 const LIMA_OFFSET_MS = 5 * 3600000  // Lima = UTC-5
 
+function addDias(fecha: string, n: number): string {
+  const d = new Date(`${fecha}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+// ─────────────────────────────────────────────────────────────
+// Memoria de demanda (Fase 2): consolida en `demanda_historica`
+// los días ya cerrados — demanda real por estación/hora + lo que
+// el modelo habría predicho (backtest con los 28 días previos).
+// Devuelve el resumen de precisión de los últimos 7 días.
+// ─────────────────────────────────────────────────────────────
+interface Memoria {
+  dias: number
+  precision: number | null
+  serie: { fecha: string; reales: number; predichos: number }[]
+}
+
+async function consolidarMemoria(
+  admin: ReturnType<typeof createAdminClient>,
+  viajes: { estacion_origen_id: string | null; inicio_at: string }[],
+  stationIds: string[],
+  hoyLima: string,
+): Promise<Memoria | null> {
+  try {
+    // Índice de viajes en calendario Lima
+    const reales: Record<string, number> = {}
+    const lista: { est: string; fecha: string; dow: number; hora: number }[] = []
+    for (const v of viajes) {
+      if (!v.estacion_origen_id || !v.inicio_at) continue
+      const lima  = new Date(new Date(v.inicio_at).getTime() - LIMA_OFFSET_MS)
+      const fecha = lima.toISOString().slice(0, 10)
+      const hora  = lima.getUTCHours()
+      reales[`${v.estacion_origen_id}|${fecha}|${hora}`] =
+        (reales[`${v.estacion_origen_id}|${fecha}|${hora}`] ?? 0) + 1
+      lista.push({ est: v.estacion_origen_id, fecha, dow: lima.getUTCDay(), hora })
+    }
+
+    const ayer = addDias(hoyLima, -1)
+    const { data: ult, error: errUlt } = await admin
+      .from('demanda_historica')
+      .select('fecha').order('fecha', { ascending: false }).limit(1)
+    if (errUlt) return null   // tabla aún no creada
+
+    let cursor = ult?.[0]?.fecha ? addDias(String(ult[0].fecha), 1) : addDias(hoyLima, -14)
+    const minCursor = addDias(hoyLima, -14)
+    if (cursor < minCursor) cursor = minCursor
+
+    // Consolidar cada día cerrado pendiente
+    while (cursor <= ayer) {
+      const ini28 = addDias(cursor, -28)
+      const dowD  = new Date(`${cursor}T00:00:00Z`).getUTCDay()
+
+      // Backtest: promedio del mismo día de semana en los 28 días previos
+      const bucket: Record<string, number> = {}
+      for (const t of lista) {
+        if (t.fecha >= cursor || t.fecha < ini28 || t.dow !== dowD) continue
+        bucket[`${t.est}|${t.hora}`] = (bucket[`${t.est}|${t.hora}`] ?? 0) + 1
+      }
+
+      const filas = []
+      for (const est of stationIds) {
+        for (let h = 5; h <= 22; h++) {
+          filas.push({
+            estacion_id:      est,
+            fecha:            cursor,
+            hora:             h,
+            viajes_reales:    reales[`${est}|${cursor}|${h}`] ?? 0,
+            viajes_predichos: Math.round(((bucket[`${est}|${h}`] ?? 0) / 4) * 100) / 100,
+          })
+        }
+      }
+      await admin.from('demanda_historica').upsert(filas, { onConflict: 'estacion_id,fecha,hora' })
+      cursor = addDias(cursor, 1)
+    }
+
+    // Resumen: precisión de los últimos 7 días (real vs predicho por día)
+    const desde7 = addDias(hoyLima, -7)
+    const filas7: { fecha: string; viajes_reales: number; viajes_predichos: number | null }[] = []
+    for (let from = 0; from < 4000; from += 1000) {
+      const { data } = await admin
+        .from('demanda_historica')
+        .select('fecha, viajes_reales, viajes_predichos')
+        .gte('fecha', desde7).lte('fecha', ayer)
+        .range(from, from + 999)
+      if (!data?.length) break
+      filas7.push(...(data as typeof filas7))
+      if (data.length < 1000) break
+    }
+
+    const porFecha: Record<string, { r: number; p: number }> = {}
+    for (const f of filas7) {
+      const m = porFecha[f.fecha] ?? (porFecha[f.fecha] = { r: 0, p: 0 })
+      m.r += f.viajes_reales
+      m.p += Number(f.viajes_predichos ?? 0)
+    }
+    const serie = Object.entries(porFecha)
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([fecha, m]) => ({ fecha, reales: m.r, predichos: Math.round(m.p) }))
+
+    const totalR = serie.reduce((s, x) => s + x.reales, 0)
+    const errAbs = serie.reduce((s, x) => s + Math.abs(x.reales - x.predichos), 0)
+    const precision = totalR > 0 ? Math.max(0, Math.round((1 - errAbs / totalR) * 100)) : null
+
+    const { count } = await admin
+      .from('demanda_historica').select('*', { count: 'exact', head: true })
+    const dias = count ? Math.round(count / Math.max(stationIds.length * 18, 1)) : serie.length
+
+    return { dias, precision, serie }
+  } catch {
+    return null
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // GET /api/prediccion/todas?intervalo=4
 // GET /api/prediccion/todas?fecha=2026-07-11&hora=8   (hora de Lima)
@@ -290,6 +404,10 @@ export async function GET(request: NextRequest) {
   if (diaParam) {
     const dowLima   = new Date(`${diaParam}T00:00:00Z`).getUTCDay()
     const horaAhoraLima = new Date(ahora.getTime() - LIMA_OFFSET_MS).getUTCHours()
+    const hoyLimaStr = new Date(ahora.getTime() - LIMA_OFFSET_MS).toISOString().slice(0, 10)
+
+    // Fase 2: consolidar días cerrados en la memoria y obtener precisión
+    const memoria = await consolidarMemoria(admin, viajes, stationIds, hoyLimaStr)
     const HORAS = Array.from({ length: 18 }, (_, i) => i + 5)  // 05:00–22:00 Lima
 
     const estDia = estaciones.map(e => {
@@ -354,7 +472,8 @@ export async function GET(request: NextRequest) {
         estimadores:      30,
         es_dia_futuro:    esDiaFuturo,
         hora_actual:      horaAhoraLima,
-        version:          'v4-paginado',
+        version:          'v5-memoria',
+        memoria,
       },
     })
   }

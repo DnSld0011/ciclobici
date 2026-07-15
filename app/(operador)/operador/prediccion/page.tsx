@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, Calendar, AlertTriangle, CheckCircle2, Info, Bike,
-  Clock, ChevronRight, Flame,
+  Clock, ChevronRight, Flame, Brain,
 } from 'lucide-react'
 
 interface EstDia {
@@ -24,6 +24,12 @@ interface EstDia {
   confianza: 'alta' | 'media' | 'baja'
 }
 
+interface Memoria {
+  dias: number
+  precision: number | null
+  serie: { fecha: string; reales: number; predichos: number }[]
+}
+
 interface Metadatos {
   total_viajes: number
   meses_historial: number
@@ -33,6 +39,7 @@ interface Metadatos {
   estimadores?: number
   es_dia_futuro?: boolean
   hora_actual?: number
+  memoria?: Memoria | null
 }
 
 const HORAS_DIA = Array.from({ length: 18 }, (_, i) => i + 5)  // 05:00–22:00
@@ -397,6 +404,63 @@ export default function PrediccionPage() {
           </div>
         </div>
 
+        {/* ── Memoria del sistema (Fase 2) ── */}
+        {meta?.memoria && meta.memoria.serie.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="font-bold text-[#0f2419] text-sm flex items-center gap-2">
+                  <Brain size={15} className="text-[#7c3aed]" />
+                  Memoria del sistema — aprendizaje diario
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Cada día se guarda la demanda real por estación y hora, y se compara con lo predicho para recalibrar el modelo
+                </p>
+              </div>
+              <div className="flex items-center gap-4 shrink-0">
+                <div className="text-center">
+                  <p className="text-2xl font-black text-[#0f2419]">
+                    {meta.memoria.precision !== null ? `${meta.memoria.precision}%` : '—'}
+                  </p>
+                  <p className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400">Precisión 7 días</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-black text-[#0f2419]">{meta.memoria.dias}</p>
+                  <p className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400">Días en memoria</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-4 pt-4 pb-2">
+              <div className="flex items-center gap-4 text-xs mb-1 px-2">
+                <span className="flex items-center gap-1.5 text-gray-500 font-medium">
+                  <span className="w-3 h-3 rounded-sm inline-block bg-[#b2f746]" />Demanda real
+                </span>
+                <span className="flex items-center gap-1.5 text-gray-500 font-medium">
+                  <span className="w-3 h-3 rounded-sm inline-block bg-[#0f2419]" />Lo que predijo el modelo
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={meta.memoria.serie} margin={{ top: 8, right: 8, left: -22, bottom: 0 }}
+                  barGap={2} barCategoryGap="28%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="fecha"
+                    tickFormatter={f => new Date(`${f}T12:00:00`).toLocaleDateString('es-PE', { weekday: 'short', day: 'numeric' })}
+                    tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 12 }}
+                    formatter={(v, name) => [`${v} viajes`, name === 'reales' ? 'Demanda real' : 'Predicho']}
+                    labelFormatter={f => new Date(`${f}T12:00:00`).toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  />
+                  <Bar dataKey="reales"    name="reales"    fill="#b2f746" radius={[4, 4, 0, 0]} maxBarSize={26} />
+                  <Bar dataKey="predichos" name="predichos" fill="#0f2419" radius={[4, 4, 0, 0]} maxBarSize={26} fillOpacity={0.85} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
         {/* ── Mensaje informativo del modelo ── */}
         {meta && (
           <div className="px-4 py-3 rounded-xl flex items-start gap-3 bg-white border border-gray-100 shadow-sm">
@@ -407,8 +471,9 @@ export default function PrediccionPage() {
               <strong>{meta.muestras_entreno?.toLocaleString('es-PE')} muestras</strong> de{' '}
               <strong>{meta.total_viajes.toLocaleString('es-PE')} viajes</strong> de los últimos{' '}
               <strong>{meta.meses_historial} {meta.meses_historial === 1 ? 'mes' : 'meses'}</strong>.
-              Las últimas semanas pesan más en el modelo, así la predicción refleja la demanda real más reciente
-              y varía según el día de la semana.
+              Las últimas semanas pesan más en el modelo, así la predicción refleja la demanda real más reciente.
+              Los patrones de cada día se consolidan automáticamente en la memoria del sistema
+              {meta.memoria ? ` (${meta.memoria.dias} días guardados)` : ''} — el modelo aprende y mejora con cada día que pasa.
             </p>
           </div>
         )}
