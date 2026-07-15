@@ -26,6 +26,7 @@ const VISTAS_FALLBACK: Record<string, string[]> = {
     '/operador',
     '/operador/viajes-en-vivo',
     '/operador/viajes',
+    '/operador/traslados',
     '/operador/mapa',
     '/operador/alertas',
     '/operador/estaciones',
@@ -39,6 +40,7 @@ const VISTAS_FALLBACK: Record<string, string[]> = {
     '/operador/admin',
     '/operador/viajes-en-vivo',
     '/operador/viajes',
+    '/operador/traslados',
     '/operador/mapa',
     '/operador/alertas',
     '/operador/estaciones',
@@ -85,9 +87,9 @@ export async function getUserAccess(): Promise<UserAccess | null> {
     // Rutas funcionales core que siempre deben ser accesibles aunque el rol tenga vistas custom
     const VISTAS_CORE: Record<string, string[]> = {
       ciudadano: ['/ciudadano/viaje-activo', '/ciudadano/escanear', '/ciudadano/viaje'],
-      // El historial de viajes es funcional para roles con vistas custom antiguas
-      operador:      ['/operador/viajes'],
-      administrador: ['/operador/viajes'],
+      // Rutas nuevas accesibles aunque el rol tenga vistas custom antiguas
+      operador:      ['/operador/viajes', '/operador/traslados'],
+      administrador: ['/operador/viajes', '/operador/traslados'],
     }
     const vistasBD = rolData?.vistas as string[] | undefined
     const vistas =

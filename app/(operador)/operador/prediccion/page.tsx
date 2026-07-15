@@ -7,8 +7,9 @@ import {
 } from 'recharts'
 import {
   TrendingUp, Calendar, AlertTriangle, CheckCircle2, Info, Bike,
-  Clock, ChevronRight, Flame, Brain,
+  Clock, ChevronRight, Flame, Brain, Truck, ArrowRight, X, Users,
 } from 'lucide-react'
+import Link from 'next/link'
 
 interface EstDia {
   id: string
@@ -58,6 +59,13 @@ export default function PrediccionPage() {
   const [datos, setDatos]       = useState<EstDia[]>([])
   const [meta, setMeta]         = useState<Metadatos | null>(null)
   const [selId, setSelId]       = useState<string | null>(null)
+
+  /* ── Fase 3: designación de traslados ── */
+  const [planAbierto, setPlanAbierto] = useState(false)
+  const [tecnicos, setTecnicos]       = useState<{ id: string; nombre: string }[]>([])
+  const [asignaciones, setAsignaciones] = useState<Record<number, string>>({})
+  const [creando, setCreando]         = useState(false)
+  const [exito, setExito]             = useState(false)
 
   const hoy    = fechaLima(0)
   const manana = fechaLima(1)
@@ -140,6 +148,84 @@ export default function PrediccionPage() {
     return {
       texto: `Stock suficiente — quedan ${e.demanda_restante} viajes previstos y tiene ${e.bicis_actuales} bicis disponibles.`,
       tipo: 'ok',
+    }
+  }
+
+  /* ── Plan de movimientos sugerido (déficit ← exceso o depósito) ── */
+  interface Movimiento { origen: { id: string; nombre: string } | null; destino: { id: string; nombre: string }; cantidad: number }
+  function generarMovimientos(): Movimiento[] {
+    const deficits = datos
+      .filter(e => e.faltan > 0)
+      .map(e => ({ id: e.id, nombre: e.nombre, necesita: e.faltan }))
+      .sort((a, b) => b.necesita - a.necesita)
+
+    const movs: Movimiento[] = []
+    if (!esFuturo) {
+      // Hoy: primero cubrir con excedentes de otras estaciones (dejando 1 de margen)
+      const exceso = datos
+        .map(e => ({ id: e.id, nombre: e.nombre, disponible: e.bicis_actuales - Math.ceil(e.demanda_restante) - 1 }))
+        .filter(e => e.disponible > 0)
+        .sort((a, b) => b.disponible - a.disponible)
+      let i = 0
+      for (const d of deficits) {
+        while (d.necesita > 0 && i < exceso.length) {
+          const q = Math.min(d.necesita, exceso[i].disponible)
+          if (q > 0) {
+            movs.push({ origen: { id: exceso[i].id, nombre: exceso[i].nombre }, destino: { id: d.id, nombre: d.nombre }, cantidad: q })
+            d.necesita -= q
+            exceso[i].disponible -= q
+          }
+          if (exceso[i].disponible <= 0) i++
+        }
+        if (d.necesita > 0) {
+          movs.push({ origen: null, destino: { id: d.id, nombre: d.nombre }, cantidad: d.necesita })
+        }
+      }
+    } else {
+      // Día futuro: todo se coloca desde el depósito central
+      for (const d of deficits) {
+        movs.push({ origen: null, destino: { id: d.id, nombre: d.nombre }, cantidad: d.necesita })
+      }
+    }
+    return movs
+  }
+
+  const movimientos = planAbierto ? generarMovimientos() : []
+  const totalMover = movimientos.reduce((s, m) => s + m.cantidad, 0)
+  const tecnicosSugeridos = Math.max(1, Math.ceil(totalMover / 4))  // ~4 bicis por técnico por viaje
+  const todasAsignadas = movimientos.length > 0 && movimientos.every((_, i) => asignaciones[i])
+
+  async function abrirPlan() {
+    setExito(false)
+    setAsignaciones({})
+    setPlanAbierto(true)
+    try {
+      const res  = await fetch('/api/operador/traslados')
+      const json = await res.json()
+      if (json.tecnicos) setTecnicos(json.tecnicos)
+    } catch { /* noop */ }
+  }
+
+  async function crearOrdenes() {
+    setCreando(true)
+    try {
+      const res = await fetch('/api/operador/traslados', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ordenes: movimientos.map((m, i) => ({
+            origen_id:  m.origen?.id ?? null,
+            destino_id: m.destino.id,
+            cantidad:   m.cantidad,
+            tecnico_id: asignaciones[i],
+            fecha_objetivo: dia,
+            notas: `Generado desde predicción de demanda (${fechaLabel})`,
+          })),
+        }),
+      })
+      if (res.ok) setExito(true)
+    } finally {
+      setCreando(false)
     }
   }
 
@@ -399,6 +485,15 @@ export default function PrediccionPage() {
                     </div>
                   ))}
                 </div>
+
+                {/* Fase 3: designar traslados */}
+                <button onClick={abrirPlan}
+                  className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl
+                             text-sm font-black text-[#0f2419] transition-all hover:opacity-90"
+                  style={{ background: '#b2f746' }}>
+                  <Truck size={15} />
+                  Designar traslados a técnicos
+                </button>
               </div>
             )}
           </div>
@@ -478,6 +573,130 @@ export default function PrediccionPage() {
           </div>
         )}
       </div>
+
+      {/* ══ Modal designación de traslados (Fase 3) ══ */}
+      {planAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15,36,25,0.45)' }}
+          onClick={() => !creando && setPlanAbierto(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="font-black text-[#0f2419] flex items-center gap-2">
+                  <Truck size={17} className="text-[#16a34a]" />
+                  Designar traslados
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Plan sugerido para el {fechaLabel} · elige el técnico que ejecuta cada traslado
+                </p>
+              </div>
+              <button onClick={() => setPlanAbierto(false)} disabled={creando}
+                className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors">
+                <X size={16} className="text-gray-400" />
+              </button>
+            </div>
+
+            {exito ? (
+              /* ── Éxito ── */
+              <div className="p-10 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-[#f0fdf4] flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 size={26} className="text-[#16a34a]" />
+                </div>
+                <p className="font-black text-[#0f2419]">Órdenes creadas</p>
+                <p className="text-xs text-gray-400 mt-1 mb-6">
+                  Los técnicos verán sus traslados asignados en su sesión
+                </p>
+                <Link href="/operador/traslados"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-black text-[#0f2419]"
+                  style={{ background: '#b2f746' }}>
+                  Ver seguimiento de traslados <ArrowRight size={14} />
+                </Link>
+              </div>
+            ) : (
+              <>
+                {/* Resumen */}
+                <div className="grid grid-cols-3 gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50/60">
+                  {[
+                    { label: 'Bicis a mover',       value: totalMover,          Icon: Bike },
+                    { label: 'Traslados',           value: movimientos.length,  Icon: Truck },
+                    { label: 'Técnicos sugeridos',  value: tecnicosSugeridos,   Icon: Users },
+                  ].map(({ label, value, Icon }) => (
+                    <div key={label} className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0">
+                        <Icon size={14} className="text-[#16a34a]" />
+                      </div>
+                      <div>
+                        <p className="text-lg font-black text-[#0f2419] leading-none">{value}</p>
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400 mt-0.5">{label}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="px-6 pt-3 text-[10px] text-gray-400">
+                  Sugerencia: un técnico puede trasladar ≈ 4 bicicletas por viaje. Puedes asignar el mismo técnico a varios traslados.
+                </p>
+
+                {/* Lista de movimientos */}
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                  {movimientos.length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-8">No hay traslados necesarios</p>
+                  )}
+                  {movimientos.map((m, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3.5 rounded-xl border border-gray-100 bg-white flex-wrap">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className={`text-xs font-bold truncate ${m.origen ? 'text-gray-700' : 'text-[#7c3aed]'}`}>
+                          {m.origen?.nombre ?? '🏭 Depósito central'}
+                        </span>
+                        <ArrowRight size={13} className="text-gray-300 shrink-0" />
+                        <span className="text-xs font-bold text-gray-700 truncate">{m.destino.nombre}</span>
+                      </div>
+                      <span className="shrink-0 flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full text-[#0f2419]"
+                        style={{ background: '#b2f746' }}>
+                        <Bike size={10} />{m.cantidad}
+                      </span>
+                      <select
+                        value={asignaciones[i] ?? ''}
+                        onChange={e => setAsignaciones(prev => ({ ...prev, [i]: e.target.value }))}
+                        className={`h-9 px-2.5 rounded-lg border text-xs font-semibold shrink-0 w-44
+                                    focus:outline-none focus:border-[#0f2419] ${
+                          asignaciones[i] ? 'border-gray-200 text-gray-700' : 'border-amber-300 text-amber-600 bg-amber-50'
+                        }`}>
+                        <option value="">Elegir técnico…</option>
+                        {tecnicos.map(t => (
+                          <option key={t.id} value={t.id}>{t.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                  {tecnicos.length === 0 && movimientos.length > 0 && (
+                    <p className="text-xs text-amber-600 font-semibold text-center">
+                      ⚠ No hay técnicos activos registrados — crea usuarios con rol técnico primero
+                    </p>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+                  <button onClick={() => setPlanAbierto(false)} disabled={creando}
+                    className="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">
+                    Cancelar
+                  </button>
+                  <button onClick={crearOrdenes} disabled={!todasAsignadas || creando}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black text-[#0f2419]
+                               disabled:opacity-40 transition-all"
+                    style={{ background: '#b2f746' }}>
+                    <Truck size={14} />
+                    {creando ? 'Creando…' : `Crear ${movimientos.length} ${movimientos.length === 1 ? 'orden' : 'órdenes'}`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

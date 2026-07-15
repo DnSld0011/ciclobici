@@ -26,6 +26,7 @@ const VISTAS_CATALOG = [
     { id: '/operador/mantenimiento',    label: 'Mantenimiento de flota' },
     { id: '/operador/asignacion',       label: 'Asignación de bicicletas' },
     { id: '/operador/prediccion',       label: 'Predicción de demanda' },
+    { id: '/operador/traslados',        label: 'Traslados de bicicletas' },
   ]},
   { grupo: 'Administrador', items: [
     { id: '/operador/admin',    label: 'Panel de administración' },
