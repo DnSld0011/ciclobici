@@ -86,7 +86,7 @@ export default function TecnicoHistorialPage() {
   const maxGrafico = Math.max(...graficoDatos.map(d => d.cantidad), 1)
 
   return (
-    <div className="p-6 space-y-5 max-w-[900px]">
+    <div className="p-4 md:p-6 pt-16 md:pt-6 space-y-5 max-w-[900px]">
       <div>
         <h1 className="text-xl font-extrabold text-primary-container">Mi historial</h1>
         <p className="text-xs text-outline mt-0.5">{nombre ? `Técnico: ${nombre}` : 'Cargando...'}</p>

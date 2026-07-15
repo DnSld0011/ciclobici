@@ -159,7 +159,7 @@ export default function StockPage() {
       <div className="px-8 py-5 space-y-5">
 
         {/* ── KPIs ── */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { label: 'Estaciones óptimas', value: optimas,    color: '#16a34a', bg: '#f0fdf4', Icon: CheckCircle2 },
             { label: 'Bajo stock',          value: bajoStock,  color: '#dc2626', bg: '#fef2f2', Icon: AlertTriangle },

@@ -283,7 +283,7 @@ export default function PrediccionPage() {
         </div>
 
         {/* ── KPIs ── */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { label: horaSel === null ? 'Demanda prevista del día' : `Demanda a las ${hh(horaSel)}`,
               value: loading ? '—' : demandaTotal, unit: 'viajes',

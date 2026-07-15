@@ -86,10 +86,10 @@ export default function TecnicoMantenimientoPage() {
   const thisMonth = registros.filter(m => new Date(m.fecha).getMonth() === new Date().getMonth()).length
 
   return (
-    <div className="p-6 space-y-5 max-w-[1000px]">
+    <div className="p-4 md:p-6 pt-16 md:pt-6 space-y-5 max-w-[1000px]">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-extrabold text-primary-container">Mis Mantenimientos</h1>
           <p className="text-xs text-outline mt-0.5">Intervenciones registradas por ti</p>
@@ -101,7 +101,7 @@ export default function TecnicoMantenimientoPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: 'Total intervenciones', value: registros.length, icon: Wrench },
           { label: 'Este mes', value: thisMonth, icon: CalendarDays },
@@ -127,8 +127,8 @@ export default function TecnicoMantenimientoPage() {
       </div>
 
       {/* Tabla */}
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="border-b border-outline-variant/20 bg-surface-container-low">
               {['Bicicleta', 'Tipo', 'Descripción', 'Fecha'].map(h => (

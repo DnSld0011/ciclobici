@@ -125,7 +125,7 @@ export default function TecnicoIncidenciasPage() {
   const resueltas    = incidencias.filter(i => i.estado === 'resuelta').length
 
   return (
-    <div className="p-6 space-y-5 max-w-[1100px]">
+    <div className="p-4 md:p-6 pt-16 md:pt-6 space-y-5 max-w-[1100px]">
 
       {/* Header */}
       <div>
@@ -134,7 +134,7 @@ export default function TecnicoIncidenciasPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: 'Pendientes',   value: pendientes,  chip: ESTADO_CHIP.pendiente,   icon: Clock },
           { label: 'En revisión',  value: en_revision, chip: ESTADO_CHIP.en_revision, icon: Wrench },
@@ -151,7 +151,7 @@ export default function TecnicoIncidenciasPage() {
       </div>
 
       {/* Filtros */}
-      <div className="card p-4 flex gap-3">
+      <div className="card p-4 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 text-outline" size={14} />
           <input className="w-full h-11 px-3 pl-9 rounded-xl border border-outline-variant/40 bg-surface text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
@@ -169,8 +169,8 @@ export default function TecnicoIncidenciasPage() {
       </div>
 
       {/* Lista */}
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-outline-variant/20 bg-surface-container-low">
               {['Tipo', 'Bicicleta', 'Estación', 'Reportado por', 'Fecha', 'Estado', ''].map(h => (

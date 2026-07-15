@@ -157,7 +157,7 @@ export default function TrasladosTecnicoPage() {
     const pct = Math.round((activa.bicis_trasladadas / activa.cantidad) * 100)
     return (
       <div className="min-h-screen bg-[#f8fafb] pb-10">
-        <div className="bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between sticky top-0 z-20">
+        <div className="bg-white border-b border-gray-100 pl-16 md:pl-5 pr-5 py-4 flex items-center justify-between sticky top-0 z-20">
           <div className="min-w-0">
             <h1 className="text-base font-black text-[#0f2419] flex items-center gap-2 truncate">
               <Truck size={17} className="text-[#16a34a] shrink-0" />
@@ -258,7 +258,7 @@ export default function TrasladosTecnicoPage() {
   /* ══ Lista de órdenes ══ */
   return (
     <div className="min-h-screen bg-[#f8fafb] pb-10">
-      <div className="bg-white border-b border-gray-100 px-5 md:px-8 py-5">
+      <div className="bg-white border-b border-gray-100 pl-16 md:pl-8 pr-5 md:pr-8 py-5">
         <h1 className="text-2xl font-black text-[#0f2419] flex items-center gap-2.5">
           <Truck size={22} className="text-[#16a34a]" />
           Mis Traslados

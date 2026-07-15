@@ -19,7 +19,8 @@ export default async function OperadorLayout({ children }: { children: React.Rea
   return (
     <div className="flex min-h-screen bg-surface">
       <SidebarOperador />
-      <main className="flex-1 md:ml-64 min-h-screen">
+      {/* pt-14 en móvil: deja libre el botón flotante del menú */}
+      <main className="flex-1 md:ml-64 min-h-screen pt-14 md:pt-0">
         {permitido ? children : <AccesoDenegado pathname={pathname} rol={access.rol} />}
       </main>
     </div>

@@ -46,14 +46,14 @@ export default function TecnicoBicicletasPage() {
   )
 
   return (
-    <div className="p-6 space-y-5 max-w-[1000px]">
+    <div className="p-4 md:p-6 pt-16 md:pt-6 space-y-5 max-w-[1000px]">
       <div>
         <h1 className="text-xl font-extrabold text-primary-container">Bicicletas</h1>
         <p className="text-xs text-outline mt-0.5">Vista de flota (solo lectura)</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {(['disponible', 'en_viaje', 'mantenimiento', 'baja'] as BicicletaEstado[]).map(e => (
           <div key={e} className={`card p-4 cursor-pointer transition-all ${filtroEstado === e ? 'ring-2 ring-primary-container' : ''}`}
             onClick={() => setFiltroEstado(filtroEstado === e ? 'todos' : e)}>
@@ -64,7 +64,7 @@ export default function TecnicoBicicletasPage() {
       </div>
 
       {/* Filtros */}
-      <div className="card p-4 flex gap-3">
+      <div className="card p-4 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 text-outline" size={14} />
           <input className="w-full h-11 px-3 pl-9 rounded-xl border border-outline-variant/40 bg-surface text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all"
@@ -82,8 +82,8 @@ export default function TecnicoBicicletasPage() {
       </div>
 
       {/* Tabla */}
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="border-b border-outline-variant/20 bg-surface-container-low">
               {['Código', 'Tipo / Marca', 'Estado', 'Estación'].map(h => (

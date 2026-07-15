@@ -167,10 +167,10 @@ export default function MapaOperadorPage() {
       </div>
 
       {/* Mapa + Panel lateral */}
-      <div className="flex gap-4" style={{ height: 540 }}>
+      <div className="flex flex-col lg:flex-row gap-4 lg:h-[540px]">
 
         {/* Mapa */}
-        <div className="flex-1 card overflow-hidden relative">
+        <div className="flex-1 card overflow-hidden relative h-[380px] lg:h-auto">
           {loading
             ? <div className="w-full h-full bg-surface-container-low animate-pulse" />
             : <MapaEstaciones
@@ -212,7 +212,7 @@ export default function MapaOperadorPage() {
         </div>
 
         {/* Panel lateral con pestañas */}
-        <div className="w-80 card flex flex-col overflow-hidden">
+        <div className="w-full lg:w-80 h-[420px] lg:h-auto card flex flex-col overflow-hidden">
 
           {/* Tabs */}
           <div className="flex border-b border-outline-variant/20">

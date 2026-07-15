@@ -140,7 +140,8 @@ export default function HistorialViajesPage() {
   /* ── fila de viaje reutilizable ── */
   const FilaViaje = ({ v, compact = false }: { v: ViajeHist; compact?: boolean }) => (
     <button onClick={() => setDetalle(v)}
-      className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors grid gap-2 items-center"
+      className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors grid gap-2 items-center ${
+        compact ? 'min-w-[560px]' : 'min-w-[820px]'}`}
       style={{ gridTemplateColumns: compact ? '1.2fr 2fr 0.8fr 0.6fr' : '1.2fr 1.4fr 1fr 2fr 0.8fr 0.7fr 0.6fr' }}>
       <div>
         <p className="text-xs font-bold text-gray-800">{fmtFecha(v.inicio_at)}</p>
@@ -250,14 +251,16 @@ export default function HistorialViajesPage() {
 
           /* ═══ TAB: todos los viajes ═══ */
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="hidden lg:grid gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100"
-              style={{ gridTemplateColumns: '1.2fr 1.4fr 1fr 2fr 0.8fr 0.7fr 0.6fr' }}>
-              {['FECHA', 'USUARIO', 'BICICLETA', 'RUTA', 'DURACIÓN', 'CALIF.', ''].map((h, i) => (
-                <span key={i} className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">{h}</span>
-              ))}
-            </div>
-            <div className="divide-y divide-gray-50">
-              {pagViajes.map(v => <FilaViaje key={v.id} v={v} />)}
+            <div className="overflow-x-auto">
+              <div className="hidden lg:grid gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100 min-w-[820px]"
+                style={{ gridTemplateColumns: '1.2fr 1.4fr 1fr 2fr 0.8fr 0.7fr 0.6fr' }}>
+                {['FECHA', 'USUARIO', 'BICICLETA', 'RUTA', 'DURACIÓN', 'CALIF.', ''].map((h, i) => (
+                  <span key={i} className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">{h}</span>
+                ))}
+              </div>
+              <div className="divide-y divide-gray-50">
+                {pagViajes.map(v => <FilaViaje key={v.id} v={v} />)}
+              </div>
             </div>
             {/* Paginación */}
             <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-t border-gray-100">
@@ -315,7 +318,7 @@ export default function HistorialViajesPage() {
                   </div>
                 </button>
                 {expandido === u.id && (
-                  <div className="border-t border-gray-100 divide-y divide-gray-50 max-h-80 overflow-y-auto">
+                  <div className="border-t border-gray-100 divide-y divide-gray-50 max-h-80 overflow-y-auto overflow-x-auto">
                     {u.viajes.map(v => <FilaViaje key={v.id} v={v} compact />)}
                   </div>
                 )}
@@ -360,7 +363,7 @@ export default function HistorialViajesPage() {
                   </div>
                 </button>
                 {expandido === b.id && (
-                  <div className="border-t border-gray-100 divide-y divide-gray-50 max-h-80 overflow-y-auto">
+                  <div className="border-t border-gray-100 divide-y divide-gray-50 max-h-80 overflow-y-auto overflow-x-auto">
                     {b.viajes.map(v => <FilaViaje key={v.id} v={v} compact />)}
                   </div>
                 )}
