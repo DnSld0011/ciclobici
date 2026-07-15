@@ -55,6 +55,7 @@ const VISTAS_FALLBACK: Record<string, string[]> = {
   ],
   tecnico: [
     '/tecnico/mantenimiento',
+    '/tecnico/traslados',
     '/tecnico/bicicletas',
     '/tecnico/incidencias',
     '/tecnico/historial',
@@ -90,6 +91,7 @@ export async function getUserAccess(): Promise<UserAccess | null> {
       // Rutas nuevas accesibles aunque el rol tenga vistas custom antiguas
       operador:      ['/operador/viajes', '/operador/traslados'],
       administrador: ['/operador/viajes', '/operador/traslados'],
+      tecnico:       ['/tecnico/traslados'],
     }
     const vistasBD = rolData?.vistas as string[] | undefined
     const vistas =

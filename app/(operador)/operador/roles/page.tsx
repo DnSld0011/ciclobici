@@ -37,6 +37,7 @@ const VISTAS_CATALOG = [
   ]},
   { grupo: 'Técnico', items: [
     { id: '/tecnico/mantenimiento', label: 'Mantenimiento técnico' },
+    { id: '/tecnico/traslados',     label: 'Traslados asignados' },
     { id: '/tecnico/bicicletas',    label: 'Bicicletas técnico' },
     { id: '/tecnico/incidencias',   label: 'Incidencias' },
     { id: '/tecnico/historial',     label: 'Historial de trabajos' },

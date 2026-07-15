@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Wrench, AlertTriangle, Bike, Menu, X, ClipboardList, LogOut, HardHat } from 'lucide-react'
+import { Wrench, AlertTriangle, Bike, Menu, X, ClipboardList, LogOut, HardHat, Truck } from 'lucide-react'
 
 const NAV = [
   { href: '/tecnico/mantenimiento', label: 'Mantenimiento',  icon: Wrench },
+  { href: '/tecnico/traslados',     label: 'Traslados',      icon: Truck },
   { href: '/tecnico/incidencias',   label: 'Incidencias',    icon: AlertTriangle },
   { href: '/tecnico/bicicletas',    label: 'Bicicletas',     icon: Bike },
   { href: '/tecnico/historial',     label: 'Mi historial',   icon: ClipboardList },
@@ -18,6 +19,7 @@ export function SidebarTecnico() {
   const router   = useRouter()
   const [open, setOpen] = useState(false)
   const [pendientes, setPendientes] = useState(0)
+  const [traslados, setTraslados]   = useState(0)
 
   const cargarPendientes = useCallback(async () => {
     const supabase = createClient()
@@ -28,14 +30,29 @@ export function SidebarTecnico() {
     setPendientes(count ?? 0)
   }, [])
 
+  const cargarTraslados = useCallback(async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    // RLS permite al técnico ver solo sus propias órdenes
+    const { count } = await supabase
+      .from('ordenes_traslado')
+      .select('*', { count: 'exact', head: true })
+      .eq('tecnico_id', user.id)
+      .in('estado', ['pendiente', 'en_proceso'])
+    setTraslados(count ?? 0)
+  }, [])
+
   useEffect(() => {
     cargarPendientes()
+    cargarTraslados()
     const supabase = createClient()
     const ch = supabase.channel('tecnico-incidencias')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias' }, cargarPendientes)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ordenes_traslado' }, cargarTraslados)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargarPendientes])
+  }, [cargarPendientes, cargarTraslados])
 
   async function cerrarSesion() {
     const supabase = createClient()
@@ -67,7 +84,8 @@ export function SidebarTecnico() {
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
-          const badge = label === 'Incidencias' && pendientes > 0 ? pendientes : null
+          const badge = label === 'Incidencias' && pendientes > 0 ? pendientes
+                      : label === 'Traslados' && traslados > 0 ? traslados : null
           return (
             <Link key={href} href={href} onClick={() => setOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
