@@ -62,8 +62,8 @@ export function MapaResumenViaje({ origen, destino, waypoints = [] }: MapaResume
           path={trayecto}
           options={{
             strokeColor: '#16a34a',
-            strokeWeight: waypoints.length >= 2 ? 3.5 : 3,
-            strokeOpacity: 0.9,
+            strokeWeight: waypoints.length >= 2 ? 2.5 : 3,
+            strokeOpacity: 0.85,
             // GPS real: línea sólida; estimada: guiones
             ...(waypoints.length < 2 && destino ? { strokeOpacity: 0.5, icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '10px' }] } : {}),
           }}

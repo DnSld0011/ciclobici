@@ -236,8 +236,8 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
             path={rutaViaje}
             options={{
               strokeColor: '#16a34a',
-              strokeWeight: 4,
-              strokeOpacity: 0.9,
+              strokeWeight: 3,
+              strokeOpacity: 0.85,
               zIndex: 10,
             }}
           />
