@@ -72,7 +72,6 @@ export default function DashboardOperadorPage() {
   const [estaciones, setEstaciones]     = useState<EstacionConDisponibilidad[]>([])
   const [alertas, setAlertas]           = useState<Alerta[]>([])
   const [viajesAnio, setViajesAnio]     = useState<ViajeAnual[]>([])
-  const [demandaPorHora, setDemandaPorHora] = useState<{ hora: number; viajes: number }[]>([])
   const [ultimaAct, setUltimaAct]       = useState<Date | null>(null)
   const [loading, setLoading]           = useState(true)
   const [tabPred, setTabPred]           = useState<'hoy' | 'semana' | 'mes'>('hoy')
@@ -85,57 +84,30 @@ export default function DashboardOperadorPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.replace('/login'); return }
 
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
-    const ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1)
-
+    // Las consultas a `viajes` van por API (adminClient) — el cliente del
+    // navegador está bloqueado por RLS y devolvía todo en cero
     const [
       { data: bicis },
       { data: ests },
-      { count: viajesHoy },
-      { count: viajesAyer },
-      { count: viajesActivos },
+      viajesActivosRes,
       { data: alertasData },
-      { data: viajesKm },
       { data: perfil },
-      { data: viajesHoraData },
     ] = await Promise.all([
       supabase.from('bicicletas').select('id, estado'),
       supabase.from('estaciones').select('*, bicicletas(id,estado)').order('nombre'),
-      supabase.from('viajes').select('*', { count: 'exact', head: true })
-        .gte('inicio_at', hoy.toISOString()).eq('estado', 'finalizado'),
-      supabase.from('viajes').select('*', { count: 'exact', head: true })
-        .gte('inicio_at', ayer.toISOString()).lt('inicio_at', hoy.toISOString()).eq('estado', 'finalizado'),
-      supabase.from('viajes').select('*', { count: 'exact', head: true }).eq('estado', 'activo'),
+      fetch('/api/operador/viajes-activos').then(r => r.json()).catch(() => null),
       supabase.from('alertas').select('*').eq('resuelta', false).order('created_at', { ascending: false }).limit(6),
-      supabase.from('viajes').select('distancia_km').eq('estado', 'finalizado').not('distancia_km', 'is', null),
       supabase.from('usuarios').select('nombre, rol').eq('id', user.id).single(),
-      supabase.from('viajes').select('inicio_at').gte('inicio_at', hoy.toISOString()),
     ])
-
-    if (viajesHoraData) {
-      const conteo: Record<number, number> = {}
-      for (let h = 0; h < 24; h++) conteo[h] = 0
-      for (const v of viajesHoraData) {
-        const h = new Date(v.inicio_at).getHours()
-        conteo[h] = (conteo[h] ?? 0) + 1
-      }
-      setDemandaPorHora(Array.from({ length: 24 }, (_, h) => ({ hora: h, viajes: conteo[h] })))
-    }
 
     if (bicis) {
       const disponibles = bicis.filter(b => b.estado === 'disponible').length
       const enViaje    = bicis.filter(b => b.estado === 'en_viaje').length
       setKpis(prev => ({ ...prev, bicisDisponibles: disponibles, bicisTotal: bicis.length, bicisEnViaje: enViaje }))
     }
-    if (viajesKm) {
-      const co2 = viajesKm.reduce((s, v) => s + ((v.distancia_km ?? 0) * 0.21), 0)
-      setKpis(prev => ({ ...prev, co2Ahorrado: Math.round(co2 * 10) / 10 }))
-    }
     setKpis(prev => ({
       ...prev,
-      viajesHoy:       viajesHoy ?? 0,
-      viajesAyer:      viajesAyer ?? 0,
-      viajesActivos:   viajesActivos ?? 0,
+      viajesActivos:   viajesActivosRes?.viajes?.length ?? 0,
       estacionesActivas: ests?.filter(e => e.estado === 'activa').length ?? 0,
     }))
     if (ests) {
@@ -171,6 +143,27 @@ export default function DashboardOperadorPage() {
     return () => { supabase.removeChannel(ch) }
   }, [cargar])
 
+  /* ── estadísticas de hoy/ayer desde el historial (adminClient, sin RLS) ── */
+  const statsHoy = useMemo(() => {
+    const hoyKey  = new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10)
+    const ayerKey = new Date(Date.now() - 5 * 3600000 - 86400000).toISOString().slice(0, 10)
+    let vHoy = 0, vAyer = 0, km = 0
+    const porHora = Array(24).fill(0) as number[]
+    for (const v of viajesAnio) {
+      const lima = new Date(new Date(v.inicio_at).getTime() - 5 * 3600000)
+      const key  = lima.toISOString().slice(0, 10)
+      km += v.distancia_km ?? 0
+      if (key === hoyKey) { vHoy++; porHora[lima.getUTCHours()]++ }
+      else if (key === ayerKey) vAyer++
+    }
+    return { vHoy, vAyer, co2: Math.round(km * 0.21 * 10) / 10, porHora }
+  }, [viajesAnio])
+
+  // Sincronizar KPIs que dependen del historial
+  useEffect(() => {
+    setKpis(prev => ({ ...prev, viajesHoy: statsHoy.vHoy, viajesAyer: statsHoy.vAyer, co2Ahorrado: statsHoy.co2 }))
+  }, [statsHoy])
+
   /* ── métricas derivadas ── */
   const pctDisp    = kpis.bicisTotal > 0 ? Math.round((kpis.bicisDisponibles / kpis.bicisTotal) * 100) : 0
   const eficiencia = kpis.bicisTotal > 0
@@ -186,10 +179,8 @@ export default function DashboardOperadorPage() {
   const estVacia    = estaciones.find(e => e.bicicletas_disponibles === 0 && e.estado === 'activa')
   const needsRedist = !!(estSaturada && estVacia)
 
-  /* ── datos para el gráfico 24h (datos reales de BD) ── */
-  const demandaData = demandaPorHora.length > 0
-    ? demandaPorHora.map(d => ({ hora: d.hora, demanda: d.viajes }))
-    : Array.from({ length: 24 }, (_, h) => ({ hora: h, demanda: 0 }))
+  /* ── datos para el gráfico 24h (viajes reales de hoy, hora de Lima) ── */
+  const demandaData = statsHoy.porHora.map((viajes, hora) => ({ hora, demanda: viajes }))
   const horaActual  = new Date().getHours()
 
   /* ── filtro búsqueda de estaciones ── */

@@ -61,6 +61,7 @@ export default function ViajeActivoPage() {
   const userLocRef    = useRef<Coord | null>(null)  // ref sincrónica para uso en handlers
   const viajeIdRef    = useRef<string | null>(null)  // id del viaje para enviar posición
   const lastSentRef   = useRef(0)                    // timestamp del último envío
+  const lastSentCoordRef = useRef<Coord | null>(null) // coordenada del último envío
 
   // Flujo finalizar
   const [detectando, setDetectando]               = useState(false)
@@ -114,10 +115,18 @@ export default function ViajeActivoPage() {
           setUserLocation(coord)
           userLocRef.current = coord
           setGpsActivo('ok')
-          // Enviar posición al servidor cada 15s para tracking en vivo del operador
+          // Tracking punto por punto: enviar cada 5s, o antes si se movió
+          // más de ~20m (captura giros de calle y detenciones)
           const now = Date.now()
-          if (viajeIdRef.current && now - lastSentRef.current > 15000) {
+          const dsdeUltimoEnvio = lastSentCoordRef.current
+            ? haversineKm(lastSentCoordRef.current, coord)
+            : Infinity
+          const debeEnviar =
+            (now - lastSentRef.current > 5000) ||
+            (dsdeUltimoEnvio > 0.02 && now - lastSentRef.current > 2500)
+          if (viajeIdRef.current && debeEnviar) {
             lastSentRef.current = now
+            lastSentCoordRef.current = coord
             fetch('/api/viajes/posicion', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

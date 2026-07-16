@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     // Verificar autenticación
     const supabase = await createClient()
@@ -24,6 +24,18 @@ export async function GET() {
 
     if (!['operador', 'tecnico', 'administrador'].includes(perfil.rol)) {
       return NextResponse.json({ error: `Rol sin permiso: ${perfil.rol}` }, { status: 403 })
+    }
+
+    // ── Recorrido punto por punto de un viaje activo ──
+    const viajeId = request.nextUrl.searchParams.get('viaje_id')
+    if (viajeId) {
+      const { data: waypoints } = await admin
+        .from('viaje_waypoints')
+        .select('lat, lng, recorded_at')
+        .eq('viaje_id', viajeId)
+        .order('recorded_at', { ascending: true })
+        .limit(2000)
+      return NextResponse.json({ waypoints: waypoints ?? [] })
     }
 
     // Obtener viajes activos (sin joins complejos para evitar errores de FK)

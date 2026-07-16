@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
 import { type CiclistaVivo } from '@/components/maps/MapaEstaciones'
 import {
-  RefreshCw, MapPin, Bike, AlertTriangle, Activity, User, Download, FileText,
+  RefreshCw, MapPin, Bike, AlertTriangle, Activity, User, Download, FileText, X, Crosshair,
 } from 'lucide-react'
 import { exportarCsv } from '@/lib/utils/exportCsv'
 import { exportarPdf } from '@/lib/utils/exportPdf'
@@ -51,6 +51,8 @@ export default function MapaOperadorPage() {
   const [loading, setLoading]           = useState(true)
   const [tabPanel, setTabPanel]         = useState<'estaciones' | 'viajes'>('estaciones')
   const [verCiclistas, setVerCiclistas] = useState(true)
+  const [seguidoId, setSeguidoId]       = useState<string | null>(null)
+  const [ruta, setRuta]                 = useState<{ lat: number; lng: number }[]>([])
 
   useTick(viajes.length > 0)
 
@@ -84,6 +86,31 @@ export default function MapaOperadorPage() {
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [cargar])
+
+  const seguido = seguidoId ? viajes.find(v => v.id === seguidoId) ?? null : null
+
+  // Recorrido punto por punto del viaje seguido: se refresca con cada
+  // nueva posición (la tabla viajes dispara el canal realtime de arriba)
+  useEffect(() => {
+    if (!seguidoId) { setRuta([]); return }
+    let cancelado = false
+    fetch(`/api/operador/viajes-activos?viaje_id=${seguidoId}`)
+      .then(r => r.json())
+      .then(json => {
+        if (!cancelado && json.waypoints) {
+          setRuta(json.waypoints.map((w: { lat: number; lng: number }) => ({ lat: w.lat, lng: w.lng })))
+        }
+      })
+      .catch(() => {})
+    return () => { cancelado = true }
+  }, [seguidoId, viajes])
+
+  // Si el viaje seguido terminó (ya no está activo), soltar el seguimiento
+  useEffect(() => {
+    if (seguidoId && !loading && !viajes.some(v => v.id === seguidoId)) {
+      setSeguidoId(null)
+    }
+  }, [viajes, seguidoId, loading])
 
   const activas  = estaciones.filter(e => e.estado === 'activa').length
   const criticas = estaciones.filter(e => e.bicicletas_disponibles === 0 && e.estado === 'activa').length
@@ -179,8 +206,28 @@ export default function MapaOperadorPage() {
                 onEstacionClick={setSeleccionada}
                 focusEstacion={seleccionada}
                 ciclistas={ciclistas}
+                rutaViaje={ruta}
+                ciclistaSeguidoId={seguidoId}
               />
           }
+
+          {/* Banner de seguimiento */}
+          {seguido && (
+            <div className="absolute top-3 left-3 z-10 flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-full shadow-lg"
+              style={{ background: '#0f2419' }}>
+              <span className="w-2 h-2 rounded-full bg-[#b2f746] animate-pulse shrink-0" />
+              <p className="text-xs font-bold text-white truncate max-w-[220px]">
+                Siguiendo a {seguido.usuario?.nombre ?? 'ciclista'} · {seguido.bicicleta?.codigo ?? ''}
+              </p>
+              <span className="text-[10px] font-semibold shrink-0" style={{ color: '#b2f746' }}>
+                {ruta.length} puntos
+              </span>
+              <button onClick={() => setSeguidoId(null)}
+                className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0 transition-colors">
+                <X size={12} className="text-white" />
+              </button>
+            </div>
+          )}
 
           {/* Toggle capa ciclistas */}
           <div className="absolute top-3 right-3 z-10">
@@ -273,15 +320,27 @@ export default function MapaOperadorPage() {
               ) : viajes.map(v => {
                 const durMin = Math.floor((Date.now() - new Date(v.inicio_at).getTime()) / 60000)
                 const urgent = durMin >= 60
+                const activo = seguidoId === v.id
+                const rastreable = v.lat != null && v.lng != null
                 return (
-                  <div key={v.id} className="px-4 py-3 hover:bg-surface-container-low/50 transition-colors">
+                  <button key={v.id}
+                    onClick={() => {
+                      if (!rastreable) return
+                      setSeleccionada(null)   // no competir con el foco de estación
+                      setSeguidoId(activo ? null : v.id)
+                    }}
+                    className={`w-full text-left px-4 py-3 transition-colors ${
+                      activo ? 'bg-[#f0fdf4]' : 'hover:bg-surface-container-low/50'
+                    } ${rastreable ? 'cursor-pointer' : 'cursor-default'}`}>
                     <div className="flex items-start gap-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${urgent ? 'bg-[#ffdad6]' : 'bg-[#e5eeff]'}`}>
-                        <User size={15} className={urgent ? 'text-error' : 'text-primary-container'} />
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        activo ? 'bg-[#b2f746]' : urgent ? 'bg-[#ffdad6]' : 'bg-[#e5eeff]'}`}>
+                        <User size={15} className={activo ? 'text-[#0f2419]' : urgent ? 'text-error' : 'text-primary-container'} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-xs font-bold text-on-surface truncate">{v.usuario?.nombre ?? 'Usuario'}</p>
+                          {activo && <span className="text-[9px] font-bold bg-[#0f2419] text-[#b2f746] px-1.5 py-0.5 rounded-full shrink-0">Siguiendo</span>}
                           {urgent && <span className="text-[9px] font-bold bg-[#ffdad6] text-error px-1.5 py-0.5 rounded-full shrink-0">+1h</span>}
                         </div>
                         <p className="text-[10px] text-outline truncate flex items-center gap-1">
@@ -290,6 +349,14 @@ export default function MapaOperadorPage() {
                         <p className="text-[10px] text-outline truncate flex items-center gap-1">
                           <MapPin size={9} className="shrink-0 text-primary-container" />{v.estacion_origen?.nombre ?? '—'}
                         </p>
+                        {rastreable ? (
+                          <p className="text-[9px] font-semibold flex items-center gap-1 mt-0.5" style={{ color: '#16a34a' }}>
+                            <Crosshair size={8} className="shrink-0" />
+                            {activo ? 'Clic para dejar de seguir' : 'Clic para seguir en el mapa'}
+                          </p>
+                        ) : (
+                          <p className="text-[9px] text-outline mt-0.5">Sin señal GPS aún</p>
+                        )}
                       </div>
                       <div className="shrink-0 text-right">
                         <p className={`font-mono text-xs font-extrabold tabular-nums ${urgent ? 'text-error' : 'text-primary-container'}`}>
@@ -300,7 +367,7 @@ export default function MapaOperadorPage() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { GoogleMap, InfoWindow, OverlayView, useJsApiLoader } from '@react-google-maps/api'
+import { GoogleMap, InfoWindow, OverlayView, Polyline, useJsApiLoader } from '@react-google-maps/api'
 import { EstacionConDisponibilidad } from '@/types'
 import { LocateFixed } from 'lucide-react'
 
@@ -20,6 +20,10 @@ interface MapaEstacionesProps {
   focusEstacion?: EstacionConDisponibilidad | null
   userLocation?: { lat: number; lng: number } | null
   ciclistas?: CiclistaVivo[]
+  /** Trazo punto por punto del viaje seguido (modo operador) */
+  rutaViaje?: { lat: number; lng: number }[]
+  /** Id del ciclista al que se sigue: se resalta y el mapa lo va siguiendo */
+  ciclistaSeguidoId?: string | null
 }
 
 const containerStyle = { width: '100%', height: '100%' }
@@ -33,7 +37,7 @@ function estiloPorDisponibilidad(disponibles: number, capacidad: number) {
   return { gradient: 'linear-gradient(135deg, #cdff7a, #b2f746)', solid: '#b2f746', text: '#002117' }
 }
 
-export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = false, focusEstacion, userLocation, ciclistas = [] }: MapaEstacionesProps) {
+export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = false, focusEstacion, userLocation, ciclistas = [], rutaViaje = [], ciclistaSeguidoId = null }: MapaEstacionesProps) {
   const { isLoaded } = useJsApiLoader({
     id: 'sbbici-google-maps',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
@@ -81,6 +85,17 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
     mapRef.current.setZoom(16)
     setActiveId(focusEstacion.id)
   }, [focusEstacion])
+
+  // Seguir al ciclista seleccionado: pan suave en cada nueva posición
+  const seguidoPrevio = useRef<string | null>(null)
+  const seguido = ciclistaSeguidoId ? ciclistas.find(c => c.id === ciclistaSeguidoId) : null
+  useEffect(() => {
+    if (!seguido || !mapRef.current) { seguidoPrevio.current = ciclistaSeguidoId; return }
+    mapRef.current.panTo({ lat: seguido.lat, lng: seguido.lng })
+    // Solo ajustar el zoom al empezar a seguir (no en cada actualización)
+    if (seguidoPrevio.current !== ciclistaSeguidoId) mapRef.current.setZoom(17)
+    seguidoPrevio.current = ciclistaSeguidoId
+  }, [ciclistaSeguidoId, seguido?.lat, seguido?.lng])  // eslint-disable-line react-hooks/exhaustive-deps
 
   function centrarEnMiUbicacion() {
     if (!userLocation || !mapRef.current) return
@@ -215,8 +230,34 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
           </InfoWindow>
         )}
 
+        {/* Trazo punto por punto del viaje seguido */}
+        {modoOperador && rutaViaje.length >= 2 && (
+          <Polyline
+            path={rutaViaje}
+            options={{
+              strokeColor: '#16a34a',
+              strokeWeight: 4,
+              strokeOpacity: 0.9,
+              zIndex: 10,
+            }}
+          />
+        )}
+        {/* Punto de inicio del recorrido */}
+        {modoOperador && rutaViaje.length >= 1 && (
+          <OverlayView position={rutaViaje[0]} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+            <div style={{
+              width: 12, height: 12, borderRadius: '50%',
+              background: '#16a34a', border: '2.5px solid white',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+              transform: 'translate(-50%, -50%)',
+            }} />
+          </OverlayView>
+        )}
+
         {/* Ciclistas en tiempo real (solo modo operador) */}
-        {modoOperador && ciclistas.map(c => (
+        {modoOperador && ciclistas.map(c => {
+          const esSeguido = c.id === ciclistaSeguidoId
+          return (
           <OverlayView
             key={c.id}
             position={{ lat: c.lat, lng: c.lng }}
@@ -225,32 +266,34 @@ export function MapaEstaciones({ estaciones, onEstacionClick, modoOperador = fal
             <div style={{ transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
               {/* Halo pulsante */}
               <div style={{
-                position: 'absolute', inset: -14, borderRadius: '50%',
-                background: 'rgba(59,130,246,0.25)',
+                position: 'absolute', inset: esSeguido ? -18 : -14, borderRadius: '50%',
+                background: esSeguido ? 'rgba(22,163,74,0.3)' : 'rgba(59,130,246,0.25)',
                 animation: 'sbbici-ciclista-pulse 2s ease-out infinite',
               }} />
               {/* Punto central */}
               <div style={{
-                position: 'relative', width: 20, height: 20, borderRadius: '50%',
-                background: '#3b82f6', border: '3px solid white',
-                boxShadow: '0 2px 8px rgba(59,130,246,0.6)',
+                position: 'relative',
+                width: esSeguido ? 26 : 20, height: esSeguido ? 26 : 20, borderRadius: '50%',
+                background: esSeguido ? '#16a34a' : '#3b82f6', border: '3px solid white',
+                boxShadow: esSeguido ? '0 2px 10px rgba(22,163,74,0.7)' : '0 2px 8px rgba(59,130,246,0.6)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10,
+                fontSize: esSeguido ? 13 : 10,
               }}>
                 🚴
               </div>
               {/* Etiqueta */}
               <div style={{
-                position: 'absolute', top: 22, left: '50%', transform: 'translateX(-50%)',
-                background: 'rgba(30,58,138,0.9)', color: 'white',
+                position: 'absolute', top: esSeguido ? 28 : 22, left: '50%', transform: 'translateX(-50%)',
+                background: esSeguido ? 'rgba(15,36,25,0.95)' : 'rgba(30,58,138,0.9)', color: 'white',
                 borderRadius: 6, padding: '2px 6px', fontSize: 9, fontWeight: 700,
                 whiteSpace: 'nowrap', fontFamily: 'inherit',
               }}>
-                {c.bicicleta}
+                {esSeguido ? `${c.nombre} · ${c.bicicleta}` : c.bicicleta}
               </div>
             </div>
           </OverlayView>
-        ))}
+          )
+        })}
 
         {userLocation && !modoOperador && (
           <OverlayView position={userLocation} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
