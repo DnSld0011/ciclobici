@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
 import { distanciaKm, formatoDistancia, minutosCaminando } from '@/lib/geo'
 import { MapPin, Bike, RefreshCw, X, ChevronDown, AlertTriangle, Footprints, LocateFixed } from 'lucide-react'
+import { ProyeccionEstacion } from '@/components/ciudadano/ProyeccionEstacion'
 
 const MapaEstaciones = dynamicImport(
   () => import('@/components/maps/MapaEstaciones').then(m => m.MapaEstaciones),
@@ -229,6 +230,9 @@ export default function MapaCiudadanoPage() {
                 </div>
               </div>
 
+              {/* Proyección de disponibilidad (próximas 3 horas) */}
+              <ProyeccionEstacion estacionId={seleccionada.id} />
+
               {/* Recomendaciones proactivas */}
               {recomendaciones.length > 0 && (
                 <div className="space-y-2">
@@ -298,6 +302,14 @@ export default function MapaCiudadanoPage() {
             <X size={14} className="text-outline" />
           </button>
         </div>
+
+        {/* Proyección de la estación seleccionada — desktop */}
+        {seleccionada && (
+          <div className="hidden lg:block px-4 py-3 border-b border-outline-variant/15">
+            <p className="text-xs font-extrabold text-on-surface mb-2 truncate">{seleccionada.nombre}</p>
+            <ProyeccionEstacion estacionId={seleccionada.id} compacto />
+          </div>
+        )}
 
         {/* Lista */}
         <div className="flex-1 overflow-y-auto divide-y divide-outline-variant/10">

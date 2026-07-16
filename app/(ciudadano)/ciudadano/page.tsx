@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { EstacionConDisponibilidad } from '@/types'
 import { Map, Bike, MapPin, ChevronRight, Leaf, Clock, AlertTriangle, TrendingUp, Home, Briefcase, Trophy } from 'lucide-react'
+import { ProyeccionEstacion } from '@/components/ciudadano/ProyeccionEstacion'
 
 const LOGROS: { id: string; emoji: string; titulo: string; desc: string; umbral: (s: Stats) => boolean }[] = [
   { id: 'primer_viaje',    emoji: '🚲', titulo: 'Primera pedalada',  desc: '1 viaje completado',      umbral: s => s.viajes >= 1 },
@@ -160,6 +161,27 @@ export default function DashboardCiudadano() {
       </div>
 
       <div className="px-4 space-y-5">
+
+        {/* ── PROYECCIÓN DE TU ESTACIÓN FAVORITA ── */}
+        {!loading && (casaId || trabajoId) && (() => {
+          const favId = casaId ?? trabajoId
+          const fav = estaciones.find(e => e.id === favId)
+          if (!fav || !favId) return null
+          return (
+            <div className="bg-white rounded-2xl border border-outline-variant/15 shadow-sm p-4 space-y-1">
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-extrabold text-sm text-on-surface flex items-center gap-1.5">
+                  {casaId ? <Home size={13} className="text-primary-container" /> : <Briefcase size={13} className="text-primary-container" />}
+                  {fav.nombre}
+                </p>
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#003527', color: '#b2f746' }}>
+                  Tu estación
+                </span>
+              </div>
+              <ProyeccionEstacion estacionId={favId} compacto />
+            </div>
+          )
+        })()}
 
         {/* ── ESTACIONES — scroll horizontal ── */}
         <div>
