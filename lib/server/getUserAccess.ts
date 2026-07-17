@@ -96,7 +96,10 @@ export const getUserAccess = cache(async (): Promise<UserAccess | null> => {
 
     // Rutas funcionales core que siempre deben ser accesibles aunque el rol tenga vistas custom
     const VISTAS_CORE: Record<string, string[]> = {
-      ciudadano: ['/ciudadano/viaje-activo', '/ciudadano/escanear', '/ciudadano/viaje'],
+      ciudadano: [
+        '/ciudadano/viaje-activo', '/ciudadano/escanear', '/ciudadano/viaje',
+        '/ciudadano/incidencias', '/ciudadano/incidencias/historial',
+      ],
       // Rutas nuevas accesibles aunque el rol tenga vistas custom antiguas
       operador:      ['/operador/viajes', '/operador/traslados'],
       administrador: ['/operador/viajes', '/operador/traslados'],
