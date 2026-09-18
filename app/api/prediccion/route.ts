@@ -82,10 +82,6 @@ export async function GET(request: NextRequest) {
 
     // Media ponderada normalizada: cuántos viajes esperamos en este slot
     const muestras = totalPeso > 0 ? sumaPeso / totalPeso : 0
-    const tasaMediaPorSemana = muestras
-
-    // Demanda estimada para el próximo ciclo de 1h
-    const demanda_estimada = Math.round(tasaMediaPorSemana * semanasCubiertas / semanasCubiertas)
     const confianza: 'alta' | 'media' | 'baja' =
       totalPeso >= 6 * PESOS[0] ? 'alta' : totalPeso >= 2 * PESOS[1] ? 'media' : 'baja'
 

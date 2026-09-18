@@ -172,10 +172,10 @@ export default function EstacionesPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Activas', value: activas, chip: 'chip-disponible' },
-          { label: 'Mantenimiento', value: mantenimiento, chip: 'chip-mantenimiento' },
-          { label: 'Inactivas', value: inactivas, chip: 'chip-baja' },
-        ].map(({ label, value, chip }) => (
+          { label: 'Activas', value: activas },
+          { label: 'Mantenimiento', value: mantenimiento },
+          { label: 'Inactivas', value: inactivas },
+        ].map(({ label, value }) => (
           <div key={label} className="card p-5 flex items-center justify-between">
             <div>
               <p className="text-2xl font-extrabold text-on-surface">{value}</p>

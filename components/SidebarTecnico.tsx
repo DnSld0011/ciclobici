@@ -60,7 +60,7 @@ export function SidebarTecnico() {
     router.push('/login')
   }
 
-  const SidebarContent = () => (
+  const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="px-5 py-6 border-b border-outline-variant/15">
@@ -122,7 +122,7 @@ export function SidebarTecnico() {
     <>
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col fixed left-0 top-0 h-screen w-60 bg-white border-r border-outline-variant/15 z-30 shadow-sm">
-        <SidebarContent />
+        {sidebarContent}
       </aside>
 
       {/* Mobile toggle */}
@@ -142,7 +142,7 @@ export function SidebarTecnico() {
                 <X size={16} className="text-outline" />
               </button>
             </div>
-            <SidebarContent />
+            {sidebarContent}
           </aside>
         </>
       )}

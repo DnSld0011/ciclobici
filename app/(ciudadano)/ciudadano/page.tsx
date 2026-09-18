@@ -204,7 +204,6 @@ export default function DashboardCiudadano() {
               {estaciones.slice(0, 8).map(est => {
                 const pct = est.capacidad > 0 ? est.bicicletas_disponibles / est.capacidad : 0
                 const barColor = pct === 0 ? '#ba1a1a' : pct < 0.2 ? '#f59e0b' : '#b2f746'
-                const bg = pct === 0 ? '#ffdad6' : pct < 0.2 ? '#fef9c3' : '#dcfce7'
                 const text = pct === 0 ? '#991b1b' : pct < 0.2 ? '#854d0e' : '#166534'
                 const esCasa = est.id === casaId
                 const esTrabajo = est.id === trabajoId

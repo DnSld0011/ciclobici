@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Incidencia, IncidenciaEstado } from '@/types'
-import { AlertTriangle, Search, CheckCircle, X, Clock, Wrench, ImageOff, ExternalLink, Plus } from 'lucide-react'
+import { Search, CheckCircle, X, Clock, Wrench, ImageOff, ExternalLink, Plus } from 'lucide-react'
 
 const ESTADO_CHIP: Record<IncidenciaEstado, string> = {
   pendiente:    'bg-[#fef9c3] text-[#854d0e] border-[#fde68a]',

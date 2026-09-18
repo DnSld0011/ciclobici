@@ -255,7 +255,7 @@ export default function ReportarIncidenciaPage() {
   }
 
   /* ── tab switcher pill (reutilizable) ── */
-  function TabSwitcher({ dark }: { dark?: boolean }) {
+  function renderTabSwitcher(dark?: boolean) {
     const base = dark
       ? 'flex rounded-xl overflow-hidden border border-white/15 text-xs font-bold'
       : 'flex rounded-xl overflow-hidden border border-outline-variant/30 text-xs font-bold'
@@ -321,7 +321,7 @@ export default function ReportarIncidenciaPage() {
             <ArrowLeft size={18} className="text-on-surface-variant" />
           </button>
           <div className="flex-1">
-            <TabSwitcher />
+            {renderTabSwitcher()}
           </div>
         </div>
 
@@ -410,7 +410,7 @@ export default function ReportarIncidenciaPage() {
           <ArrowLeft size={18} className="text-white" />
         </button>
         <div className="flex-1">
-          <TabSwitcher dark />
+          {renderTabSwitcher(true)}
         </div>
       </div>
 
@@ -526,7 +526,7 @@ export default function ReportarIncidenciaPage() {
           <ArrowLeft size={18} className="text-on-surface-variant" />
         </button>
         <div className="flex-1">
-          <TabSwitcher />
+          {renderTabSwitcher()}
         </div>
       </div>
 

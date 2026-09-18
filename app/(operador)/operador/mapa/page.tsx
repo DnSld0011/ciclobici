@@ -26,8 +26,8 @@ interface ViajeVivo {
   estacion_origen: { id: string; nombre: string } | null
 }
 
-function tiempoTranscurrido(inicioAt: string) {
-  const seg = Math.floor((Date.now() - new Date(inicioAt).getTime()) / 1000)
+function tiempoTranscurrido(inicioAt: string, now: number) {
+  const seg = Math.floor((now - new Date(inicioAt).getTime()) / 1000)
   const mm  = String(Math.floor(seg / 60) % 60).padStart(2, '0')
   const ss  = String(seg % 60).padStart(2, '0')
   if (seg >= 3600) return `${String(Math.floor(seg / 3600)).padStart(2, '0')}:${mm}:${ss}`
@@ -35,12 +35,13 @@ function tiempoTranscurrido(inicioAt: string) {
 }
 
 function useTick(active: boolean) {
-  const [, setTick] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!active) return
-    const id = setInterval(() => setTick(t => t + 1), 1000)
+    const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [active])
+  return now
 }
 
 export default function MapaOperadorPage() {
@@ -54,7 +55,7 @@ export default function MapaOperadorPage() {
   const [seguidoId, setSeguidoId]       = useState<string | null>(null)
   const [ruta, setRuta]                 = useState<{ lat: number; lng: number }[]>([])
 
-  useTick(viajes.length > 0)
+  const now = useTick(viajes.length > 0)
 
   const cargar = useCallback(async () => {
     const supabase = createClient()
@@ -318,7 +319,7 @@ export default function MapaOperadorPage() {
                   <p className="text-xs text-outline mt-1">Cuando un ciudadano inicie un viaje aparecerá aquí</p>
                 </div>
               ) : viajes.map(v => {
-                const durMin = Math.floor((Date.now() - new Date(v.inicio_at).getTime()) / 60000)
+                const durMin = Math.floor((now - new Date(v.inicio_at).getTime()) / 60000)
                 const urgent = durMin >= 60
                 const activo = seguidoId === v.id
                 const rastreable = v.lat != null && v.lng != null
@@ -360,7 +361,7 @@ export default function MapaOperadorPage() {
                       </div>
                       <div className="shrink-0 text-right">
                         <p className={`font-mono text-xs font-extrabold tabular-nums ${urgent ? 'text-error' : 'text-primary-container'}`}>
-                          {tiempoTranscurrido(v.inicio_at)}
+                          {tiempoTranscurrido(v.inicio_at, now)}
                         </p>
                         <p className="text-[9px] text-outline mt-0.5">
                           {new Date(v.inicio_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}

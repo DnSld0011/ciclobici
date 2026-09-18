@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
+import { useNow } from '@/lib/hooks/useNow'
 import { EstacionConDisponibilidad, Alerta } from '@/types'
 import {
   TrendingUp, TrendingDown, Bell, Leaf, RefreshCw, ChevronRight,
@@ -39,14 +40,14 @@ interface KPIs {
 }
 
 /* ── componente alerta ── */
-function AlertaCard({ a }: { a: Alerta }) {
+function AlertaCard({ a, now }: { a: Alerta; now: number }) {
   const conf = {
     critica: { bg: '#fff0ee', border: '#ef4444', text: '#93000a', icon: AlertTriangle },
     warning: { bg: '#fffbeb', border: '#f59e0b', text: '#854d0e', icon: AlertTriangle },
     info:    { bg: '#f0fff4', border: '#22c55e', text: '#166534', icon: CheckCircle },
   }[a.nivel] ?? { bg: '#f0fff4', border: '#22c55e', text: '#166534', icon: Info }
   const Icon = conf.icon
-  const hace = Math.floor((Date.now() - new Date(a.created_at).getTime()) / 60000)
+  const hace = Math.floor((now - new Date(a.created_at).getTime()) / 60000)
   const tiempoStr = hace < 60 ? `${hace}m` : `${Math.floor(hace / 60)}h`
 
   return (
@@ -64,6 +65,7 @@ function AlertaCard({ a }: { a: Alerta }) {
 }
 
 export default function DashboardOperadorPage() {
+  const now = useNow(5_000)
   const [kpis, setKpis] = useState<KPIs>({
     bicisDisponibles: 0, bicisTotal: 0, bicisEnViaje: 0,
     viajesHoy: 0, viajesAyer: 0, viajesActivos: 0,
@@ -145,8 +147,8 @@ export default function DashboardOperadorPage() {
 
   /* ── estadísticas de hoy/ayer desde el historial (adminClient, sin RLS) ── */
   const statsHoy = useMemo(() => {
-    const hoyKey  = new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10)
-    const ayerKey = new Date(Date.now() - 5 * 3600000 - 86400000).toISOString().slice(0, 10)
+    const hoyKey  = new Date(now - 5 * 3600000).toISOString().slice(0, 10)
+    const ayerKey = new Date(now - 5 * 3600000 - 86400000).toISOString().slice(0, 10)
     let vHoy = 0, vAyer = 0, km = 0
     const porHora = Array(24).fill(0) as number[]
     for (const v of viajesAnio) {
@@ -157,7 +159,7 @@ export default function DashboardOperadorPage() {
       else if (key === ayerKey) vAyer++
     }
     return { vHoy, vAyer, co2: Math.round(km * 0.21 * 10) / 10, porHora }
-  }, [viajesAnio])
+  }, [viajesAnio, now])
 
   // Sincronizar KPIs que dependen del historial
   useEffect(() => {
@@ -171,7 +173,6 @@ export default function DashboardOperadorPage() {
   const viajesDelta = kpis.viajesAyer > 0
     ? Math.round(((kpis.viajesHoy - kpis.viajesAyer) / kpis.viajesAyer) * 100) : 0
   const co2TN = (kpis.co2Ahorrado / 1000).toFixed(1)
-  const alertasCriticas = alertas.filter(a => a.nivel === 'critica').length
   const esPicoUso = viajesDelta > 10
 
   /* ── estaciones con problema para redistribución ── */
@@ -453,7 +454,7 @@ export default function DashboardOperadorPage() {
               {ultimaAct && (
                 <div className="flex items-center bg-white/80 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-white/40">
                   <span className="text-xs text-gray-500 font-medium">
-                    Actualizado hace {Math.floor((Date.now() - ultimaAct.getTime()) / 1000)}s
+                    Actualizado hace {Math.floor((now - ultimaAct.getTime()) / 1000)}s
                   </span>
                 </div>
               )}
@@ -504,7 +505,7 @@ export default function DashboardOperadorPage() {
                       <p className="text-xs text-gray-400">Todo está funcionando correctamente</p>
                     </div>
                   )
-                  : alertas.map(a => <AlertaCard key={a.id} a={a} />)
+                  : alertas.map(a => <AlertaCard key={a.id} a={a} now={now} />)
               }
             </div>
 

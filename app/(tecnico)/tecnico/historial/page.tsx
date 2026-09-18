@@ -15,13 +15,11 @@ export default function TecnicoHistorialPage() {
   const [incidencias, setIncidencias]   = useState<IncidenciaResumen[]>([])
   const [loading, setLoading]           = useState(true)
   const [nombre, setNombre]             = useState('')
-  const [userId, setUserId]             = useState('')
 
   const cargar = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
-    setUserId(user.id)
 
     const { data: perfil } = await supabase.from('usuarios').select('nombre').eq('id', user.id).single()
     if (!perfil?.nombre) { setLoading(false); return }

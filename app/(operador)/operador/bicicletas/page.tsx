@@ -615,6 +615,8 @@ export default function BicicletasPage() {
             </div>
             <div className="p-6 text-center space-y-4">
               <p className="font-mono font-bold text-primary-container text-lg">{modalQr.codigo}</p>
+              {/* data: URL generada en el cliente — next/image no la optimiza, <img> es correcto aquí */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               {qrDataUrl && <img src={qrDataUrl} alt="QR" className="mx-auto rounded-xl border border-outline-variant/20" width={220} height={220} />}
               <button className={btnPrimary + ' w-full justify-center'} onClick={descargarQr}>
                 <Download size={16} /> Descargar QR

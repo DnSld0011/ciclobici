@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { codigo, tipo, marca, modelo, qr_url, estado, estacion_id } = body
+  const { codigo, tipo, marca, modelo, estado, estacion_id } = body
 
   if (!codigo || !tipo) {
     return NextResponse.json({ error: 'codigo y tipo son requeridos' }, { status: 400 })

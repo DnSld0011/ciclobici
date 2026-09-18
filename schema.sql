@@ -1,6 +1,16 @@
 -- =========================================
 -- CicloBici — Schema de Base de Datos
 -- Ejecutar en Supabase SQL Editor (en orden)
+--
+-- Este archivo es la ÚNICA fuente de verdad del schema (2026-09-18
+-- se consolidó todo lo que vivía disperso en scripts/migrations/ y
+-- supabase/migrations/ — ambas carpetas quedan solo como historial).
+-- Los archivos en supabase/seeds/ siguen siendo válidos para cargar
+-- datos de ejemplo, pero no crean nada de schema que no esté aquí.
+--
+-- Requiere además un bucket de Storage llamado "evidencias" (público
+-- para lectura) creado manualmente en Supabase Dashboard → Storage,
+-- usado para las fotos de incidencias reportadas por el ciudadano.
 -- =========================================
 
 -- 1. Tabla de Usuarios
@@ -11,7 +21,7 @@ create table if not exists public.usuarios (
   correo text unique not null,
   celular text unique not null,
   estado text default 'pendiente' check (estado in ('pendiente', 'activo', 'suspendido')),
-  rol text default 'ciudadano' check (rol in ('ciudadano', 'operador', 'tecnico')),
+  rol text default 'ciudadano' check (rol in ('ciudadano', 'operador', 'tecnico', 'administrador')),
   created_at timestamptz default now()
 );
 
@@ -27,6 +37,11 @@ create table if not exists public.estaciones (
   estado text default 'activa' check (estado in ('activa', 'inactiva', 'mantenimiento')),
   created_at timestamptz default now()
 );
+
+-- Favoritos del ciudadano (requieren que estaciones ya exista)
+alter table public.usuarios
+  add column if not exists estacion_casa_id uuid references public.estaciones(id) on delete set null,
+  add column if not exists estacion_trabajo_id uuid references public.estaciones(id) on delete set null;
 
 -- 3. Tabla de Bicicletas
 create table if not exists public.bicicletas (
@@ -64,7 +79,10 @@ create table if not exists public.viajes (
   fin_at              timestamptz,
   estado              text        default 'activo' check (estado in ('activo', 'finalizado', 'cancelado')),
   distancia_km        numeric(6,2) default null,
-  duracion_min        integer      default null
+  duracion_min        integer      default null,
+  lat                 double precision default null,
+  lng                 double precision default null,
+  calificacion        smallint     default null check (calificacion between 1 and 5)
 );
 
 -- 6. Tabla de Roles
@@ -116,7 +134,7 @@ create trigger trg_incidencias_updated_at
   before update on public.incidencias
   for each row execute function public.fn_set_updated_at();
 
--- 7. Tabla de Alertas
+-- 8. Tabla de Alertas
 -- Generadas por triggers automáticos o manualmente por el operador.
 create table if not exists public.alertas (
   id           uuid        primary key default gen_random_uuid(),
@@ -194,13 +212,16 @@ create trigger trg_alerta_disponibilidad
   after update of estado, estacion_id on public.bicicletas
   for each row execute function public.fn_alerta_disponibilidad();
 
--- Trigger: calcular duracion_min y distancia_km al finalizar viaje
+-- Trigger: calcular duracion_min al finalizar viaje.
+-- distancia_km solo se estima si el cliente no envió ya el dato real por GPS.
 create or replace function public.fn_finalizar_viaje()
 returns trigger language plpgsql as $$
 begin
   if new.fin_at is not null and old.fin_at is null then
     new.duracion_min := round(extract(epoch from (new.fin_at - new.inicio_at)) / 60)::integer;
-    new.distancia_km := round((new.duracion_min::numeric / 60.0) * 12.0, 2);
+    if new.distancia_km is null then
+      new.distancia_km := round((new.duracion_min::numeric / 60.0) * 10.0, 2);
+    end if;
   end if;
   return new;
 end;
@@ -268,6 +289,80 @@ create trigger trg_alerta_mantenimiento_urgente
   when (new.estado = 'mantenimiento')
   execute function public.fn_alerta_mantenimiento_urgente();
 
+-- 9. Tabla de Roles: registros base (id coincide con el check de usuarios.rol)
+insert into public.roles (id, nombre, descripcion, color, vistas, es_sistema) values
+  ('ciudadano', 'Ciudadano', 'Usuario final del sistema', '#166534',
+    array['/ciudadano','/ciudadano/mapa','/ciudadano/viajes','/ciudadano/escanear',
+          '/ciudadano/viaje','/ciudadano/viaje-activo','/ciudadano/incidencias',
+          '/ciudadano/incidencias/historial','/ciudadano/perfil'], true),
+  ('operador', 'Operador', 'Gestión y monitoreo del sistema', '#1d4ed8',
+    array['/operador','/operador/viajes-en-vivo','/operador/viajes','/operador/traslados',
+          '/operador/mapa','/operador/alertas','/operador/estaciones','/operador/bicicletas',
+          '/operador/mantenimiento','/operador/asignacion','/operador/prediccion'], true),
+  ('tecnico', 'Técnico', 'Mantenimiento de bicicletas y estaciones', '#92400e',
+    array['/tecnico/mantenimiento','/tecnico/traslados','/tecnico/bicicletas',
+          '/tecnico/incidencias','/tecnico/historial'], true),
+  ('administrador', 'Administrador', 'Acceso total al sistema', '#7c3aed',
+    array['/operador','/operador/admin','/operador/viajes-en-vivo','/operador/viajes',
+          '/operador/traslados','/operador/mapa','/operador/alertas','/operador/estaciones',
+          '/operador/bicicletas','/operador/mantenimiento','/operador/asignacion',
+          '/operador/prediccion','/operador/kpis','/operador/stock','/operador/usuarios',
+          '/operador/roles'], true)
+on conflict (id) do nothing;
+
+-- 10. Tabla de Waypoints GPS por viaje (seguimiento en vivo + recorrido histórico)
+create table if not exists public.viaje_waypoints (
+  id          uuid             primary key default gen_random_uuid(),
+  viaje_id    uuid             not null references public.viajes(id) on delete cascade,
+  lat         double precision not null,
+  lng         double precision not null,
+  recorded_at timestamptz      default now()
+);
+create index if not exists idx_viaje_waypoints_viaje_id on public.viaje_waypoints(viaje_id);
+
+-- 11. Tabla de Órdenes de Traslado (operador designa técnicos según predicción de demanda)
+create table if not exists public.ordenes_traslado (
+  id                  uuid        primary key default gen_random_uuid(),
+  -- NULL = las bicis salen del depósito central (no de una estación)
+  estacion_origen_id  uuid        references public.estaciones(id) on delete set null,
+  estacion_destino_id uuid        not null references public.estaciones(id) on delete cascade,
+  cantidad            int         not null check (cantidad > 0),
+  bicis_trasladadas   int         not null default 0,
+  tecnico_id          uuid        references public.usuarios(id) on delete set null,
+  creado_por          uuid        references public.usuarios(id) on delete set null,
+  estado              text        not null default 'pendiente'
+                      check (estado in ('pendiente', 'en_proceso', 'completada', 'cancelada')),
+  notas               text,
+  fecha_objetivo      date,
+  created_at          timestamptz default now(),
+  completada_at       timestamptz
+);
+create index if not exists idx_ordenes_traslado_estado  on public.ordenes_traslado(estado);
+create index if not exists idx_ordenes_traslado_tecnico on public.ordenes_traslado(tecnico_id);
+
+-- 12. Tabla de Memoria de Demanda (consolidación diaria real vs. predicha, por estación/hora)
+create table if not exists public.demanda_historica (
+  id               uuid        primary key default gen_random_uuid(),
+  estacion_id      uuid        not null references public.estaciones(id) on delete cascade,
+  fecha            date        not null,
+  hora             smallint    not null check (hora between 0 and 23),
+  viajes_reales    int         not null default 0,
+  viajes_predichos numeric(6,2),
+  created_at       timestamptz default now(),
+  unique (estacion_id, fecha, hora)
+);
+create index if not exists idx_demanda_historica_fecha on public.demanda_historica(fecha);
+
+-- 13. Tabla de Suscripciones Push (notificaciones web push al ciudadano)
+create table if not exists public.push_subscriptions (
+  id         uuid        primary key default gen_random_uuid(),
+  usuario_id uuid        not null references public.usuarios(id) on delete cascade,
+  endpoint   text        not null unique,
+  p256dh     text        not null,
+  auth       text        not null,
+  created_at timestamptz not null default now()
+);
+
 -- =========================================
 -- Row Level Security (RLS)
 -- =========================================
@@ -279,6 +374,10 @@ alter table public.mantenimientos enable row level security;
 alter table public.viajes enable row level security;
 alter table public.incidencias enable row level security;
 alter table public.alertas enable row level security;
+alter table public.viaje_waypoints enable row level security;
+alter table public.ordenes_traslado enable row level security;
+alter table public.demanda_historica enable row level security;
+alter table public.push_subscriptions enable row level security;
 
 -- Políticas: Usuarios
 create policy "Usuarios: lectura propia" on public.usuarios
@@ -349,6 +448,59 @@ create policy "Viajes: gestión propia ciudadano" on public.viajes
     )
   );
 
+create policy "Viajes: ciudadano califica su viaje" on public.viajes
+  for update using (usuario_id = auth.uid())
+  with check (usuario_id = auth.uid());
+
+-- Políticas: Waypoints de viaje (mismo dueño que el viaje, o staff)
+create policy "Waypoints: lectura dueño del viaje o staff" on public.viaje_waypoints
+  for select using (
+    exists (
+      select 1 from public.viajes v
+      where v.id = viaje_id and (
+        v.usuario_id = auth.uid()
+        or exists (
+          select 1 from public.usuarios
+          where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
+        )
+      )
+    )
+  );
+
+create policy "Waypoints: gestión staff" on public.viaje_waypoints
+  for all using (
+    exists (
+      select 1 from public.usuarios
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
+    )
+  );
+
+-- Políticas: Órdenes de traslado
+create policy "Traslados: staff gestiona" on public.ordenes_traslado
+  for all using (
+    exists (
+      select 1 from public.usuarios
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
+    )
+  );
+
+create policy "Traslados: técnico ve las suyas" on public.ordenes_traslado
+  for select using (tecnico_id = auth.uid());
+
+-- Políticas: Demanda histórica (solo staff, escritura vía service role)
+create policy "Demanda histórica: lectura staff" on public.demanda_historica
+  for select using (
+    exists (
+      select 1 from public.usuarios
+      where id = auth.uid() and rol in ('operador', 'tecnico', 'administrador')
+    )
+  );
+
+-- Políticas: Suscripciones push (cada usuario gestiona la suya)
+create policy "Push: gestión propia" on public.push_subscriptions
+  for all using (usuario_id = auth.uid())
+  with check (usuario_id = auth.uid());
+
 -- Políticas: Incidencias
 create policy "Incidencias: ciudadano ve las suyas y staff ve todas" on public.incidencias
   for select using (
@@ -387,6 +539,7 @@ alter publication supabase_realtime add table public.estaciones;
 alter publication supabase_realtime add table public.incidencias;
 alter publication supabase_realtime add table public.alertas;
 alter publication supabase_realtime add table public.viajes;
+alter publication supabase_realtime add table public.ordenes_traslado;
 
 -- =========================================
 -- Datos de Ejemplo (Opcional)

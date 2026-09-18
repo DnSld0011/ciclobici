@@ -52,10 +52,6 @@ function diasAtras(n) {
   return d.toISOString()
 }
 
-function horasAtras(n) {
-  return new Date(Date.now() - n * 3600000).toISOString()
-}
-
 // ─── Main ────────────────────────────────────────────────────────────
 
 async function seed() {

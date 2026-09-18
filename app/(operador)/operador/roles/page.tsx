@@ -279,11 +279,9 @@ function ModalEliminarRol({ rol, onClose, onDone }: { rol: Rol; onClose: () => v
 export default function RolesPage() {
   const [roles, setRoles]           = useState<Rol[]>([])
   const [loading, setLoading]       = useState(true)
-  const [modalRol, setModalRol]     = useState<Rol | null | 'nuevo'>('nuevo' as unknown as null)
   const [modalEliminar, setModalEliminar] = useState<Rol | null>(null)
   const [toast, setToast]           = useState('')
 
-  // Fix: initialize properly
   const [showModal, setShowModal]   = useState(false)
   const [editandoRol, setEditandoRol] = useState<Rol | null>(null)
 
