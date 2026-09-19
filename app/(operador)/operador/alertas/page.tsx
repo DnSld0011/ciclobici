@@ -34,6 +34,10 @@ export default function AlertasOperadorPage() {
   const [loading, setLoading] = useState(true)
   const [filtroNivel, setFiltroNivel] = useState<AlertaNivel | 'todos'>('todos')
   const [filtroLeida, setFiltroLeida] = useState<'pendiente' | 'leida' | 'todos'>('pendiente')
+  // Resumen global (independiente del filtro de la lista de abajo, que
+  // por defecto oculta lo ya leído/resuelto y por eso no sirve para contar)
+  const [resumen, setResumen] = useState({ criticas: 0, warnings: 0, resueltas: 0 })
+
   const cargar = useCallback(async () => {
     const supabase = createClient()
     let q = supabase.from('alertas')
@@ -50,36 +54,46 @@ export default function AlertasOperadorPage() {
     setLoading(false)
   }, [filtroNivel, filtroLeida])
 
-  useEffect(() => { cargar() }, [cargar])
+  const cargarResumen = useCallback(async () => {
+    const supabase = createClient()
+    const [{ count: criticas }, { count: warnings }, { count: resueltas }] = await Promise.all([
+      supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('nivel', 'critica').eq('leida', false),
+      supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('nivel', 'warning').eq('leida', false),
+      supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('resuelta', true),
+    ])
+    setResumen({ criticas: criticas ?? 0, warnings: warnings ?? 0, resueltas: resueltas ?? 0 })
+  }, [])
+
+  useEffect(() => { cargar(); cargarResumen() }, [cargar, cargarResumen])
 
   useEffect(() => {
     const supabase = createClient()
     const ch = supabase.channel('alertas-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, cargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, () => { cargar(); cargarResumen() })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar])
+  }, [cargar, cargarResumen])
 
   async function marcarLeida(id: string) {
     const supabase = createClient()
     await supabase.from('alertas').update({ leida: true }).eq('id', id)
     setAlertas(prev => prev.map(a => a.id === id ? { ...a, leida: true } : a))
+    cargarResumen()
   }
 
   async function marcarResuelta(id: string) {
     const supabase = createClient()
     await supabase.from('alertas').update({ leida: true, resuelta: true }).eq('id', id)
     setAlertas(prev => prev.filter(a => a.id !== id))
+    cargarResumen()
   }
 
   async function marcarTodasLeidas() {
     const supabase = createClient()
     await supabase.from('alertas').update({ leida: true }).eq('leida', false)
     setAlertas(prev => prev.map(a => ({ ...a, leida: true })))
+    cargarResumen()
   }
-
-  const criticas = alertas.filter(a => a.nivel === 'critica' && !a.leida).length
-  const warnings = alertas.filter(a => a.nivel === 'warning' && !a.leida).length
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
@@ -133,7 +147,7 @@ export default function AlertasOperadorPage() {
             <AlertTriangle size={18} className="text-error" />
           </div>
           <div>
-            <p className="text-2xl font-extrabold text-error">{criticas}</p>
+            <p className="text-2xl font-extrabold text-error">{resumen.criticas}</p>
             <p className="text-[10px] text-outline uppercase font-semibold tracking-wide">Críticas sin leer</p>
           </div>
         </div>
@@ -142,7 +156,7 @@ export default function AlertasOperadorPage() {
             <AlertTriangle size={18} className="text-amber-500" />
           </div>
           <div>
-            <p className="text-2xl font-extrabold text-amber-600">{warnings}</p>
+            <p className="text-2xl font-extrabold text-amber-600">{resumen.warnings}</p>
             <p className="text-[10px] text-outline uppercase font-semibold tracking-wide">Avisos sin leer</p>
           </div>
         </div>
@@ -151,7 +165,7 @@ export default function AlertasOperadorPage() {
             <CheckCircle size={18} className="text-[#166534]" />
           </div>
           <div>
-            <p className="text-2xl font-extrabold text-[#166534]">{alertas.filter(a => a.resuelta).length}</p>
+            <p className="text-2xl font-extrabold text-[#166534]">{resumen.resueltas}</p>
             <p className="text-[10px] text-outline uppercase font-semibold tracking-wide">Resueltas</p>
           </div>
         </div>
