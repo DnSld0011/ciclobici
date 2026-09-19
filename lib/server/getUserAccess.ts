@@ -31,6 +31,7 @@ const VISTAS_FALLBACK: Record<string, string[]> = {
     '/operador/traslados',
     '/operador/mapa',
     '/operador/alertas',
+    '/operador/fallas',
     '/operador/estaciones',
     '/operador/bicicletas',
     '/operador/mantenimiento',
@@ -45,6 +46,7 @@ const VISTAS_FALLBACK: Record<string, string[]> = {
     '/operador/traslados',
     '/operador/mapa',
     '/operador/alertas',
+    '/operador/fallas',
     '/operador/estaciones',
     '/operador/bicicletas',
     '/operador/mantenimiento',
@@ -101,8 +103,8 @@ export const getUserAccess = cache(async (): Promise<UserAccess | null> => {
         '/ciudadano/incidencias', '/ciudadano/incidencias/historial',
       ],
       // Rutas nuevas accesibles aunque el rol tenga vistas custom antiguas
-      operador:      ['/operador/viajes', '/operador/traslados'],
-      administrador: ['/operador/viajes', '/operador/traslados'],
+      operador:      ['/operador/viajes', '/operador/traslados', '/operador/fallas'],
+      administrador: ['/operador/viajes', '/operador/traslados', '/operador/fallas'],
       tecnico:       ['/tecnico/traslados'],
     }
     const vistasBD = rolData?.vistas as string[] | undefined
