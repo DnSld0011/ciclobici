@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, LabelList, Cell,
 } from 'recharts'
 import { CheckCircle2, AlertTriangle, ArrowRight, Download, RefreshCw, Bike } from 'lucide-react'
+import { calcularMovimientos as calcularMovimientosBase } from '@/lib/utils/rebalanceo'
 
 interface EstStock {
   id: string
@@ -18,38 +19,12 @@ interface EstStock {
   confianza: 'alta' | 'media' | 'baja'
 }
 
-interface Movimiento {
-  de: string
-  a: string
-  cantidad: number
-}
-
-function calcularMovimientos(estaciones: EstStock[]): Movimiento[] {
-  const exceso   = estaciones
-    .filter(e => e.accion === 'surplus')
-    .map(e => ({ nombre: e.nombre, disponible: Math.abs(e.diferencia) }))
-    .sort((a, b) => b.disponible - a.disponible)
-
-  const deficit  = estaciones
-    .filter(e => e.accion === 'deficit')
-    .map(e => ({ nombre: e.nombre, necesita: e.diferencia }))
-    .sort((a, b) => b.necesita - a.necesita)
-
-  const movs: Movimiento[] = []
-  let i = 0, j = 0
-
-  while (i < exceso.length && j < deficit.length) {
-    const cantidad = Math.min(exceso[i].disponible, deficit[j].necesita)
-    if (cantidad > 0) {
-      movs.push({ de: exceso[i].nombre, a: deficit[j].nombre, cantidad })
-      exceso[i].disponible  -= cantidad
-      deficit[j].necesita   -= cantidad
-    }
-    if (exceso[i].disponible <= 0)  i++
-    if (deficit[j].necesita  <= 0)  j++
-  }
-
-  return movs
+function calcularMovimientos(estaciones: EstStock[]) {
+  const exceso  = estaciones.filter(e => e.accion === 'surplus')
+    .map(e => ({ id: e.id, nombre: e.nombre, disponible: Math.abs(e.diferencia) }))
+  const deficit = estaciones.filter(e => e.accion === 'deficit')
+    .map(e => ({ id: e.id, nombre: e.nombre, necesita: Math.abs(e.diferencia) }))
+  return calcularMovimientosBase(exceso, deficit)
 }
 
 function TickEstacion({ x = 0, y = 0, payload }: { x?: number; y?: number; payload?: { value: string } }) {
@@ -251,9 +226,9 @@ export default function StockPage() {
               {movimientos.map((m, i) => (
                 <div key={i} className="flex items-center gap-3 p-3.5 rounded-xl bg-[#f8fafb] border border-gray-100">
                   <div className="flex items-center gap-1 min-w-0 flex-1">
-                    <span className="text-sm font-semibold text-gray-700 truncate">{m.de}</span>
+                    <span className="text-sm font-semibold text-gray-700 truncate">{m.origen?.nombre ?? 'Depósito central'}</span>
                     <ArrowRight size={14} className="text-gray-400 shrink-0 mx-1" />
-                    <span className="text-sm font-semibold text-gray-700 truncate">{m.a}</span>
+                    <span className="text-sm font-semibold text-gray-700 truncate">{m.destino.nombre}</span>
                   </div>
                   <span className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold text-[#0f2419]"
                     style={{ background: '#b2f746' }}>

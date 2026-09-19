@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Map, Bike, Building2, Wrench,
-  TrendingUp, Bell, Menu, X, LogOut, Users, Shield, Crown, ArrowRightLeft, BarChart2, PackageSearch, History, Truck, AlertTriangle,
+  TrendingUp, Bell, Menu, X, LogOut, Users, Shield, Crown, ArrowRightLeft, BarChart2, PackageSearch, History, Truck, AlertTriangle, Route,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -20,6 +20,7 @@ const NAV_OPERADOR = [
   { href: '/operador/fallas',         label: 'Fallas mecánicas', icon: AlertTriangle },
   { href: '/operador/asignacion',     label: 'Asignación',     icon: ArrowRightLeft },
   { href: '/operador/prediccion',     label: 'Predicción',     icon: TrendingUp },
+  { href: '/operador/rutas-rebalanceo', label: 'Rutas de rebalanceo', icon: Route },
   { href: '/operador/traslados',      label: 'Traslados',      icon: Truck },
 ]
 

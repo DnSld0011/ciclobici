@@ -10,6 +10,7 @@ import {
   Clock, ChevronRight, Flame, Brain, Truck, ArrowRight, X, Users,
 } from 'lucide-react'
 import Link from 'next/link'
+import { calcularMovimientos } from '@/lib/utils/rebalanceo'
 
 interface EstDia {
   id: string
@@ -92,6 +93,18 @@ export default function PrediccionPage() {
     return Math.round(d * 10) / 10
   }, [horaSel])
 
+  // Estimado de bicis disponibles dentro de N horas: resta la demanda
+  // acumulada prevista desde ahora, sin modelar reposiciones (igual de
+  // simple que el resto de esta vista operativa del día)
+  const estimadoEnHoras = useCallback((e: EstDia, horas: number) => {
+    const horaActual = meta?.hora_actual ?? 0
+    let stock = e.bicis_actuales
+    for (let h = horaActual; h < horaActual + horas; h++) {
+      stock -= e.por_hora.find(x => x.hora === h % 24)?.demanda ?? 0
+    }
+    return Math.max(0, Math.round(stock))
+  }, [meta])
+
   const faltanDe = useCallback((e: EstDia) => {
     if (horaSel === null) return e.faltan
     const d = Math.ceil(e.por_hora.find(x => x.hora === horaSel)?.demanda ?? 0)
@@ -152,42 +165,16 @@ export default function PrediccionPage() {
   }
 
   /* ── Plan de movimientos sugerido (déficit ← exceso o depósito) ── */
-  interface Movimiento { origen: { id: string; nombre: string } | null; destino: { id: string; nombre: string }; cantidad: number }
-  function generarMovimientos(): Movimiento[] {
-    const deficits = datos
+  function generarMovimientos() {
+    const deficit = datos
       .filter(e => e.faltan > 0)
       .map(e => ({ id: e.id, nombre: e.nombre, necesita: e.faltan }))
-      .sort((a, b) => b.necesita - a.necesita)
 
-    const movs: Movimiento[] = []
-    if (!esFuturo) {
-      // Hoy: primero cubrir con excedentes de otras estaciones (dejando 1 de margen)
-      const exceso = datos
-        .map(e => ({ id: e.id, nombre: e.nombre, disponible: e.bicis_actuales - Math.ceil(e.demanda_restante) - 1 }))
-        .filter(e => e.disponible > 0)
-        .sort((a, b) => b.disponible - a.disponible)
-      let i = 0
-      for (const d of deficits) {
-        while (d.necesita > 0 && i < exceso.length) {
-          const q = Math.min(d.necesita, exceso[i].disponible)
-          if (q > 0) {
-            movs.push({ origen: { id: exceso[i].id, nombre: exceso[i].nombre }, destino: { id: d.id, nombre: d.nombre }, cantidad: q })
-            d.necesita -= q
-            exceso[i].disponible -= q
-          }
-          if (exceso[i].disponible <= 0) i++
-        }
-        if (d.necesita > 0) {
-          movs.push({ origen: null, destino: { id: d.id, nombre: d.nombre }, cantidad: d.necesita })
-        }
-      }
-    } else {
-      // Día futuro: todo se coloca desde el depósito central
-      for (const d of deficits) {
-        movs.push({ origen: null, destino: { id: d.id, nombre: d.nombre }, cantidad: d.necesita })
-      }
-    }
-    return movs
+    // Día futuro: sin excedentes confiables que mover, todo sale del depósito central
+    const exceso = esFuturo ? [] : datos
+      .map(e => ({ id: e.id, nombre: e.nombre, disponible: e.bicis_actuales - Math.ceil(e.demanda_restante) - 1 }))
+
+    return calcularMovimientos(exceso, deficit, { permitirDeposito: true })
   }
 
   const movimientos = planAbierto ? generarMovimientos() : []
@@ -448,6 +435,28 @@ export default function PrediccionPage() {
                 </div>
               )}
 
+              {sel && !esFuturo && (
+                <div className="px-5 pb-2">
+                  <p className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400 mb-1.5">
+                    Bicis disponibles estimadas
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { label: 'Ahora', value: sel.bicis_actuales, destacado: true },
+                      { label: '+1h',   value: estimadoEnHoras(sel, 1),  destacado: false },
+                      { label: '+3h',   value: estimadoEnHoras(sel, 3),  destacado: false },
+                      { label: '+6h',   value: estimadoEnHoras(sel, 6),  destacado: false },
+                    ].map(({ label, value, destacado }) => (
+                      <div key={label} className="rounded-xl px-2.5 py-2 text-center"
+                        style={{ background: destacado ? '#b2f746' : '#f9fafb' }}>
+                        <p className="text-base font-black" style={{ color: value === 0 ? '#dc2626' : '#0f2419' }}>{value}</p>
+                        <p className="text-[9px] font-bold" style={{ color: destacado ? '#003527' : '#9ca3af' }}>{label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {sel && (
                 <div className="grid grid-cols-3 gap-2 px-5 pb-5">
                   {[
@@ -494,6 +503,11 @@ export default function PrediccionPage() {
                   <Truck size={15} />
                   Designar traslados a técnicos
                 </button>
+                <Link href="/operador/rutas-rebalanceo"
+                  className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl
+                             text-xs font-bold text-white/80 border border-white/15 hover:bg-white/5 transition-all">
+                  Ver rutas de rebalanceo en vivo <ArrowRight size={12} />
+                </Link>
               </div>
             )}
           </div>

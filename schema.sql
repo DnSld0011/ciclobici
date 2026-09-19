@@ -299,7 +299,7 @@ insert into public.roles (id, nombre, descripcion, color, vistas, es_sistema) va
     array['/operador','/operador/viajes-en-vivo','/operador/viajes','/operador/traslados',
           '/operador/mapa','/operador/alertas','/operador/fallas','/operador/estaciones',
           '/operador/bicicletas','/operador/mantenimiento','/operador/asignacion',
-          '/operador/prediccion'], true),
+          '/operador/prediccion','/operador/rutas-rebalanceo'], true),
   ('tecnico', 'Técnico', 'Mantenimiento de bicicletas y estaciones', '#92400e',
     array['/tecnico/mantenimiento','/tecnico/traslados','/tecnico/bicicletas',
           '/tecnico/incidencias','/tecnico/historial'], true),
@@ -307,8 +307,8 @@ insert into public.roles (id, nombre, descripcion, color, vistas, es_sistema) va
     array['/operador','/operador/admin','/operador/viajes-en-vivo','/operador/viajes',
           '/operador/traslados','/operador/mapa','/operador/alertas','/operador/fallas',
           '/operador/estaciones','/operador/bicicletas','/operador/mantenimiento',
-          '/operador/asignacion','/operador/prediccion','/operador/kpis','/operador/stock',
-          '/operador/usuarios','/operador/roles'], true)
+          '/operador/asignacion','/operador/prediccion','/operador/rutas-rebalanceo',
+          '/operador/kpis','/operador/stock','/operador/usuarios','/operador/roles'], true)
 on conflict (id) do nothing;
 
 -- 10. Tabla de Waypoints GPS por viaje (seguimiento en vivo + recorrido histórico)
