@@ -87,9 +87,15 @@ export async function proxy(request: NextRequest) {
     const isAppRoute = GROUP_ROOTS.some(g => pathname.startsWith(g))
     if (!isAppRoute || !serviceKey) return supabaseResponse
 
-    // Rutas funcionales que NUNCA se bloquean con vistas — son parte del flujo core del app
+    // Rutas funcionales que NUNCA se bloquean con vistas — son parte del flujo core del app.
+    // IMPORTANTE: este es el control que de verdad corre en cada request (el de
+    // lib/server/getUserAccess.ts es una segunda verificación a nivel de layout,
+    // pero si esta lista no incluye una ruta nueva, el usuario nunca llega a verla
+    // aunque la tabla `roles` en BD no se haya actualizado todavía.
     const RUTAS_CORE: Record<string, string[]> = {
-      ciudadano: ['/ciudadano/viaje-activo', '/ciudadano/escanear', '/ciudadano/viaje/'],
+      ciudadano:     ['/ciudadano/viaje-activo', '/ciudadano/escanear', '/ciudadano/viaje/'],
+      operador:      ['/operador/fallas', '/operador/rutas-rebalanceo'],
+      administrador: ['/operador/fallas', '/operador/rutas-rebalanceo'],
     }
     const rutasCore = RUTAS_CORE[rol] ?? []
     const esRutaCore = rutasCore.some(r => pathname === r || pathname.startsWith(r))
