@@ -7,6 +7,9 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import { ArrowLeft, TrendingUp, RefreshCw } from 'lucide-react'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { demoTendenciasFallas } from '@/lib/demo/generarDemo'
+import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 
 interface TendenciasData {
   mesesHistorial: number
@@ -37,11 +40,13 @@ const ESTADO_UI: Record<string, { label: string; bg: string; text: string }> = {
 }
 
 export default function TendenciasFallasPage() {
+  const { activa: simulando } = useSimulacion()
   const [data, setData]       = useState<TendenciasData | null>(null)
   const [loading, setLoading] = useState(true)
 
   const cargar = useCallback(async () => {
     setLoading(true)
+    if (simulando) { setData(demoTendenciasFallas()); setLoading(false); return }
     try {
       const res  = await fetch('/api/operador/fallas/tendencias')
       const json = await res.json()
@@ -49,12 +54,19 @@ export default function TendenciasFallasPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [simulando])
 
   useEffect(() => { cargar() }, [cargar])
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
+
+      <InfoExplicativa>
+        Vista histórica (últimos 6 meses): qué modelo de bicicleta falla más seguido, qué tipo de
+        componente concentra más incidencias, y una tabla de combinaciones recurrentes
+        (componente + modelo) con prioridad según frecuencia — útil para decidir compras de repuestos
+        o retiro de un modelo problemático.
+      </InfoExplicativa>
 
       {/* Header */}
       <div className="flex items-start justify-between">

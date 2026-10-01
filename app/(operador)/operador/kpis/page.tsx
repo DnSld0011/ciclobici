@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { demoKpis } from '@/lib/demo/generarDemo'
+import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
@@ -35,6 +38,7 @@ const BADGE: Record<EstKPI['estadoCalc'], { bg: string; color: string }> = {
 }
 
 export default function KPIsPage() {
+  const { activa: simulando } = useSimulacion()
   const [periodo, setPeriodo]           = useState<Periodo>('30d')
   const [loading, setLoading]           = useState(true)
   const [viajesTotal, setViajesTotal]   = useState(0)
@@ -48,6 +52,17 @@ export default function KPIsPage() {
 
   const cargar = useCallback(async () => {
     setLoading(true)
+    if (simulando) {
+      const demo = demoKpis()
+      setViajesTotal(demo.viajesTotal)
+      setViajesPrev(demo.viajesPrev)
+      setUsuarios(demo.usuarios)
+      setChartData(demo.chartData)
+      setEstaciones(demo.estaciones)
+      setTopZonas(demo.topZonas)
+      setLoading(false)
+      return
+    }
     const supabase = createClient()
     const dias = PERIODO_DIAS[periodo]
 
@@ -129,7 +144,7 @@ export default function KPIsPage() {
     }
 
     setLoading(false)
-  }, [periodo])
+  }, [periodo, simulando])
 
   useEffect(() => {
     cargar()
@@ -207,6 +222,13 @@ export default function KPIsPage() {
       </div>
 
       <div className="px-8 pt-6 space-y-5">
+
+        <InfoExplicativa>
+          Estos KPIs resumen el rendimiento del servicio: viajes totales vs. el período anterior,
+          usuarios activos, y el gráfico compara los viajes reales de cada día contra un objetivo
+          (15% por encima del promedio). La tabla de abajo muestra qué estaciones necesitan atención
+          según su disponibilidad actual.
+        </InfoExplicativa>
 
         {/* ── KPI Cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

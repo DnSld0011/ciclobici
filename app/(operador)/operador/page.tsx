@@ -6,6 +6,9 @@ import Link from 'next/link'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { useNow } from '@/lib/hooks/useNow'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { demoDashboard } from '@/lib/demo/generarDemo'
+import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 import { EstacionConDisponibilidad, Alerta } from '@/types'
 import {
   TrendingUp, TrendingDown, Bell, Leaf, RefreshCw, ChevronRight,
@@ -66,6 +69,7 @@ function AlertaCard({ a, now }: { a: Alerta; now: number }) {
 
 export default function DashboardOperadorPage() {
   const now = useNow(5_000)
+  const { activa: simulando } = useSimulacion()
   const [kpis, setKpis] = useState<KPIs>({
     bicisDisponibles: 0, bicisTotal: 0, bicisEnViaje: 0,
     viajesHoy: 0, viajesAyer: 0, viajesActivos: 0,
@@ -82,6 +86,15 @@ export default function DashboardOperadorPage() {
   const router = useRouter()
 
   const cargar = useCallback(async () => {
+    if (simulando) {
+      const demo = demoDashboard()
+      setKpis(prev => ({ ...prev, ...demo.kpis }))
+      setEstaciones(demo.estaciones)
+      setAlertas(demo.alertas)
+      setUltimaAct(new Date())
+      setLoading(false)
+      return
+    }
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.replace('/login'); return }
@@ -124,15 +137,16 @@ export default function DashboardOperadorPage() {
     if (perfil) setNombreUsuario(perfil.nombre ?? '')
     setUltimaAct(new Date())
     setLoading(false)
-  }, [router])
+  }, [router, simulando])
 
   // Historial anual: se carga una sola vez vía API (adminClient evita RLS)
   useEffect(() => {
+    if (simulando) { setViajesAnio(demoDashboard().viajesAnio); return }
     fetch('/api/dashboard/historico')
       .then(res => res.json())
       .then(json => { if (json.viajes) setViajesAnio(json.viajes as ViajeAnual[]) })
       .catch(() => {})
-  }, [])
+  }, [simulando])
 
   useEffect(() => {
     cargar()
@@ -338,6 +352,12 @@ export default function DashboardOperadorPage() {
       </div>
 
       <div className="p-6 space-y-5 max-w-[1440px]">
+
+        <InfoExplicativa>
+          Este es el panel principal: resume en vivo cuántas bicis hay disponibles, los viajes de hoy
+          comparados con ayer, el CO₂ ahorrado por el uso de bicicletas, y las alertas operativas más
+          recientes. El mapa muestra el estado de cada estación (verde = con stock, ámbar = bajo, rojo = vacía).
+        </InfoExplicativa>
 
         {/* ── Actualización ── */}
         <div className="flex items-center justify-between">

@@ -11,6 +11,9 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { calcularMovimientos } from '@/lib/utils/rebalanceo'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { demoPrediccion } from '@/lib/demo/generarDemo'
+import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 
 interface EstDia {
   id: string
@@ -54,6 +57,7 @@ function fechaLima(offsetDias: number) {
 }
 
 export default function PrediccionPage() {
+  const { activa: simulando } = useSimulacion()
   const [dia, setDia]           = useState(() => fechaLima(0))
   const [horaSel, setHoraSel]   = useState<number | null>(null)  // null = todo el día
   const [loading, setLoading]   = useState(true)
@@ -74,6 +78,13 @@ export default function PrediccionPage() {
 
   const consultar = useCallback(async () => {
     setLoading(true)
+    if (simulando) {
+      const demo = demoPrediccion()
+      setDatos(demo.estaciones)
+      setMeta(demo.metadatos)
+      setLoading(false)
+      return
+    }
     try {
       const res  = await fetch(`/api/prediccion/todas?dia=${dia}`)
       const json = await res.json()
@@ -82,7 +93,7 @@ export default function PrediccionPage() {
     } finally {
       setLoading(false)
     }
-  }, [dia])
+  }, [dia, simulando])
 
   useEffect(() => { consultar() }, [consultar])
 
@@ -186,6 +197,14 @@ export default function PrediccionPage() {
     setExito(false)
     setAsignaciones({})
     setPlanAbierto(true)
+    if (simulando) {
+      setTecnicos([
+        { id: 'demo-t1', nombre: 'Jorge Castillo R.' },
+        { id: 'demo-t2', nombre: 'Milagros Vega S.' },
+        { id: 'demo-t3', nombre: 'Renzo Palacios T.' },
+      ])
+      return
+    }
     try {
       const res  = await fetch('/api/operador/traslados')
       const json = await res.json()
@@ -195,6 +214,13 @@ export default function PrediccionPage() {
 
   async function crearOrdenes() {
     setCreando(true)
+    // En simulación no se escribe nada real — solo se muestra el resultado esperado
+    if (simulando) {
+      await new Promise(r => setTimeout(r, 500))
+      setExito(true)
+      setCreando(false)
+      return
+    }
     try {
       const res = await fetch('/api/operador/traslados', {
         method: 'POST',
@@ -228,6 +254,12 @@ export default function PrediccionPage() {
       </div>
 
       <div className="px-8 py-5 space-y-5">
+
+        <InfoExplicativa>
+          El modelo predice, hora por hora, cuántos viajes va a tener cada estación usando el historial
+          de demanda. Si el stock actual no alcanza para cubrir esa demanda, la estación aparece como
+          crítica y el sistema sugiere un técnico para reponer bicis antes de que se quede vacía.
+        </InfoExplicativa>
 
         {/* ── Selector de día y hora ── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-center gap-3">

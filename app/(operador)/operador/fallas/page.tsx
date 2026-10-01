@@ -6,6 +6,9 @@ import { createClient } from '@/lib/supabase/client'
 import {
   AlertTriangle, RefreshCw, TrendingUp, ArrowRight, Gauge, ListChecks, CheckCircle2,
 } from 'lucide-react'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { demoFallas } from '@/lib/demo/generarDemo'
+import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 
 interface Alerta {
   id: string
@@ -40,11 +43,13 @@ function tiempoActivo(horas: number) {
 }
 
 export default function FallasMecanicasPage() {
+  const { activa: simulando } = useSimulacion()
   const [data, setData]       = useState<FallasData | null>(null)
   const [loading, setLoading] = useState(true)
   const [filtro, setFiltro]   = useState<'todas' | Alerta['urgencia']>('todas')
 
   const cargar = useCallback(async () => {
+    if (simulando) { setData(demoFallas()); setLoading(false); return }
     try {
       const res  = await fetch('/api/operador/fallas')
       const json = await res.json()
@@ -52,7 +57,7 @@ export default function FallasMecanicasPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [simulando])
 
   useEffect(() => {
     cargar()
@@ -64,6 +69,10 @@ export default function FallasMecanicasPage() {
   }, [cargar])
 
   async function marcarEnRevision(id: string) {
+    if (simulando) {
+      setData(prev => prev && { ...prev, alertas: prev.alertas.map(a => a.id === id ? { ...a, estado: 'en_revision' } : a) })
+      return
+    }
     const supabase = createClient()
     await supabase.from('incidencias').update({ estado: 'en_revision' }).eq('id', id)
   }
@@ -72,6 +81,13 @@ export default function FallasMecanicasPage() {
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
+
+      <InfoExplicativa>
+        Esta pantalla agrupa las incidencias mecánicas activas (reportadas por ciudadanos o técnicos)
+        por urgencia: frenos y componentes eléctricos siempre son urgentes por seguridad; el resto
+        escala según cuántas horas lleva sin atenderse. &quot;% flota con fallas&quot; es cuántas bicis
+        distintas tienen al menos una incidencia abierta.
+      </InfoExplicativa>
 
       {/* Header */}
       <div className="flex items-start justify-between">

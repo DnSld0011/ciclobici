@@ -7,6 +7,9 @@ import {
 } from 'recharts'
 import { CheckCircle2, AlertTriangle, ArrowRight, Download, RefreshCw, Bike } from 'lucide-react'
 import { calcularMovimientos as calcularMovimientosBase } from '@/lib/utils/rebalanceo'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { demoStock } from '@/lib/demo/generarDemo'
+import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 
 interface EstStock {
   id: string
@@ -39,12 +42,19 @@ function TickEstacion({ x = 0, y = 0, payload }: { x?: number; y?: number; paylo
 }
 
 export default function StockPage() {
+  const { activa: simulando } = useSimulacion()
   const [loading, setLoading]   = useState(true)
   const [datos, setDatos]       = useState<EstStock[]>([])
   const [ultima, setUltima]     = useState('')
 
   const cargar = useCallback(async () => {
     setLoading(true)
+    if (simulando) {
+      setDatos(demoStock())
+      setUltima(new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }))
+      setLoading(false)
+      return
+    }
     try {
       const res  = await fetch('/api/prediccion/todas?intervalo=2')
       const json = await res.json()
@@ -53,7 +63,7 @@ export default function StockPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [simulando])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -132,6 +142,13 @@ export default function StockPage() {
       </div>
 
       <div className="px-8 py-5 space-y-5">
+
+        <InfoExplicativa>
+          Compara el stock actual de cada estación contra la demanda estimada para las próximas 2 horas.
+          &quot;Bajo stock&quot; significa que probablemente no alcancen las bicis; &quot;sobre stock&quot;
+          que hay más de las necesarias y podrían moverse a otra estación. El plan de abajo sugiere
+          esos traslados automáticamente.
+        </InfoExplicativa>
 
         {/* ── KPIs ── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

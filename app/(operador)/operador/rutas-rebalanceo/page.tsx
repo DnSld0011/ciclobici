@@ -8,6 +8,9 @@ import { EstacionConDisponibilidad } from '@/types'
 import {
   Route, ArrowRight, Bike, RefreshCw, Truck, Users, CheckCircle2, MapPin,
 } from 'lucide-react'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { demoRutasRebalanceo } from '@/lib/demo/generarDemo'
+import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 
 const MapaEstaciones = dynamicImport(
   () => import('@/components/maps/MapaEstaciones').then(m => m.MapaEstaciones),
@@ -50,6 +53,7 @@ function estadoTecnico(tecnicoId: string, ordenes: Orden[]): { label: string; co
 }
 
 export default function RutasRebalanceoPage() {
+  const { activa: simulando } = useSimulacion()
   const [datos, setDatos]           = useState<EstStock[]>([])
   const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
   const [tecnicos, setTecnicos]     = useState<Tecnico[]>([])
@@ -62,6 +66,16 @@ export default function RutasRebalanceoPage() {
   const cargar = useCallback(async () => {
     setLoading(true)
     setExito(false)
+    if (simulando) {
+      const demo = demoRutasRebalanceo()
+      setDatos(demo.datos)
+      setEstaciones(demo.estaciones)
+      setTecnicos(demo.tecnicos)
+      setOrdenes(demo.ordenes)
+      setLoading(false)
+      setAsignaciones({})
+      return
+    }
     try {
       const [predRes, trasladosRes] = await Promise.all([
         fetch('/api/prediccion/todas?intervalo=2'),
@@ -88,7 +102,7 @@ export default function RutasRebalanceoPage() {
       setLoading(false)
       setAsignaciones({})
     }
-  }, [])
+  }, [simulando])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -111,6 +125,12 @@ export default function RutasRebalanceoPage() {
   async function asignarFlotaCompleta() {
     if (!todasAsignadas) return
     setCreando(true)
+    if (simulando) {
+      await new Promise(r => setTimeout(r, 500))
+      setExito(true)
+      setCreando(false)
+      return
+    }
     try {
       const res = await fetch('/api/operador/traslados', {
         method: 'POST',
@@ -133,6 +153,13 @@ export default function RutasRebalanceoPage() {
 
   return (
     <div className="p-6 space-y-5 max-w-6xl">
+
+      <InfoExplicativa>
+        El sistema compara el stock actual de cada estación contra lo que predice la demanda y arma
+        rutas pickup→drop-off para parejar excedentes con déficits. La prioridad indica qué tan urgente
+        es cada traslado (crítica = estación quedándose vacía). Al asignar un técnico a cada ruta y
+        confirmar, se crean las órdenes de traslado reales.
+      </InfoExplicativa>
 
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">

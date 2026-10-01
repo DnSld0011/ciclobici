@@ -5,9 +5,10 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Map, Bike, Building2, Wrench,
-  TrendingUp, Bell, Menu, X, LogOut, Users, Shield, Crown, ArrowRightLeft, BarChart2, PackageSearch, History, Truck, AlertTriangle, Route,
+  TrendingUp, Bell, Menu, X, LogOut, Users, Shield, Crown, ArrowRightLeft, BarChart2, PackageSearch, History, Truck, AlertTriangle, Route, Sparkles,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
 
 const NAV_OPERADOR = [
   { href: '/operador',                label: 'Dashboard',      icon: LayoutDashboard, exact: true },
@@ -35,6 +36,7 @@ const NAV_ADMIN = [
 export function SidebarOperador() {
   const pathname = usePathname()
   const router   = useRouter()
+  const { activa: simulacionActiva, toggle: toggleSimulacion } = useSimulacion()
   const [mobileOpen, setMobileOpen]           = useState(false)
   const [alertasNoLeidas, setAlertasNoLeidas] = useState(0)
   const [viajesActivos, setViajesActivos]     = useState(0)
@@ -143,6 +145,24 @@ export function SidebarOperador() {
             <span className="text-[11px] font-extrabold" style={{ color: '#1a56db' }}>Operador</span>
           </div>
         ) : null}
+
+        {/* Modo Simulación — demo de todo el panel con datos de ejemplo */}
+        <button onClick={toggleSimulacion}
+          className={`mt-3 w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg transition-colors ${
+            simulacionActiva ? '' : 'hover:bg-surface-container-low'
+          }`}
+          style={simulacionActiva ? { background: '#b2f746' } : { background: 'transparent', border: '1px solid var(--outline-variant, #e5e7eb)' }}
+          title="Mostrar el panel con datos de ejemplo, para demos o presentaciones">
+          <span className="flex items-center gap-1.5">
+            <Sparkles size={12} style={{ color: simulacionActiva ? '#002117' : '#6b7280' }} />
+            <span className="text-[11px] font-extrabold" style={{ color: simulacionActiva ? '#002117' : '#6b7280' }}>
+              Modo Simulación
+            </span>
+          </span>
+          <span className={`w-7 h-4 rounded-full relative transition-colors ${simulacionActiva ? 'bg-[#002117]' : 'bg-gray-300'}`}>
+            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${simulacionActiva ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+          </span>
+        </button>
       </div>
 
       {/* Nav principal */}

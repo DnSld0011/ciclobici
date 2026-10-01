@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { SidebarOperador } from '@/components/SidebarOperador'
 import { AccesoDenegado } from '@/components/AccesoDenegado'
 import { getUserAccess, isVistaPermitida } from '@/lib/server/getUserAccess'
+import { SimulacionProvider } from '@/lib/demo/SimulacionContext'
+import { BannerSimulacion } from '@/components/demo/BannerSimulacion'
 
 const ROLES_PERMITIDOS = ['operador', 'administrador']
 
@@ -17,12 +19,15 @@ export default async function OperadorLayout({ children }: { children: React.Rea
   const permitido = isVistaPermitida(pathname, access.vistas)
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <SidebarOperador />
-      {/* pt-14 en móvil: deja libre el botón flotante del menú */}
-      <main className="flex-1 md:ml-64 min-h-screen pt-14 md:pt-0">
-        {permitido ? children : <AccesoDenegado pathname={pathname} rol={access.rol} />}
-      </main>
-    </div>
+    <SimulacionProvider>
+      <div className="flex min-h-screen bg-surface">
+        <SidebarOperador />
+        {/* pt-14 en móvil: deja libre el botón flotante del menú */}
+        <main className="flex-1 md:ml-64 min-h-screen pt-14 md:pt-0">
+          <BannerSimulacion />
+          {permitido ? children : <AccesoDenegado pathname={pathname} rol={access.rol} />}
+        </main>
+      </div>
+    </SimulacionProvider>
   )
 }

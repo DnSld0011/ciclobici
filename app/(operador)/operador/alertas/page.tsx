@@ -1,11 +1,14 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Alerta, AlertaNivel, AlertaTipo } from '@/types'
 import { Bell, AlertTriangle, Info, CheckCircle, RefreshCw, Filter, Download, FileText } from 'lucide-react'
 import { exportarCsv } from '@/lib/utils/exportCsv'
 import { exportarPdf } from '@/lib/utils/exportPdf'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { demoAlertas } from '@/lib/demo/generarDemo'
+import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 
 const NIVEL_CONFIG: Record<AlertaNivel, { bg: string; border: string; text: string; badge: string }> = {
   critica: { bg: 'bg-[#ffdad6]', border: 'border-l-error', text: 'text-[#93000a]', badge: 'bg-error text-white' },
@@ -30,6 +33,7 @@ function tiempoHace(iso: string) {
 }
 
 export default function AlertasOperadorPage() {
+  const { activa: simulando } = useSimulacion()
   const [alertas, setAlertas] = useState<Alerta[]>([])
   const [loading, setLoading] = useState(true)
   const [filtroNivel, setFiltroNivel] = useState<AlertaNivel | 'todos'>('todos')
@@ -37,8 +41,20 @@ export default function AlertasOperadorPage() {
   // Resumen global (independiente del filtro de la lista de abajo, que
   // por defecto oculta lo ya leído/resuelto y por eso no sirve para contar)
   const [resumen, setResumen] = useState({ criticas: 0, warnings: 0, resueltas: 0 })
+  // Dataset demo estable: se regenera solo al activar simulación, no en cada filtro
+  const demoRef = useRef<ReturnType<typeof demoAlertas> | null>(null)
 
   const cargar = useCallback(async () => {
+    if (simulando) {
+      if (!demoRef.current) demoRef.current = demoAlertas()
+      const filtradas = demoRef.current.alertas.filter(a =>
+        (filtroNivel === 'todos' || a.nivel === filtroNivel) &&
+        (filtroLeida === 'todos' || (filtroLeida === 'pendiente' ? !a.leida : a.leida))
+      )
+      setAlertas(filtradas)
+      setLoading(false)
+      return
+    }
     const supabase = createClient()
     let q = supabase.from('alertas')
       .select('*, estacion:estacion_id(id, nombre), bicicleta:bicicleta_id(id, codigo)')
@@ -52,9 +68,14 @@ export default function AlertasOperadorPage() {
     const { data } = await q
     if (data) setAlertas(data as Alerta[])
     setLoading(false)
-  }, [filtroNivel, filtroLeida])
+  }, [filtroNivel, filtroLeida, simulando])
 
   const cargarResumen = useCallback(async () => {
+    if (simulando) {
+      if (!demoRef.current) demoRef.current = demoAlertas()
+      setResumen(demoRef.current.resumen)
+      return
+    }
     const supabase = createClient()
     const [{ count: criticas }, { count: warnings }, { count: resueltas }] = await Promise.all([
       supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('nivel', 'critica').eq('leida', false),
@@ -62,19 +83,29 @@ export default function AlertasOperadorPage() {
       supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('resuelta', true),
     ])
     setResumen({ criticas: criticas ?? 0, warnings: warnings ?? 0, resueltas: resueltas ?? 0 })
-  }, [])
+  }, [simulando])
+
+  // Al desactivar la simulación, soltar el dataset demo guardado
+  useEffect(() => { if (!simulando) demoRef.current = null }, [simulando])
 
   useEffect(() => { cargar(); cargarResumen() }, [cargar, cargarResumen])
 
   useEffect(() => {
+    if (simulando) return
     const supabase = createClient()
     const ch = supabase.channel('alertas-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, () => { cargar(); cargarResumen() })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar, cargarResumen])
+  }, [cargar, cargarResumen, simulando])
 
   async function marcarLeida(id: string) {
+    if (simulando) {
+      if (demoRef.current) demoRef.current.alertas = demoRef.current.alertas.map(a => a.id === id ? { ...a, leida: true } : a)
+      setAlertas(prev => prev.map(a => a.id === id ? { ...a, leida: true } : a))
+      cargarResumen()
+      return
+    }
     const supabase = createClient()
     await supabase.from('alertas').update({ leida: true }).eq('id', id)
     setAlertas(prev => prev.map(a => a.id === id ? { ...a, leida: true } : a))
@@ -82,6 +113,12 @@ export default function AlertasOperadorPage() {
   }
 
   async function marcarResuelta(id: string) {
+    if (simulando) {
+      if (demoRef.current) demoRef.current.alertas = demoRef.current.alertas.filter(a => a.id !== id)
+      setAlertas(prev => prev.filter(a => a.id !== id))
+      cargarResumen()
+      return
+    }
     const supabase = createClient()
     await supabase.from('alertas').update({ leida: true, resuelta: true }).eq('id', id)
     setAlertas(prev => prev.filter(a => a.id !== id))
@@ -89,6 +126,12 @@ export default function AlertasOperadorPage() {
   }
 
   async function marcarTodasLeidas() {
+    if (simulando) {
+      if (demoRef.current) demoRef.current.alertas = demoRef.current.alertas.map(a => ({ ...a, leida: true }))
+      setAlertas(prev => prev.map(a => ({ ...a, leida: true })))
+      cargarResumen()
+      return
+    }
     const supabase = createClient()
     await supabase.from('alertas').update({ leida: true }).eq('leida', false)
     setAlertas(prev => prev.map(a => ({ ...a, leida: true })))
@@ -97,6 +140,13 @@ export default function AlertasOperadorPage() {
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
+
+      <InfoExplicativa>
+        Estas alertas las genera el sistema automáticamente (estación vacía, saturada, bici sin
+        retornar, mantenimiento urgente, etc.) a partir de triggers en la base de datos — nadie las
+        escribe a mano. &quot;Marcar leída&quot; solo la reconoce; &quot;Resolver&quot; la da por
+        atendida y la saca de la lista.
+      </InfoExplicativa>
 
       {/* Header */}
       <div className="flex items-start justify-between">
