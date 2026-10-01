@@ -43,7 +43,7 @@ function tiempoActivo(horas: number) {
 }
 
 export default function FallasMecanicasPage() {
-  const { activa: simulando } = useSimulacion()
+  const { activa: simulando, listo: simListo } = useSimulacion()
   const [data, setData]       = useState<FallasData | null>(null)
   const [loading, setLoading] = useState(true)
   const [filtro, setFiltro]   = useState<'todas' | Alerta['urgencia']>('todas')
@@ -60,13 +60,14 @@ export default function FallasMecanicasPage() {
   }, [simulando])
 
   useEffect(() => {
+    if (!simListo) return
     cargar()
     const supabase = createClient()
     const ch = supabase.channel('fallas-mecanicas-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar])
+  }, [cargar, simListo])
 
   async function marcarEnRevision(id: string) {
     if (simulando) {

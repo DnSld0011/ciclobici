@@ -33,7 +33,7 @@ function tiempoHace(iso: string) {
 }
 
 export default function AlertasOperadorPage() {
-  const { activa: simulando } = useSimulacion()
+  const { activa: simulando, listo: simListo } = useSimulacion()
   const [alertas, setAlertas] = useState<Alerta[]>([])
   const [loading, setLoading] = useState(true)
   const [filtroNivel, setFiltroNivel] = useState<AlertaNivel | 'todos'>('todos')
@@ -88,7 +88,7 @@ export default function AlertasOperadorPage() {
   // Al desactivar la simulación, soltar el dataset demo guardado
   useEffect(() => { if (!simulando) demoRef.current = null }, [simulando])
 
-  useEffect(() => { cargar(); cargarResumen() }, [cargar, cargarResumen])
+  useEffect(() => { if (simListo) { cargar(); cargarResumen() } }, [cargar, cargarResumen, simListo])
 
   useEffect(() => {
     if (simulando) return

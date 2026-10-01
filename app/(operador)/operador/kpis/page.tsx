@@ -38,7 +38,7 @@ const BADGE: Record<EstKPI['estadoCalc'], { bg: string; color: string }> = {
 }
 
 export default function KPIsPage() {
-  const { activa: simulando } = useSimulacion()
+  const { activa: simulando, listo: simListo } = useSimulacion()
   const [periodo, setPeriodo]           = useState<Periodo>('30d')
   const [loading, setLoading]           = useState(true)
   const [viajesTotal, setViajesTotal]   = useState(0)
@@ -147,6 +147,7 @@ export default function KPIsPage() {
   }, [periodo, simulando])
 
   useEffect(() => {
+    if (!simListo) return
     cargar()
     const supabase = createClient()
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -157,7 +158,7 @@ export default function KPIsPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios' }, debounced)
       .subscribe()
     return () => { if (timeout) clearTimeout(timeout); supabase.removeChannel(ch) }
-  }, [cargar])
+  }, [cargar, simListo])
 
   // KPIs derivados
   const pctCrecimiento = viajesPrev > 0

@@ -57,7 +57,7 @@ function fechaLima(offsetDias: number) {
 }
 
 export default function PrediccionPage() {
-  const { activa: simulando } = useSimulacion()
+  const { activa: simulando, listo: simListo } = useSimulacion()
   const [dia, setDia]           = useState(() => fechaLima(0))
   const [horaSel, setHoraSel]   = useState<number | null>(null)  // null = todo el día
   const [loading, setLoading]   = useState(true)
@@ -95,7 +95,7 @@ export default function PrediccionPage() {
     }
   }, [dia, simulando])
 
-  useEffect(() => { consultar() }, [consultar])
+  useEffect(() => { if (simListo) consultar() }, [consultar, simListo])
 
   /* ── valores según vista: todo el día o una hora específica ── */
   const demandaDe = useCallback((e: EstDia) => {

@@ -53,7 +53,7 @@ function estadoTecnico(tecnicoId: string, ordenes: Orden[]): { label: string; co
 }
 
 export default function RutasRebalanceoPage() {
-  const { activa: simulando } = useSimulacion()
+  const { activa: simulando, listo: simListo } = useSimulacion()
   const [datos, setDatos]           = useState<EstStock[]>([])
   const [estaciones, setEstaciones] = useState<EstacionConDisponibilidad[]>([])
   const [tecnicos, setTecnicos]     = useState<Tecnico[]>([])
@@ -104,7 +104,7 @@ export default function RutasRebalanceoPage() {
     }
   }, [simulando])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { if (simListo) cargar() }, [cargar, simListo])
 
   const estMap = Object.fromEntries(datos.map(e => [e.id, e]))
 

@@ -40,7 +40,7 @@ const ESTADO_UI: Record<string, { label: string; bg: string; text: string }> = {
 }
 
 export default function TendenciasFallasPage() {
-  const { activa: simulando } = useSimulacion()
+  const { activa: simulando, listo: simListo } = useSimulacion()
   const [data, setData]       = useState<TendenciasData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -56,7 +56,7 @@ export default function TendenciasFallasPage() {
     }
   }, [simulando])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { if (simListo) cargar() }, [cargar, simListo])
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">

@@ -69,7 +69,7 @@ function AlertaCard({ a, now }: { a: Alerta; now: number }) {
 
 export default function DashboardOperadorPage() {
   const now = useNow(5_000)
-  const { activa: simulando } = useSimulacion()
+  const { activa: simulando, listo: simListo } = useSimulacion()
   const [kpis, setKpis] = useState<KPIs>({
     bicisDisponibles: 0, bicisTotal: 0, bicisEnViaje: 0,
     viajesHoy: 0, viajesAyer: 0, viajesActivos: 0,
@@ -141,14 +141,16 @@ export default function DashboardOperadorPage() {
 
   // Historial anual: se carga una sola vez vía API (adminClient evita RLS)
   useEffect(() => {
+    if (!simListo) return
     if (simulando) { setViajesAnio(demoDashboard().viajesAnio); return }
     fetch('/api/dashboard/historico')
       .then(res => res.json())
       .then(json => { if (json.viajes) setViajesAnio(json.viajes as ViajeAnual[]) })
       .catch(() => {})
-  }, [simulando])
+  }, [simulando, simListo])
 
   useEffect(() => {
+    if (!simListo) return
     cargar()
     const supabase = createClient()
     const ch = supabase.channel('operador-rt')
@@ -157,7 +159,7 @@ export default function DashboardOperadorPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'viajes' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar])
+  }, [cargar, simListo])
 
   /* ── estadísticas de hoy/ayer desde el historial (adminClient, sin RLS) ── */
   const statsHoy = useMemo(() => {

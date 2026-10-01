@@ -42,7 +42,7 @@ function TickEstacion({ x = 0, y = 0, payload }: { x?: number; y?: number; paylo
 }
 
 export default function StockPage() {
-  const { activa: simulando } = useSimulacion()
+  const { activa: simulando, listo: simListo } = useSimulacion()
   const [loading, setLoading]   = useState(true)
   const [datos, setDatos]       = useState<EstStock[]>([])
   const [ultima, setUltima]     = useState('')
@@ -65,7 +65,7 @@ export default function StockPage() {
     }
   }, [simulando])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { if (simListo) cargar() }, [cargar, simListo])
 
   const optimas    = datos.filter(e => e.accion === 'ok').length
   const bajoStock  = datos.filter(e => e.accion === 'deficit').length
