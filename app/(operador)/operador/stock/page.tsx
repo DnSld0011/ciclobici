@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList, Cell,
@@ -47,10 +47,14 @@ export default function StockPage() {
   const [datos, setDatos]       = useState<EstStock[]>([])
   const [ultima, setUltima]     = useState('')
 
+  const peticionRef = useRef(0)
   const cargar = useCallback(async () => {
+    const miId = ++peticionRef.current
     setLoading(true)
     if (simulando) {
-      setDatos(demoStock())
+      const demo = demoStock()
+      if (peticionRef.current !== miId) return
+      setDatos(demo)
       setUltima(new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }))
       setLoading(false)
       return
@@ -58,10 +62,11 @@ export default function StockPage() {
     try {
       const res  = await fetch('/api/prediccion/todas?intervalo=2')
       const json = await res.json()
+      if (peticionRef.current !== miId) return
       setDatos(json.estaciones ?? [])
       setUltima(new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }))
     } finally {
-      setLoading(false)
+      if (peticionRef.current === miId) setLoading(false)
     }
   }, [simulando])
 

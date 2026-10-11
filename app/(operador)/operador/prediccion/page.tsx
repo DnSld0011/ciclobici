@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -12,7 +12,8 @@ import {
 import Link from 'next/link'
 import { calcularMovimientos } from '@/lib/utils/rebalanceo'
 import { useSimulacion } from '@/lib/demo/SimulacionContext'
-import { demoPrediccion } from '@/lib/demo/generarDemo'
+import { demoPrediccion, TECNICOS_DEMO } from '@/lib/demo/generarDemo'
+import { agregarTrasladosDemo } from '@/lib/demo/mundoDemo'
 import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 
 interface EstDia {
@@ -76,10 +77,13 @@ export default function PrediccionPage() {
   const manana = fechaLima(1)
   const esFuturo = meta?.es_dia_futuro ?? false
 
+  const peticionRef = useRef(0)
   const consultar = useCallback(async () => {
+    const miId = ++peticionRef.current
     setLoading(true)
     if (simulando) {
       const demo = demoPrediccion()
+      if (peticionRef.current !== miId) return
       setDatos(demo.estaciones)
       setMeta(demo.metadatos)
       setLoading(false)
@@ -88,10 +92,11 @@ export default function PrediccionPage() {
     try {
       const res  = await fetch(`/api/prediccion/todas?dia=${dia}`)
       const json = await res.json()
+      if (peticionRef.current !== miId) return
       setDatos(json.estaciones ?? [])
       setMeta(json.metadatos ?? null)
     } finally {
-      setLoading(false)
+      if (peticionRef.current === miId) setLoading(false)
     }
   }, [dia, simulando])
 
@@ -198,11 +203,7 @@ export default function PrediccionPage() {
     setAsignaciones({})
     setPlanAbierto(true)
     if (simulando) {
-      setTecnicos([
-        { id: 'demo-t1', nombre: 'Jorge Castillo R.' },
-        { id: 'demo-t2', nombre: 'Milagros Vega S.' },
-        { id: 'demo-t3', nombre: 'Renzo Palacios T.' },
-      ])
+      setTecnicos(TECNICOS_DEMO.map(t => ({ id: t.id, nombre: t.nombre })))
       return
     }
     try {
@@ -214,9 +215,25 @@ export default function PrediccionPage() {
 
   async function crearOrdenes() {
     setCreando(true)
-    // En simulación no se escribe nada real — solo se muestra el resultado esperado
+    // En simulación no se escribe nada real — se guarda solo en localStorage
     if (simulando) {
       await new Promise(r => setTimeout(r, 500))
+      agregarTrasladosDemo(movimientos.map((m, i) => {
+        const tecnico = tecnicos.find(t => t.id === asignaciones[i])
+        return {
+          estacion_origen_id: m.origen?.id ?? null,
+          estacion_destino_id: m.destino.id,
+          origen_nombre: m.origen?.nombre ?? 'Depósito central',
+          origen_direccion: '',
+          destino_nombre: m.destino.nombre,
+          destino_direccion: '',
+          cantidad: m.cantidad,
+          tecnico_id: asignaciones[i],
+          tecnico_nombre: tecnico?.nombre ?? 'Técnico',
+          notas: `Generado desde predicción de demanda (${fechaLabel}) — simulación`,
+          fecha_objetivo: dia,
+        }
+      }))
       setExito(true)
       setCreando(false)
       return
@@ -651,9 +668,11 @@ export default function PrediccionPage() {
                 <div className="w-14 h-14 rounded-2xl bg-[#f0fdf4] flex items-center justify-center mx-auto mb-4">
                   <CheckCircle2 size={26} className="text-[#16a34a]" />
                 </div>
-                <p className="font-black text-[#0f2419]">Órdenes creadas</p>
+                <p className="font-black text-[#0f2419]">{simulando ? 'Órdenes simuladas' : 'Órdenes creadas'}</p>
                 <p className="text-xs text-gray-400 mt-1 mb-6">
-                  Los técnicos verán sus traslados asignados en su sesión
+                  {simulando
+                    ? 'Activa el Modo Simulación también en una sesión de técnico (mismo navegador) para verlas en "Mis Traslados"'
+                    : 'Los técnicos verán sus traslados asignados en su sesión'}
                 </p>
                 <Link href="/operador/traslados"
                   className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-black text-[#0f2419]"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -48,14 +48,23 @@ export default function FallasMecanicasPage() {
   const [loading, setLoading] = useState(true)
   const [filtro, setFiltro]   = useState<'todas' | Alerta['urgencia']>('todas')
 
+  const peticionRef = useRef(0)
   const cargar = useCallback(async () => {
-    if (simulando) { setData(demoFallas()); setLoading(false); return }
+    const miId = ++peticionRef.current
+    if (simulando) {
+      const demo = demoFallas()
+      if (peticionRef.current !== miId) return
+      setData(demo)
+      setLoading(false)
+      return
+    }
     try {
       const res  = await fetch('/api/operador/fallas')
       const json = await res.json()
+      if (peticionRef.current !== miId) return
       if (res.ok) setData(json)
     } finally {
-      setLoading(false)
+      if (peticionRef.current === miId) setLoading(false)
     }
   }, [simulando])
 

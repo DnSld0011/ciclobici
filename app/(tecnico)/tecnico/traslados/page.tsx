@@ -4,8 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   Truck, ArrowRight, Bike, CheckCircle2, Clock, MapPin, QrCode,
-  Keyboard, X, AlertTriangle, PartyPopper,
+  Keyboard, X, AlertTriangle, PartyPopper, Sparkles,
 } from 'lucide-react'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { obtenerTrasladosDemo, actualizarTrasladoDemo } from '@/lib/demo/mundoDemo'
 
 interface Orden {
   id: string
@@ -30,7 +32,26 @@ const ESTADO_UI: Record<Orden['estado'], { label: string; bg: string; color: str
   cancelada:  { label: 'Cancelada',  bg: '#f3f4f6', color: '#6b7280' },
 }
 
+function trasladosDemoComoOrdenes(): Orden[] {
+  return obtenerTrasladosDemo().map(o => ({
+    id: o.id,
+    estacion_origen_id: o.estacion_origen_id,
+    estacion_destino_id: o.estacion_destino_id,
+    cantidad: o.cantidad,
+    bicis_trasladadas: o.bicis_trasladadas,
+    estado: o.estado,
+    notas: o.notas,
+    fecha_objetivo: o.fecha_objetivo,
+    created_at: o.created_at,
+    origen_nombre: o.origen_nombre,
+    origen_direccion: o.origen_direccion,
+    destino_nombre: o.destino_nombre,
+    destino_direccion: o.destino_direccion,
+  }))
+}
+
 export default function TrasladosTecnicoPage() {
+  const { activa: simulando, listo: simListo } = useSimulacion()
   const [ordenes, setOrdenes]   = useState<Orden[]>([])
   const [loading, setLoading]   = useState(true)
   const [activa, setActiva]     = useState<Orden | null>(null)   // orden en ejecución (escáner abierto)
@@ -42,33 +63,69 @@ export default function TrasladosTecnicoPage() {
   const scannerRef     = useRef<import('html5-qrcode').Html5Qrcode | null>(null)
   const scannerStarted = useRef(false)
   const bloqueado      = useRef(false)   // evita procesar el mismo QR dos veces seguidas
+  const peticionRef    = useRef(0)
 
   const cargar = useCallback(async () => {
+    const miId = ++peticionRef.current
+    if (simulando) {
+      const demo = trasladosDemoComoOrdenes()
+      if (peticionRef.current !== miId) return
+      setOrdenes(demo)
+      setActiva(prev => prev ? (demo.find(o => o.id === prev.id) ?? null) : null)
+      setLoading(false)
+      return
+    }
     try {
       const res  = await fetch('/api/tecnico/traslados')
       const json = await res.json()
+      if (peticionRef.current !== miId) return
       if (json.ordenes) {
         setOrdenes(json.ordenes)
         // Mantener la orden activa sincronizada
         setActiva(prev => prev ? (json.ordenes.find((o: Orden) => o.id === prev.id) ?? null) : null)
       }
     } finally {
-      setLoading(false)
+      if (peticionRef.current === miId) setLoading(false)
     }
-  }, [])
+  }, [simulando])
 
   useEffect(() => {
+    if (!simListo) return
     cargar()
+    if (simulando) {
+      // Entre pestañas del mismo navegador: si el operador asigna un
+      // traslado demo en otra pestaña, esta se refresca sola.
+      const onStorage = (e: StorageEvent) => { if (e.key === 'sbb:traslados-simulacion') cargar() }
+      window.addEventListener('storage', onStorage)
+      return () => window.removeEventListener('storage', onStorage)
+    }
     const supabase = createClient()
     const ch = supabase.channel('tecnico-traslados-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ordenes_traslado' }, cargar)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargar])
+  }, [cargar, simulando, simListo])
+
+  // Registrar una bici "escaneada" simulada (sin cámara)
+  function registrarBiciDemo() {
+    if (!activa) return
+    const nuevasTrasladadas = activa.bicis_trasladadas + 1
+    const completada = nuevasTrasladadas >= activa.cantidad
+    actualizarTrasladoDemo(activa.id, {
+      bicis_trasladadas: nuevasTrasladadas,
+      estado: completada ? 'completada' : 'en_proceso',
+    })
+    if (completada) {
+      setFeedback({ tipo: 'fin', texto: `¡Traslado completado! ${activa.cantidad} bicis en ${activa.destino_nombre}` })
+    } else {
+      setFeedback({ tipo: 'ok', texto: `✓ Bici registrada — van ${nuevasTrasladadas} de ${activa.cantidad}` })
+    }
+    cargar()
+  }
 
   /* ── Escáner QR ── */
   useEffect(() => {
-    if (!activa || modoManual || feedback?.tipo === 'fin') return
+    if (!activa || modoManual || feedback?.tipo === 'fin' || simulando) return
     let stopped = false
 
     async function iniciar() {
@@ -94,7 +151,7 @@ export default function TrasladosTecnicoPage() {
       detenerScanner()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activa, modoManual, feedback?.tipo])
+  }, [activa, modoManual, feedback?.tipo, simulando])
 
   async function detenerScanner() {
     if (scannerRef.current && scannerStarted.current) {
@@ -207,6 +264,21 @@ export default function TrasladosTecnicoPage() {
               style={{ background: '#b2f746' }}>
               Volver a mis traslados
             </button>
+          ) : simulando ? (
+            <>
+              {/* Simulación: sin cámara real, un botón registra cada bici */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center space-y-4">
+                <Sparkles size={24} className="mx-auto" style={{ color: '#b2f746' }} />
+                <p className="text-xs text-gray-400">
+                  En modo simulación no hay cámara real — cada clic simula escanear una bici.
+                </p>
+                <button onClick={registrarBiciDemo}
+                  className="w-full py-3.5 rounded-xl text-sm font-black text-[#0f2419]"
+                  style={{ background: '#b2f746' }}>
+                  Simular registro de bici
+                </button>
+              </div>
+            </>
           ) : (
             <>
               {/* Escáner o modo manual */}

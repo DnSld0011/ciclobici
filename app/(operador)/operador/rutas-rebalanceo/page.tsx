@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamicImport from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { calcularMovimientos, type Movimiento } from '@/lib/utils/rebalanceo'
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useSimulacion } from '@/lib/demo/SimulacionContext'
 import { demoRutasRebalanceo } from '@/lib/demo/generarDemo'
+import { regenerarMundo, agregarTrasladosDemo } from '@/lib/demo/mundoDemo'
 import { InfoExplicativa } from '@/components/demo/InfoExplicativa'
 
 const MapaEstaciones = dynamicImport(
@@ -62,12 +63,15 @@ export default function RutasRebalanceoPage() {
   const [loading, setLoading]       = useState(true)
   const [creando, setCreando]       = useState(false)
   const [exito, setExito]           = useState(false)
+  const peticionRef = useRef(0)
 
   const cargar = useCallback(async () => {
+    const miId = ++peticionRef.current
     setLoading(true)
     setExito(false)
     if (simulando) {
       const demo = demoRutasRebalanceo()
+      if (peticionRef.current !== miId) return
       setDatos(demo.datos)
       setEstaciones(demo.estaciones)
       setTecnicos(demo.tecnicos)
@@ -83,6 +87,7 @@ export default function RutasRebalanceoPage() {
       ])
       const predJson = await predRes.json()
       const trasladosJson = await trasladosRes.json()
+      if (peticionRef.current !== miId) return
       setDatos(predJson.estaciones ?? [])
       setTecnicos(trasladosJson.tecnicos ?? [])
       setOrdenes(trasladosJson.ordenes ?? [])
@@ -92,6 +97,7 @@ export default function RutasRebalanceoPage() {
         supabase.from('estaciones').select('*').eq('estado', 'activa'),
         supabase.from('bicicletas').select('estacion_id, estado'),
       ])
+      if (peticionRef.current !== miId) return
       if (ests) {
         setEstaciones(ests.map(e => ({
           ...e,
@@ -99,12 +105,19 @@ export default function RutasRebalanceoPage() {
         })))
       }
     } finally {
-      setLoading(false)
-      setAsignaciones({})
+      if (peticionRef.current === miId) {
+        setLoading(false)
+        setAsignaciones({})
+      }
     }
   }, [simulando])
 
   useEffect(() => { if (simListo) cargar() }, [cargar, simListo])
+
+  function recalcular() {
+    if (simulando) regenerarMundo()
+    cargar()
+  }
 
   const estMap = Object.fromEntries(datos.map(e => [e.id, e]))
 
@@ -127,6 +140,22 @@ export default function RutasRebalanceoPage() {
     setCreando(true)
     if (simulando) {
       await new Promise(r => setTimeout(r, 500))
+      agregarTrasladosDemo(movimientos.map((m, i) => {
+        const tecnico = tecnicos.find(t => t.id === asignaciones[i])
+        return {
+          estacion_origen_id: m.origen?.id ?? null,
+          estacion_destino_id: m.destino.id,
+          origen_nombre: m.origen?.nombre ?? 'Depósito central',
+          origen_direccion: '',
+          destino_nombre: m.destino.nombre,
+          destino_direccion: '',
+          cantidad: m.cantidad,
+          tecnico_id: asignaciones[i],
+          tecnico_nombre: tecnico?.nombre ?? 'Técnico',
+          notas: 'Generado desde rutas de rebalanceo sugeridas (simulación)',
+          fecha_objetivo: null,
+        }
+      }))
       setExito(true)
       setCreando(false)
       return
@@ -170,7 +199,7 @@ export default function RutasRebalanceoPage() {
           <p className="text-sm text-outline mt-0.5">Optimización logística basada en demanda predictiva · San Borja en Bici</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={cargar}
+          <button onClick={recalcular}
             className="flex items-center gap-1.5 text-xs font-semibold text-outline border border-outline-variant/30 bg-white px-3 py-2 rounded-full hover:bg-surface-container-low transition-colors">
             <RefreshCw size={12} /> Recalcular algoritmo
           </button>
@@ -185,7 +214,11 @@ export default function RutasRebalanceoPage() {
       {exito && (
         <div className="card p-4 flex items-center gap-3 bg-[#f0fdf4] border-[#16a34a]/30">
           <CheckCircle2 size={20} className="text-[#16a34a] shrink-0" />
-          <p className="text-sm font-semibold text-[#166534]">Órdenes de traslado creadas — los técnicos ya las ven en su sesión.</p>
+          <p className="text-sm font-semibold text-[#166534]">
+            {simulando
+              ? 'Simulado — activa el Modo Simulación también en una sesión de técnico (mismo navegador) para ver estas órdenes en "Mis Traslados".'
+              : 'Órdenes de traslado creadas — los técnicos ya las ven en su sesión.'}
+          </p>
         </div>
       )}
 

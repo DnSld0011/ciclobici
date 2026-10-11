@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSimulacion } from '@/lib/demo/SimulacionContext'
 import { demoKpis } from '@/lib/demo/generarDemo'
@@ -50,10 +50,13 @@ export default function KPIsPage() {
   const [pagina, setPagina]             = useState(0)
   const POR_PAGINA = 4
 
+  const peticionRef = useRef(0)
   const cargar = useCallback(async () => {
+    const miId = ++peticionRef.current
     setLoading(true)
     if (simulando) {
       const demo = demoKpis()
+      if (peticionRef.current !== miId) return
       setViajesTotal(demo.viajesTotal)
       setViajesPrev(demo.viajesPrev)
       setUsuarios(demo.usuarios)
@@ -71,6 +74,8 @@ export default function KPIsPage() {
       fetch(`/api/kpis/resumen?dias=${dias}`).then(r => r.json()),
       supabase.from('estaciones').select('id, nombre, direccion, capacidad, estado').order('nombre'),
     ])
+
+    if (peticionRef.current !== miId) return
 
     const totalV = resumenRes.viajes_total ?? 0
     setViajesTotal(totalV)
@@ -97,6 +102,8 @@ export default function KPIsPage() {
       const ids = estData.map(e => e.id)
       const { data: bicis } = await supabase
         .from('bicicletas').select('estacion_id, estado').in('estacion_id', ids)
+
+      if (peticionRef.current !== miId) return
 
       const bMap: Record<string, { total: number; disp: number; mant: number }> = {}
       for (const b of bicis ?? []) {

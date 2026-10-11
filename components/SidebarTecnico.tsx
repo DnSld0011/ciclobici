@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Wrench, AlertTriangle, Bike, Menu, X, ClipboardList, LogOut, HardHat, Truck } from 'lucide-react'
+import { Wrench, AlertTriangle, Bike, Menu, X, ClipboardList, LogOut, HardHat, Truck, Sparkles } from 'lucide-react'
+import { useSimulacion } from '@/lib/demo/SimulacionContext'
+import { obtenerTrasladosDemo } from '@/lib/demo/mundoDemo'
 
 const NAV = [
   { href: '/tecnico/mantenimiento', label: 'Mantenimiento',  icon: Wrench },
@@ -17,20 +19,26 @@ const NAV = [
 export function SidebarTecnico() {
   const pathname = usePathname()
   const router   = useRouter()
+  const { activa: simulando, toggle: toggleSimulacion } = useSimulacion()
   const [open, setOpen] = useState(false)
   const [pendientes, setPendientes] = useState(0)
   const [traslados, setTraslados]   = useState(0)
 
   const cargarPendientes = useCallback(async () => {
+    if (simulando) return // las incidencias demo no están implementadas del lado técnico todavía
     const supabase = createClient()
     const { count } = await supabase
       .from('incidencias')
       .select('*', { count: 'exact', head: true })
       .eq('estado', 'pendiente')
     setPendientes(count ?? 0)
-  }, [])
+  }, [simulando])
 
   const cargarTraslados = useCallback(async () => {
+    if (simulando) {
+      setTraslados(obtenerTrasladosDemo().filter(o => o.estado === 'pendiente' || o.estado === 'en_proceso').length)
+      return
+    }
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
@@ -41,18 +49,19 @@ export function SidebarTecnico() {
       .eq('tecnico_id', user.id)
       .in('estado', ['pendiente', 'en_proceso'])
     setTraslados(count ?? 0)
-  }, [])
+  }, [simulando])
 
   useEffect(() => {
     cargarPendientes()
     cargarTraslados()
+    if (simulando) return // sin canal realtime para datos demo (localStorage)
     const supabase = createClient()
     const ch = supabase.channel('tecnico-incidencias')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias' }, cargarPendientes)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ordenes_traslado' }, cargarTraslados)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [cargarPendientes, cargarTraslados])
+  }, [cargarPendientes, cargarTraslados, simulando])
 
   async function cerrarSesion() {
     const supabase = createClient()
@@ -78,6 +87,24 @@ export function SidebarTecnico() {
           <HardHat size={12} style={{ color: '#854d0e' }} />
           <span className="text-[11px] font-extrabold" style={{ color: '#854d0e' }}>Técnico</span>
         </div>
+
+        {/* Modo Simulación — ve los traslados demo que el operador asignó */}
+        <button onClick={toggleSimulacion}
+          className={`mt-3 w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg transition-colors ${
+            simulando ? '' : 'hover:bg-surface-container-low'
+          }`}
+          style={simulando ? { background: '#b2f746' } : { background: 'transparent', border: '1px solid var(--outline-variant, #e5e7eb)' }}
+          title="Ver datos de ejemplo, incluyendo traslados asignados en modo simulación">
+          <span className="flex items-center gap-1.5">
+            <Sparkles size={12} style={{ color: simulando ? '#002117' : '#6b7280' }} />
+            <span className="text-[11px] font-extrabold" style={{ color: simulando ? '#002117' : '#6b7280' }}>
+              Modo Simulación
+            </span>
+          </span>
+          <span className={`w-7 h-4 rounded-full relative transition-colors ${simulando ? 'bg-[#002117]' : 'bg-gray-300'}`}>
+            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${simulando ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+          </span>
+        </button>
       </div>
 
       {/* Nav */}

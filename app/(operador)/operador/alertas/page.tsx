@@ -43,14 +43,18 @@ export default function AlertasOperadorPage() {
   const [resumen, setResumen] = useState({ criticas: 0, warnings: 0, resueltas: 0 })
   // Dataset demo estable: se regenera solo al activar simulación, no en cada filtro
   const demoRef = useRef<ReturnType<typeof demoAlertas> | null>(null)
+  const peticionRef = useRef(0)
+  const peticionResumenRef = useRef(0)
 
   const cargar = useCallback(async () => {
+    const miId = ++peticionRef.current
     if (simulando) {
       if (!demoRef.current) demoRef.current = demoAlertas()
       const filtradas = demoRef.current.alertas.filter(a =>
         (filtroNivel === 'todos' || a.nivel === filtroNivel) &&
         (filtroLeida === 'todos' || (filtroLeida === 'pendiente' ? !a.leida : a.leida))
       )
+      if (peticionRef.current !== miId) return
       setAlertas(filtradas)
       setLoading(false)
       return
@@ -66,13 +70,16 @@ export default function AlertasOperadorPage() {
     if (filtroLeida === 'leida') q = q.eq('leida', true)
 
     const { data } = await q
+    if (peticionRef.current !== miId) return
     if (data) setAlertas(data as Alerta[])
     setLoading(false)
   }, [filtroNivel, filtroLeida, simulando])
 
   const cargarResumen = useCallback(async () => {
+    const miId = ++peticionResumenRef.current
     if (simulando) {
       if (!demoRef.current) demoRef.current = demoAlertas()
+      if (peticionResumenRef.current !== miId) return
       setResumen(demoRef.current.resumen)
       return
     }
@@ -82,6 +89,7 @@ export default function AlertasOperadorPage() {
       supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('nivel', 'warning').eq('leida', false),
       supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('resuelta', true),
     ])
+    if (peticionResumenRef.current !== miId) return
     setResumen({ criticas: criticas ?? 0, warnings: warnings ?? 0, resueltas: resueltas ?? 0 })
   }, [simulando])
 

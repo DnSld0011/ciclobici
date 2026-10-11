@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -44,15 +44,24 @@ export default function TendenciasFallasPage() {
   const [data, setData]       = useState<TendenciasData | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const peticionRef = useRef(0)
   const cargar = useCallback(async () => {
+    const miId = ++peticionRef.current
     setLoading(true)
-    if (simulando) { setData(demoTendenciasFallas()); setLoading(false); return }
+    if (simulando) {
+      const demo = demoTendenciasFallas()
+      if (peticionRef.current !== miId) return
+      setData(demo)
+      setLoading(false)
+      return
+    }
     try {
       const res  = await fetch('/api/operador/fallas/tendencias')
       const json = await res.json()
+      if (peticionRef.current !== miId) return
       if (res.ok) setData(json)
     } finally {
-      setLoading(false)
+      if (peticionRef.current === miId) setLoading(false)
     }
   }, [simulando])
 

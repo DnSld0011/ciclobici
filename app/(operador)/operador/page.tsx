@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import dynamicImport from 'next/dynamic'
@@ -84,13 +84,17 @@ export default function DashboardOperadorPage() {
   const [nombreUsuario, setNombreUsuario] = useState('')
   const [busqueda, setBusqueda]         = useState('')
   const router = useRouter()
+  const peticionRef = useRef(0)
 
   const cargar = useCallback(async () => {
+    const miId = ++peticionRef.current
     if (simulando) {
       const demo = demoDashboard()
+      if (peticionRef.current !== miId) return
       setKpis(prev => ({ ...prev, ...demo.kpis }))
       setEstaciones(demo.estaciones)
       setAlertas(demo.alertas)
+      setViajesAnio(demo.viajesAnio)
       setUltimaAct(new Date())
       setLoading(false)
       return
@@ -114,6 +118,8 @@ export default function DashboardOperadorPage() {
       supabase.from('alertas').select('*').eq('resuelta', false).order('created_at', { ascending: false }).limit(6),
       supabase.from('usuarios').select('nombre, rol').eq('id', user.id).single(),
     ])
+
+    if (peticionRef.current !== miId) return
 
     if (bicis) {
       const disponibles = bicis.filter(b => b.estado === 'disponible').length
@@ -140,12 +146,16 @@ export default function DashboardOperadorPage() {
   }, [router, simulando])
 
   // Historial anual: se carga una sola vez vía API (adminClient evita RLS)
+  const peticionHistRef = useRef(0)
   useEffect(() => {
-    if (!simListo) return
-    if (simulando) { setViajesAnio(demoDashboard().viajesAnio); return }
+    const miId = ++peticionHistRef.current // invalida cualquier fetch anterior aunque no hagamos uno nuevo
+    if (!simListo || simulando) return // en simulación, cargar() ya puso viajesAnio
     fetch('/api/dashboard/historico')
       .then(res => res.json())
-      .then(json => { if (json.viajes) setViajesAnio(json.viajes as ViajeAnual[]) })
+      .then(json => {
+        if (peticionHistRef.current !== miId) return
+        if (json.viajes) setViajesAnio(json.viajes as ViajeAnual[])
+      })
       .catch(() => {})
   }, [simulando, simListo])
 
