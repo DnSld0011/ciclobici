@@ -46,7 +46,7 @@ export async function proxy(request: NextRequest) {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser()
 
-    const publicRoutes = ['/login', '/registro', '/verificacion', '/api/']
+    const publicRoutes = ['/login', '/registro', '/verificacion', '/api/', '/encuesta-usabilidad']
     const isPublic = publicRoutes.some(r => pathname.startsWith(r))
 
     if (isPublic) return supabaseResponse
@@ -94,8 +94,8 @@ export async function proxy(request: NextRequest) {
     // aunque la tabla `roles` en BD no se haya actualizado todavía.
     const RUTAS_CORE: Record<string, string[]> = {
       ciudadano:     ['/ciudadano/viaje-activo', '/ciudadano/escanear', '/ciudadano/viaje/'],
-      operador:      ['/operador/fallas', '/operador/rutas-rebalanceo'],
-      administrador: ['/operador/fallas', '/operador/rutas-rebalanceo'],
+      operador:      ['/operador/fallas', '/operador/rutas-rebalanceo', '/operador/modelo-predictivo', '/operador/validacion-software'],
+      administrador: ['/operador/fallas', '/operador/rutas-rebalanceo', '/operador/modelo-predictivo', '/operador/validacion-software'],
     }
     const rutasCore = RUTAS_CORE[rol] ?? []
     const esRutaCore = rutasCore.some(r => pathname === r || pathname.startsWith(r))

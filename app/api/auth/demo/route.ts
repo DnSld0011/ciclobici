@@ -12,6 +12,12 @@ const TEST_USERS: Record<string, { email: string; celular: string }> = {
 }
 
 export async function GET(req: NextRequest) {
+  // Fixture de demo/pruebas — resetea la contraseña de cuentas reales sin
+  // autenticación. Nunca debe quedar accesible en producción.
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'No disponible' }, { status: 404 })
+  }
+
   const phone = req.nextUrl.searchParams.get('phone') ?? ''
   const test = TEST_USERS[phone]
   if (!test) {

@@ -13,6 +13,12 @@ export async function GET() {
     const { data: perfil } = await admin
       .from('usuarios').select('rol').eq('id', user.id).single()
 
+    // Expone configuración de roles/vistas y si existe la service role key —
+    // solo administradores deben poder verlo.
+    if (perfil?.rol !== 'administrador') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
     const { data: roles, error: rolesError } = await admin
       .from('roles').select('id, nombre, vistas').order('id')
 

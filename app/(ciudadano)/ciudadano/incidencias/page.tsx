@@ -136,16 +136,21 @@ export default function ReportarIncidenciaPage() {
 
     async function iniciar() {
       const { Html5Qrcode } = await import('html5-qrcode')
-      if (stopped || scannerStarted.current) return
+      if (stopped) return
       try {
         scannerRef.current = new Html5Qrcode('qr-reader-report')
-        scannerStarted.current = true
         await scannerRef.current.start(
           { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 220, height: 220 } },
           (decoded) => { if (!stopped) buscarBici(decoded) },
           () => {}
         )
+        if (stopped) {
+          await scannerRef.current.stop().catch(() => {})
+          scannerRef.current = null
+          return
+        }
+        scannerStarted.current = true
       } catch {
         if (!stopped) { setErrorQr('No se pudo acceder a la cámara.'); setModoManual(true) }
       }
@@ -155,10 +160,15 @@ export default function ReportarIncidenciaPage() {
     return () => {
       stopped = true
       if (scannerRef.current && scannerStarted.current) {
-        scannerRef.current.stop().catch(() => {}).finally(() => {
+        try {
+          scannerRef.current.stop().catch(() => {}).finally(() => {
+            scannerRef.current = null
+            scannerStarted.current = false
+          })
+        } catch {
           scannerRef.current = null
           scannerStarted.current = false
-        })
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -166,7 +176,9 @@ export default function ReportarIncidenciaPage() {
 
   async function detenerCamara() {
     if (scannerRef.current && scannerStarted.current) {
-      await scannerRef.current.stop().catch(() => {})
+      try {
+        await scannerRef.current.stop().catch(() => {})
+      } catch { /* scanner ya detenido */ }
       scannerRef.current = null
       scannerStarted.current = false
     }

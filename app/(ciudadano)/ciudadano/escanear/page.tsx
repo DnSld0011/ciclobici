@@ -29,16 +29,26 @@ export default function EscanearPage() {
 
     async function iniciarScanner() {
       const { Html5Qrcode } = await import('html5-qrcode')
-      if (stopped || scannerStarted.current) return
+      if (stopped) return
       try {
         scannerRef.current = new Html5Qrcode('qr-reader')
-        scannerStarted.current = true
         await scannerRef.current.start(
           { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 240, height: 240 } },
           (decoded) => { if (!stopped) procesarCodigo(decoded) },
           () => {}
         )
+        // Si el efecto se desmontó mientras start() aún estaba en vuelo (p.ej.
+        // React Strict Mode en dev monta/desmonta dos veces), recién ahora el
+        // scanner quedó realmente "running" — hay que detenerlo acá, porque el
+        // cleanup ya corrió antes y no pudo (marcarlo started antes de que
+        // start() resuelva causaba "Cannot stop, scanner is not running").
+        if (stopped) {
+          await scannerRef.current.stop().catch(() => {})
+          scannerRef.current = null
+          return
+        }
+        scannerStarted.current = true
       } catch {
         if (!stopped) {
           setError('No se pudo acceder a la cámara. Usa el modo manual.')
@@ -51,10 +61,15 @@ export default function EscanearPage() {
     return () => {
       stopped = true
       if (scannerRef.current && scannerStarted.current) {
-        scannerRef.current.stop().catch(() => {}).finally(() => {
+        try {
+          scannerRef.current.stop().catch(() => {}).finally(() => {
+            scannerRef.current = null
+            scannerStarted.current = false
+          })
+        } catch {
           scannerRef.current = null
           scannerStarted.current = false
-        })
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

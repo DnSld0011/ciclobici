@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Map, Bike, Building2, Wrench,
-  TrendingUp, Bell, Menu, X, LogOut, Users, Shield, Crown, ArrowRightLeft, BarChart2, PackageSearch, History, Truck, AlertTriangle, Route, Sparkles,
+  TrendingUp, Bell, Menu, X, LogOut, Users, Shield, Crown, ArrowRightLeft, BarChart2, PackageSearch, History, Truck, AlertTriangle, Route, Sparkles, FlaskConical, ShieldCheck,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useSimulacion } from '@/lib/demo/SimulacionContext'
@@ -23,6 +23,8 @@ const NAV_OPERADOR = [
   { href: '/operador/prediccion',     label: 'Predicción',     icon: TrendingUp },
   { href: '/operador/rutas-rebalanceo', label: 'Rutas de rebalanceo', icon: Route },
   { href: '/operador/traslados',      label: 'Traslados',      icon: Truck },
+  { href: '/operador/modelo-predictivo', label: 'Modelo Predictivo (ML)', icon: FlaskConical },
+  { href: '/operador/validacion-software', label: 'Validación de Software', icon: ShieldCheck },
 ]
 
 const NAV_ADMIN = [
@@ -148,7 +150,7 @@ export function SidebarOperador() {
 
         {/* Modo Simulación — demo de todo el panel con datos de ejemplo */}
         <button onClick={toggleSimulacion}
-          className={`mt-3 w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg transition-colors ${
+          className={`mt-3 w-full flex items-center justify-between gap-2 pl-2.5 pr-3.5 py-1.5 rounded-lg transition-colors ${
             simulacionActiva ? '' : 'hover:bg-surface-container-low'
           }`}
           style={simulacionActiva ? { background: '#b2f746' } : { background: 'transparent', border: '1px solid var(--outline-variant, #e5e7eb)' }}
@@ -160,7 +162,7 @@ export function SidebarOperador() {
             </span>
           </span>
           <span className={`w-7 h-4 rounded-full relative transition-colors ${simulacionActiva ? 'bg-[#002117]' : 'bg-gray-300'}`}>
-            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${simulacionActiva ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            <span className="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white" />
           </span>
         </button>
       </div>

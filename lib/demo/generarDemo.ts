@@ -241,8 +241,10 @@ function estStockDemo() {
     const stockPct = e.capacidad > 0 ? e.bicis_actuales / e.capacidad : 1
     const pisoCritico = stockPct <= 0.2 ? Math.max(3, Math.ceil(e.capacidad * 0.2)) : 0
     const demanda_predicha = Math.max(1, demanda2h, pisoCritico)
-    const diferencia = e.bicis_actuales - demanda_predicha
-    const accion = (diferencia < -2 ? 'deficit' : diferencia > 3 ? 'surplus' : 'ok') as 'deficit' | 'surplus' | 'ok'
+    // Mismo signo que /api/prediccion/todas: positivo = falta stock (deficit),
+    // negativo = exceso de bicis (surplus) — la UI de /operador/stock asume esta convención.
+    const diferencia = demanda_predicha - e.bicis_actuales
+    const accion = (diferencia > 1 ? 'deficit' : diferencia < -2 ? 'surplus' : 'ok') as 'deficit' | 'surplus' | 'ok'
     return {
       id: e.id, nombre: e.nombre, capacidad: e.capacidad, bicis_actuales: e.bicis_actuales,
       demanda_predicha, diferencia, accion, confianza: pick(['alta', 'media', 'baja'] as const),

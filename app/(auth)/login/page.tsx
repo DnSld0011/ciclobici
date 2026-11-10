@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Lock, Eye, EyeOff, Bike, CheckCircle } from 'lucide-react'
+import { Lock, Eye, EyeOff, Bike, CheckCircle, MessageSquareHeart } from 'lucide-react'
 import { loginAction } from './actions'
 
 const inputCls = 'w-full h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface placeholder-outline focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all'
@@ -202,6 +202,19 @@ function LoginContent() {
               Regístrate gratis
             </Link>
           </p>
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-outline-variant/30" />
+            <span className="text-[10px] font-bold text-outline uppercase tracking-widest">o</span>
+            <div className="h-px flex-1 bg-outline-variant/30" />
+          </div>
+
+          <Link href="/encuesta-usabilidad"
+            className="flex items-center justify-center gap-2 w-full h-12 rounded-xl font-bold text-sm transition-all active:scale-[.98] border"
+            style={{ borderColor: '#b2f746', color: '#003527', background: '#f3fde3' }}>
+            <MessageSquareHeart size={17} style={{ color: '#446900' }} />
+            Darnos tu opinión (anónimo, sin cuenta)
+          </Link>
 
         </div>
       </div>

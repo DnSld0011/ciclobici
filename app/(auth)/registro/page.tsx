@@ -9,6 +9,17 @@ import { Bike, CheckCircle, User, CreditCard, Mail, Phone, Lock, Eye, EyeOff } f
 const inputCls = 'w-full h-12 px-4 rounded-xl border border-outline-variant/40 bg-white text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all placeholder-outline'
 const labelCls = 'block text-[10px] font-extrabold tracking-widest text-outline uppercase mb-1.5'
 
+function mensajeErrorUsuarios(error: { code?: string; message?: string }): string {
+  const msg = error.message ?? ''
+  if (error.code === '23505' || msg.includes('duplicate key')) {
+    if (msg.includes('documento')) return 'Ese DNI / documento ya está registrado con otra cuenta.'
+    if (msg.includes('celular'))   return 'Ese número de celular ya está registrado con otra cuenta.'
+    if (msg.includes('correo'))    return 'Ese correo ya está registrado con otra cuenta.'
+    return 'Alguno de tus datos (DNI, celular o correo) ya está registrado con otra cuenta.'
+  }
+  return msg || 'No se pudo guardar tu perfil. Intenta de nuevo.'
+}
+
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
     password.length >= 8,
@@ -98,7 +109,7 @@ function RegistroContent() {
           rol:      'ciudadano',
         }, { onConflict: 'id' })
 
-        if (insertError) throw insertError
+        if (insertError) throw new Error(mensajeErrorUsuarios(insertError))
         router.replace('/ciudadano')
         return
       }
@@ -132,7 +143,7 @@ function RegistroContent() {
 
       if (data.session) {
         // Email confirmation desactivado — sesión activa de inmediato
-        await supabase.from('usuarios').upsert({
+        const { error: insertError } = await supabase.from('usuarios').upsert({
           id:        data.user!.id,
           nombre:    form.nombre.trim(),
           documento: form.documento.trim(),
@@ -141,6 +152,10 @@ function RegistroContent() {
           estado:   'activo',
           rol:      'ciudadano',
         }, { onConflict: 'id' })
+        // Si falla (p.ej. documento/celular ya registrados por otra cuenta), no
+        // redirigimos: quedaría un usuario de auth sin fila en "usuarios" y el
+        // middleware lo mandaría a /login en un bucle confuso de "perfil incompleto".
+        if (insertError) throw new Error(mensajeErrorUsuarios(insertError))
         router.replace('/ciudadano')
       } else {
         // Email confirmation activado — usuario debe confirmar su correo
